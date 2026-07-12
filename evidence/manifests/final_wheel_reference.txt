@@ -1,0 +1,4 @@
+filename=vllm-0.18.1+das.dtk2604-cp310-cp310-linux_x86_64.whl
+sha256=03568ba87ff64fd0a8aade299026d7ee78cbf40d9c1ed5884fb584250b2031f2
+included_in_repository=false
+build_from_source_required=true
