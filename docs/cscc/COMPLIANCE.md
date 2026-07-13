@@ -12,7 +12,8 @@
 
 ## 最终候选源码
 
-以下 13 个文件构成相对上游基线的最终累计候选源码锚点：
+以下 13 个文件构成当前提交相对上游基线的累计核心源码锚点；其中
+`setup.py` 已包含 H10-only profile package-data：
 
 1. `csrc/rocm/ops.h`
 2. `csrc/rocm/skinny_gemms.cu`
@@ -35,6 +36,19 @@ sha256sum -c evidence/manifests/repo_source.sha256
 ```
 
 应得到 13 项 `OK`。
+
+H10-only 新增/修改 `.gitignore`、`setup.py`、
+`vllm/v1/worker/gpu_worker.py`，并新增：
+
+- `vllm/platforms/rocm_tunableop.py`
+- `vllm/platforms/tunable_profiles/gfx936_qwen3_5_27b_bf16_tn_m4096.csv`
+- `scripts/cscc_gfx936_env.sh`
+
+增量哈希由下列命令校验：
+
+```bash
+sha256sum -c evidence/manifests/h10_only_submission.sha256
+```
 
 ## 未修改的评测资产
 
@@ -64,7 +78,8 @@ sha256sum -c evidence/manifests/repo_source.sha256
 - 本次改动未新增 prompt/数据集特判；
 - 上游 scheduler 源码随完整项目提交，但本次优化未修改 scheduler/batch
   文件或评测边界；
-- 最终候选没有通过隐藏环境变量开启的性能路径。
+- H10-only 环境变量全部公开记录在 `ENVIRONMENT.md` 和
+  `scripts/cscc_gfx936_env.sh`；没有隐藏性能开关。
 
 ## 仓库排除项
 
@@ -87,7 +102,7 @@ Python 语义、编译或运行。除这两处外，冻结源码差分没有其�
 
 ## 提交前验证
 
-1. 13 项源码哈希全部通过；
+1. baseline 13 项源码和 H10-only 增量哈希全部通过；
 2. 新增 GQA6 文件已被 Git 跟踪；
 3. 构建脚本 `bash -n` 通过；
 4. 无模型、wheel、native binary、测试数据或凭据；

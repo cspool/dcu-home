@@ -59,11 +59,42 @@ Global TPOT P99 按每请求 `sum(itls)/(output_len-1)` 重建 150 请求后计�
 列表和 gold 多重集合重算为 100.00；OpenCompass 原生中间 summary 的 0.00
 不是固定脚本最终口径。
 
+## H10-only 提交增量
+
+提交版从源码独立重建 wheel，在 fresh 服务上连续运行三个完整
+`run_throughput.sh all 3` round，自然窗口 `661 s`，idle padding=0。
+27/27 请求成功、failed=0；三轮三档的 output length 和完整文本 hash
+均与冻结 H11.5+H10.8 baseline exact。
+
+| Band | Baseline all3 | H10-only 三轮均值 | 相对变化 |
+| --- | ---: | ---: | ---: |
+| 4-8K | 12.948554862 | 13.054359229 | +0.817113% |
+| 8-16K | 15.771696925 | 15.883771439 | +0.710605% |
+| 16-32K | 9.889236403 | 10.027930935 | +1.402480% |
+
+20/50/30 加权提升为 `+0.939469%`。pooled request TPOT P99 为
+`47.135118 ms`，最大 TTFT P99 为 `6349.108759 ms`，SLA 通过。此前使用
+同一四行 profile 的独立 C100 窗口为 `664.215 s`、加权 `+0.958538%`，
+同样 27/27、三档为正且输出 exact，因此该增量不是单次噪声。
+
+提交版 fixed `run_accuracy.sh all` 自然运行 `943 s`，结果为：
+
+| 数据集 | 官方 baseline | 提交版显示值 | k |
+| --- | ---: | ---: | ---: |
+| hotpotqa | 77.959706960 | 77.96 | 1.00 |
+| gov_report | 32.961006236 | 32.95 | 1.00 |
+| retrieval_multi_point | 100.00 | 100.00 | 1.00 |
+| aggregation_keyword_aggregation | 100.00 | 100.00 | 1.00 |
+
+最终 `K=1.00`。本增量尚未重跑 full×3，不能把 `+0.939469%` 直接叠加为
+新的综合分；上文 `88.5484555040153` 仍是权威 full 计分锚点。
+
 ## 构建与运行时锚点
 
 | Artifact | SHA256 |
 | --- | --- |
 | final wheel | `03568ba87ff64fd0a8aade299026d7ee78cbf40d9c1ed5884fb584250b2031f2` |
+| H10-only submission wheel | `fe8ceeec1634db072b179ba88f364e489640ea246eef5aab8a0487253511307a` |
 | installed `_rocm_C.abi3.so` | `51e4839b564355279fcca4bc426ccd1da0a5f03d0e39006210960e99fd124ab1` |
 | `run_throughput.sh` | `adf0cf91266745b37df916926c7d495ec79f00a11be653c219d1d5df4d93c681` |
 | `run_accuracy.sh` | `2e641672a45ac96318c2118df8df4dae2babf87c16afd49cbe4b037ff9beed4e` |

@@ -17,9 +17,10 @@
 
 # PRA2026-BH408：Qwen3.5-27B 单卡推理优化
 
-这是面向 2026 智能计算创新设计赛的完整源码提交。本仓库本次实测候选中最高且已完成
-full/accuracy/SLA 闭环的版本为 **H11.5 + H10.8**，不是仅包含差分或
-预编译 wheel 的交付。
+这是面向 2026 智能计算创新设计赛的完整源码提交。已完成 full×3、accuracy
+和 SLA 闭环的计分锚点为 **H11.5 + H10.8**；当前提交在其上加入输出 exact、
+两次 10 分钟窗口均稳定为正的 **H10-only ROCm TunableOp profile**。仓库交付
+完整源码，不是仅包含差分或预编译 wheel。
 
 ## 本次实测最终结果
 
@@ -28,8 +29,13 @@ full/accuracy/SLA 闭环的版本为 **H11.5 + H10.8**，不是仅包含差分�
 - 相对上一最佳 R24 的 20/50/30 加权吞吐提升：`+10.2361569769%`
 - 固定 accuracy：`77.96 / 33.05 / 100.00 / 100.00`，`K=1.00`
 - 三轮共 `450/450` 请求成功，TTFT/TPOT SLA 全部通过
-- 最终 wheel SHA256：
+- H11.5+H10.8 full 计分 wheel SHA256：
   `03568ba87ff64fd0a8aade299026d7ee78cbf40d9c1ed5884fb584250b2031f2`
+- H10-only 本次 661 秒 all3：三档均为正，20/50/30 加权
+  `+0.939469%`，27/27、输出长度和全文 hash exact
+- H10-only fixed accuracy：`77.96 / 32.95 / 100 / 100`，`K=1.00`
+- H10-only 独立重建 wheel SHA256：
+  `fe8ceeec1634db072b179ba88f364e489640ea246eef5aab8a0487253511307a`
 
 详细测试口径见 [docs/cscc/RESULTS.md](docs/cscc/RESULTS.md)。
 
@@ -38,8 +44,10 @@ full/accuracy/SLA 闭环的版本为 **H11.5 + H10.8**，不是仅包含差分�
 - 完整 vLLM 源码、ROCm custom ops、CMake/Python 构建体系
 - H11.5 wide-causal GQA6 prefill 源码
 - H10.8 gfx936 strided LLMM1 源码
+- H10-only fail-closed TunableOp loader、四行 profile 和 worker 集成
 - [BUILD.md](BUILD.md)：统一评测容器内的源码编译与安装方法
 - [ENVIRONMENT.md](ENVIRONMENT.md)：工具链和环境变量说明
+- [scripts/cscc_gfx936_env.sh](scripts/cscc_gfx936_env.sh)：H10-only 启动环境
 - [docs/cscc/OPTIMIZATION.md](docs/cscc/OPTIMIZATION.md)：技术路线与贡献
 - [docs/cscc/COMPLIANCE.md](docs/cscc/COMPLIANCE.md)：赛题边界与提交审计
 - [evidence/manifests](evidence/manifests)：源码/运行时/最终 wheel 哈希锚点
@@ -65,16 +73,24 @@ python3 -m pip install --force-reinstall --no-deps dist/vllm-*.whl
 
 本提交不修改组委会固定的 `start_vllm.sh`、`run_throughput.sh` 或
 `run_accuracy.sh`。安装 wheel 后应直接使用评测平台提供的固定脚本启动
-服务和评测。运行变量及固定默认值见 [ENVIRONMENT.md](ENVIRONMENT.md)。
+服务和评测。H10-only 提交版需在启动前执行：
+
+```bash
+source scripts/cscc_gfx936_env.sh
+bash /path/to/testdata/start_vllm.sh
+```
+
+变量作用、fail-closed 范围及固定默认值见 [ENVIRONMENT.md](ENVIRONMENT.md)。
 
 ## 源码完整性检查
 
-以下命令校验最终候选涉及的 13 个源码文件；其中包括必须提交的新增 GQA6
-文件：
+以下命令分别校验当前提交的 13 个累计核心源码文件和 H10-only 增量文件：
 
 ```bash
 sha256sum -c evidence/manifests/repo_source.sha256
+sha256sum -c evidence/manifests/h10_only_submission.sha256
 bash -n scripts/build_cscc_wheel.sh
+source scripts/cscc_gfx936_env.sh
 ```
 
 两个检查均应成功。最终候选刻意保留 `vllm/version.py` 中上游累计栈已有的

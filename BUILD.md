@@ -64,11 +64,13 @@ python3 -m pip install --force-reinstall --no-deps \
 
 ```text
 vllm-0.18.1+das.dtk2604-cp310-cp310-linux_x86_64.whl
-SHA256 03568ba87ff64fd0a8aade299026d7ee78cbf40d9c1ed5884fb584250b2031f2
+H10-only submission build SHA256
+fe8ceeec1634db072b179ba88f364e489640ea246eef5aab8a0487253511307a
 ```
 
 最终 wheel 不提交到 GitLab；评测机应从本仓库源码重新编译。对应源码哈希见
-`evidence/manifests/repo_source.sha256`。
+`evidence/manifests/repo_source.sha256` 和
+`evidence/manifests/h10_only_submission.sha256`。
 
 ## 构建后检查
 
@@ -78,4 +80,5 @@ sha256sum dist/vllm-*.whl
 ```
 
 预期版本为 `0.18.1+das.dtk2604`。安装完成后使用组委会提供且未修改的
-`start_vllm.sh`、`run_throughput.sh` 和 `run_accuracy.sh` 进行评测。
+`start_vllm.sh`、`run_throughput.sh` 和 `run_accuracy.sh` 进行评测。启动前
+先执行 `source scripts/cscc_gfx936_env.sh`；变量作用见 `ENVIRONMENT.md`。

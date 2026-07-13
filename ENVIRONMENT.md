@@ -2,15 +2,39 @@
 
 ## 结论
 
-最终 H11.5 + H10.8 优化**不依赖新增的性能控制环境变量**。两项优化均由
-源码中的设备、dtype 和精确 shape gate 自动命中。
+H11.5 + H10.8 累计优化不依赖新增的性能控制环境变量，两项优化均由源码中的
+设备、dtype 和精确 shape gate 自动命中。当前提交新增的 H10-only rocBLAS
+profile 是显式 opt-in；评测启动前必须 source `scripts/cscc_gfx936_env.sh`。
 
 尤其是：
 
 - H10.8 不要求设置 `VLLM_ROCM_USE_SKINNY_GEMM`；
-- 不需要通过环境变量强制切换 BLAS backend；
+- 不全局强制切换 BLAS backend；H10-only 只加载四个 exact TunableOp key；
 - 不使用 H10.10 K6144 或任何实验性开关；
 - 不硬编码 `HIP_VISIBLE_DEVICES` 或 `CUDA_VISIBLE_DEVICES`。
+
+## H10-only 运行变量
+
+```bash
+source scripts/cscc_gfx936_env.sh
+bash /path/to/testdata/start_vllm.sh
+```
+
+| 变量 | 固定值 | 作用 |
+| --- | --- | --- |
+| `VLLM_ROCM_TUNABLEOP_PROFILE` | `gfx936_qwen3_5_27b_bf16_tn_m4096` | 选择唯一允许的 profile |
+| `VLLM_ROCM_TUNABLEOP_PROFILE_SHA256` | `41742b4c5d071fdf9085c46ad4ec1743d7e4f410431c05ff39b0e0f293548a0b` | 校验 wheel 内 CSV |
+| `PYTORCH_TUNABLEOP_ENABLED` | `1` | 启用已加载结果 |
+| `PYTORCH_TUNABLEOP_TUNING` | `0` | 禁止在线 tuning |
+| `PYTORCH_TUNABLEOP_RECORD_UNTUNED` | `0` | 禁止记录未命中项 |
+| `PYTORCH_TUNABLEOP_ROCBLAS_ENABLED` | `1` | 允许冻结的 rocBLAS solutions |
+| `PYTORCH_TUNABLEOP_HIPBLASLT_ENABLED` | `0` | 排除未记录的 hipBLASLt 候选 |
+
+环境脚本还会 unset `PYTORCH_TUNABLEOP_FILENAME`、verbose 变量及历史误拼
+`PYTORCH_TUNABLEOP_VEROBSE`。loader 只接受 Qwen3.5、BF16、
+`max_num_batched_tokens=4096`、单卡 TP/PP/PCP/DP=1 和冻结的
+PyTorch/HIP/gfx936/rocBLAS/hipBLASLt validators；scope、环境、哈希或结果表
+任一漂移都会 fail closed。未 source 脚本时 profile 默认关闭。
 
 ## 编译变量
 
