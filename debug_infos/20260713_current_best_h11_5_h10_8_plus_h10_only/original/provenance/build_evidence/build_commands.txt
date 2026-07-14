@@ -1,4 +1,0 @@
-cd /public/home/tangyu408/vllm_cscc
-python3 setup.py build_py --force
-MAX_JOBS=16 python3 setup.py bdist_wheel --dist-dir /public/home/tangyu408/testdata/goal_runs/20260712_h11_5_h10_8_build/dist
-python3 -m pip install --force-reinstall --no-deps /public/home/tangyu408/testdata/goal_runs/20260712_h11_5_h10_8_build/dist/vllm-0.18.1+das.dtk2604-cp310-cp310-linux_x86_64.whl

@@ -1,2 +1,0 @@
-fb7635f3ce0dcaedb050ad41f85eeb99d6d334dd3e408dcc8a92d57c68966884  csrc/rocm/skinny_gemms.cu
-ddb9ee5dafa9ba3b3cd524b8a3fe63706812fdff3d7baae65517e8b069f1f661  vllm/model_executor/layers/utils.py

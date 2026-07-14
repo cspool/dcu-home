@@ -1,1 +1,0 @@
-f630d09263cc29cefd5372b47714924b1d74143b112bf2aea005413e9436a4d6  build/temp.linux-x86_64-cpython-310/CMakeFiles/_rocm_C.dir/csrc/rocm/skinny_gemms.hip.o

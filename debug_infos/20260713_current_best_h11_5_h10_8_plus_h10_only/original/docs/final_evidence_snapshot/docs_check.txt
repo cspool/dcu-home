@@ -1,2 +1,0 @@
-vllm_cscc_single_card_throughput_optimization_plan.md: OK
-vllm_cscc_stage_experiment_results.md: OK

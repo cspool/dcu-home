@@ -35,7 +35,24 @@ online-softmax 和 cache-block 选择语义，并为 gfx936/BF16/head256/GQA6
 修正 query-head 行重叠及增加 H11.5 wide-causal 编译配置。提交文件自身保留
 Apache-2.0 SPDX 与 vLLM contributors 版权头。
 
-## 3. flash-linear-attention
+## 3. FlashAttention / 平台 ROCm 分发包
+
+- 项目：FlashAttention / FlashAttention-2
+- 上游：<https://github.com/Dao-AILab/flash-attention>
+- 平台预装版本：
+  `2.8.3+das.opt1.dtk2604.torch2100.20260330.g3f0061`
+- 平台包 metadata 许可证分类：BSD License；上游许可证为 BSD-3-Clause
+- 本提交调用接口：`flash_attn_2_cuda.varlen_fwd` 与
+  `flash_attn.flash_attn_interface.varlen_fwd_unified`
+- 本提交对应文件：
+  `vllm/v1/attention/ops/rocm_page784_split_attention.py`
+
+新 wrapper 调用评测容器预装的 contiguous/paged attention 二进制接口，不在
+仓库中重新分发其二进制或复制其 kernel 源码。仓库内新增代码负责 page784 的
+`768 + 16` 排布、Triton residual pack、有界 workspace 和 FP32 LSE state
+merge；第三方 API 与自研封装边界据此区分。
+
+## 4. flash-linear-attention
 
 - 项目：flash-linear-attention
 - 上游：<https://github.com/sustcsonglin/flash-linear-attention>
@@ -77,7 +94,8 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-## 4. 平台预装依赖
+## 5. 平台预装依赖
 
-PyTorch、Triton、transformers、DTK/ROCm 和 AITER 由评测容器预装，本仓库
-不重新分发这些二进制包，也不提交模型权重。其使用仍分别受各自许可证约束。
+PyTorch、Triton、transformers、DTK/ROCm、AITER 和 FlashAttention 由评测
+容器预装，本仓库不重新分发这些二进制包，也不提交模型权重。其使用仍分别
+受各自许可证约束。

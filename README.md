@@ -11,19 +11,35 @@
 >
 > gfx936/GQA6 attention 特化参考 AMD AITER
 > `aiter/ops/triton/unified_attention.py`，验证版本为
-> `0.1.dev1+g9daa788.d20260401`；GDN recurrent 源码包含
-> flash-linear-attention 的 MIT 许可代码。来源、版本、许可证和改动范围见
+> `0.1.dev1+g9daa788.d20260401`；page784 wrapper 调用平台预装的
+> FlashAttention `2.8.3+das.opt1.dtk2604.torch2100.20260330.g3f0061`
+> paged/contiguous API；GDN recurrent 源码包含 flash-linear-attention 的
+> MIT 许可代码。来源、版本、许可证、调用/改动边界见
 > [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。
 
 # PRA2026-BH408：Qwen3.5-27B 单卡推理优化
 
-这是面向 2026 智能计算创新设计赛的完整源码提交。已完成 full×3、accuracy
-和 SLA 闭环的计分锚点为 **H11.5 + H10.8**；当前提交在其上加入 H10-only
-ROCm TunableOp profile，以及 2026-07-15 合并验证通过的 page784 later-prefill、
-低 live-range GQA6、row2 K=5120 GEMV 和连续 M-RoPE 传输修复。仓库交付完整
-源码，不是仅包含差分或预编译 wheel。
+这是面向 2026 智能计算创新设计赛的完整源码提交。**截至 2026-07-15，当前
+提交已通过组委会平台评测并进入决赛。** 平台结论是晋级状态的权威依据；下文
+吞吐和 accuracy 数字均标明为历史或本地复核数据，不冒充平台公布成绩。
 
-## 本次实测最终结果
+已完成 full×3、accuracy 和 SLA 闭环的历史计分锚点为
+**H11.5 + H10.8**；当前提交在其上加入 H10-only ROCm TunableOp profile，
+以及 page784 later-prefill、低 live-range GQA6、row2 K=5120 GEMV 和连续
+M-RoPE 传输优化。仓库交付完整源码，不是仅包含差分或预编译 wheel。
+
+## 结果与证据层级
+
+- 官方平台：当前提交已通过评测并进入决赛；本文不记录未获提供的官方分数。
+- 提交后本地固定 `run_throughput.sh all`：`150/150` 请求成功，三档吞吐为
+  `21.1640098344 / 18.5924670551 / 15.5822543127 tok/s`；按 `K=1`
+  本地重建综合分为 `91.1674076938`，仅作为复核数据。
+- 相对下列历史 full×3 均值，三档分别为
+  `+8.051372% / +8.771758% / +19.825859%`；TTFT/TPOT SLA 通过。
+- 合并候选提交前 fixed accuracy 为
+  `77.9597 / 32.8749 / 100 / 100`，`K=1.00`；平台最终评测已通过。
+
+历史 H11.5 + H10.8 闭环如下：
 
 - 三次 full 综合分：`88.490349137758 / 88.578483694186 / 88.576533680101`
 - 三轮均分：`88.5484555040153`
@@ -37,11 +53,8 @@ ROCm TunableOp profile，以及 2026-07-15 合并验证通过的 page784 later-p
 - H10-only fixed accuracy：`77.96 / 32.95 / 100 / 100`，`K=1.00`
 - H10-only 独立重建 wheel SHA256：
   `fe8ceeec1634db072b179ba88f364e489640ea246eef5aab8a0487253511307a`
-- 最新合并候选使用三条冻结最差样本各测试一次，相对当前最佳分别为
+- 最新合并候选使用三条冻结最差样本各测试一次，相对历史当前最佳分别为
   `+4.697% / +9.522% / +13.611%`
-- 最新合并候选 fixed accuracy 为
-  `77.9597 / 32.8749 / 100 / 100`，`K=1.00`；本次提交后的完整
-  `run_throughput.sh all` 尚待执行，不能提前计入权威综合分
 
 详细测试口径见 [docs/cscc/RESULTS.md](docs/cscc/RESULTS.md)。
 
@@ -60,11 +73,12 @@ ROCm TunableOp profile，以及 2026-07-15 合并验证通过的 page784 later-p
 - [scripts/cscc_gfx936_env.sh](scripts/cscc_gfx936_env.sh)：H10-only 启动环境
 - [docs/cscc/OPTIMIZATION.md](docs/cscc/OPTIMIZATION.md)：技术路线与贡献
 - [docs/cscc/COMPLIANCE.md](docs/cscc/COMPLIANCE.md)：赛题边界与提交审计
-- [evidence/manifests](evidence/manifests)：源码/运行时/最终 wheel 哈希锚点
+- [evidence/manifests](evidence/manifests)：精简源码、脚本和历史 wheel 哈希锚点
 - [README_UPSTREAM.md](README_UPSTREAM.md)：vLLM 上游 README
 
-模型权重、tokenizer、固定评测脚本、测试数据、原始 benchmark 输出、
-build 目录和预编译 wheel 不在仓库中；它们由评测平台提供或在评测机生成。
+模型权重、tokenizer、固定评测脚本、测试数据、原始 benchmark/accuracy
+输出、调试日志、build 目录和预编译 wheel 不在当前提交树中；它们由评测
+平台提供或只在评测机生成。
 
 ## 快速编译
 

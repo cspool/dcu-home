@@ -1,7 +1,0 @@
-{
-  "clean": true,
-  "listening_socket_inodes": [],
-  "port": 8001,
-  "schema": "r27-h10.18-runtime-guard-v1",
-  "vllm_processes": []
-}

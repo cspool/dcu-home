@@ -2,7 +2,9 @@
 
 ## 已验证环境
 
-本版本在组委会统一容器中完成构建、安装和评测。已验证工具链如下：
+本版本在组委会统一容器中完成构建、安装和评测；当前提交已通过平台评测并
+进入决赛。该结论表示源码在平台路径可构建、可启动并通过本阶段评测，不把
+下文任何本地 wheel 哈希表述为平台成绩。已验证工具链如下：
 
 | 组件 | 版本 |
 | --- | --- |
@@ -60,7 +62,7 @@ python3 -m pip install --force-reinstall --no-deps \
 
 使用 `--no-deps` 是为了保留评测容器预装的定制依赖。
 
-## 历史已验证产物
+## 构建验证与历史产物
 
 ```text
 vllm-0.18.1+das.dtk2604-cp310-cp310-linux_x86_64.whl
@@ -69,8 +71,9 @@ fe8ceeec1634db072b179ba88f364e489640ea246eef5aab8a0487253511307a
 ```
 
 该 SHA 是 H10-only 阶段的历史闭环产物，不是本次合并源码的产物标识。本次
-合并源码已于 2026-07-15 使用本页一键脚本完成干净构建；最终 wheel 不提交到
-GitLab，评测机应从本仓库源码重新编译。对应源码哈希见
+合并源码已于 2026-07-15 使用本页一键脚本完成干净构建，随后通过组委会平台
+评测；最终 wheel 不提交到 GitLab，评测机应从本仓库源码重新编译。对应源码
+哈希见
 `evidence/manifests/repo_source.sha256` 和
 `evidence/manifests/h10_only_submission.sha256`。
 
@@ -84,3 +87,6 @@ sha256sum dist/vllm-*.whl
 预期版本为 `0.18.1+das.dtk2604`。安装完成后使用组委会提供且未修改的
 `start_vllm.sh`、`run_throughput.sh` 和 `run_accuracy.sh` 进行评测。启动前
 先执行 `source scripts/cscc_gfx936_env.sh`；变量作用见 `ENVIRONMENT.md`。
+
+本仓库记录的是初赛单卡 gfx936 配置。决赛若发布多卡、拓扑或启动参数的新
+要求，应以组委会决赛文档为准重新验证，不能从“已晋级”推断多卡配置已覆盖。

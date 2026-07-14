@@ -1,5 +1,11 @@
 # 优化方案与技术路线
 
+> 第三方声明：本方案基于 vLLM/OpenDAS fork；GQA6 路径参考 AMD AITER，
+> page784 wrapper 调用平台预装 FlashAttention 的 paged/contiguous API，GDN
+> recurrent 含 flash-linear-attention 来源代码。精确版本、许可证以及
+> “调用第三方 API/新增自研封装”的边界见仓库根目录
+> `THIRD_PARTY_NOTICES.md`。本节不把第三方 kernel 表述为自研成果。
+
 ## 目标与最终栈
 
 目标是在统一 Qwen3.5-27B BF16 权重、统一 vLLM 0.18.1、固定服务参数、
@@ -40,7 +46,10 @@ commit `fa718036bdb9dfd80a872b86c8ac16c9d02bfd31`。GitHub vLLM 是该 fork
 实现要点：
 
 - 将每个 KV head 对应的 6 个 query heads 分为三个两头组；
-- 使用逻辑 56-token K/V tile，并为 MFMA padding 到 64；
+- 当前提交使用逻辑 64-token K/V tile，数值上按两个连续 32-token 子块执行
+  FP32 online-softmax/P@V 更新，降低同时存活的寄存器；
+- tile 跨越 page784 边界时最多 gather 两个相邻物理页，覆盖
+  `16+48`、`32+32`、`48+16` 三种拆分；
 - `BLOCK_Q=32`；
 - 根据 causal query 上界减少无效 K/V 访问；
 - 其他 shape、短 query、多序列和 decode 路径回退到 H11.4/AITER 原路径。
@@ -62,11 +71,12 @@ commit `fa718036bdb9dfd80a872b86c8ac16c9d02bfd31`。GitHub vLLM 是该 fork
 - `n=1`
 - `k=5120`
 - 无 bias
-- 连续输入/权重
-- `m in {14336, 16384, 34816}`
+- 连续且满足对齐要求的输入/权重
+- `m in {96, 14336, 16384, 34816, 248320}`
 
-三个大投影使用 `LLMM1Strided(4,640)` 的 wave-pair reduction；`m=96`
-继续使用原 LLMM1。非目标 shape 走原 GEMM 路径。
+`m=96` 使用 `LLMM1Strided(4,640)`；四个大输出（含 `m=248320` LM head）
+使用 `LLMM1Strided(2,640)`。C++ 入口还逐一校验合法 row/pair 组合，非目标
+shape 走原 GEMM 路径。
 
 H10.9 的 backend 强制切换经审计为 runtime no-op；H10.10 K6144
 pair-reduce 虽 standalone microbenchmark 为正，但端到端三档 TPOT 全部回归。
@@ -104,9 +114,12 @@ workspace 按 device/layout 有界复用，不把完整 KV 解包回 HBM。
 消除分平面复制带来的额外调度。所有路径均 fail-closed，未命中的 shape 回退
 原 AITER/vLLM 实现。
 
-三条冻结最差样本各一次的吞吐相对当前最佳为
-`+4.697% / +9.522% / +13.611%`，fixed accuracy `K=1.0`。完整 `all`
-按用户要求在提交后执行，因此这些小样本结果不能提前替代 full 计分。
+三条冻结最差样本各一次的吞吐相对历史当前最佳为
+`+4.697% / +9.522% / +13.611%`，fixed accuracy `K=1.0`。提交后本地固定
+`all` 已完成 `150/150`，三档为
+`21.1640098344 / 18.5924670551 / 15.5822543127 tok/s`；本地按 `K=1`
+重建综合分 `91.1674076938`。该值是本地复核，不是平台公布成绩；当前提交
+通过平台评测并进入决赛才是正式状态结论。
 
 ## 累计语义安全快路径
 
@@ -131,12 +144,19 @@ workspace 按 device/layout 有界复用，不把完整 KV 解包回 HBM。
 | H11.5 | R24 小样本 | 三档 TTFT 改善 15.89% / 20.47% / 24.65% | prefill 晋级信号 |
 | H10.8 | H11.5 小样本 | 三档 TPOT 改善 5.233% / 5.033% / 4.906% | decode 晋级信号 |
 | H11.5+H10.8 full | R24 full 均值 | 三档吞吐 +6.744% / +9.540% / +13.724% | 最终计分 |
-| H11.5+H10.8 score | R24 score | 85.707490 -> 88.548456 | 本次实测最高 |
+| H11.5+H10.8 score | R24 score | 85.707490 -> 88.548456 | 历史 full×3 锚点 |
 | H10-only all3 | H11.5+H10.8 all3 | 三档 +0.8171% / +0.7106% / +1.4025%，加权 +0.939469% | 当前提交增量 |
+| 合并提交后本地 all | 历史 H11.5+H10.8 full 均值 | 三档 +8.051372% / +8.771758% / +19.825859%；本地分 91.167408 | 当前整栈复核 |
 
 H10-only 的独立历史窗口也得到加权 `+0.958538%`，两次均 27/27、输出 exact、
-三档为正。提交版另完成固定 accuracy `K=1.0`，但尚未重跑 full×3，因此
-`88.5484555` 仍是当前权威 full 综合分，不能把 all3 增量直接加到分数上。
+三档为正。`88.5484555` 是历史 full×3 本地计分锚点；后续合并提交只完成了
+一次本地 full `all`，不能把它表述为 full×3 均值或平台官方分数。
+
+page784 wrapper 和 GQA6 子块改变了浮点归约顺序，但仍逐 token 计算完整
+causal attention，使用相同 BF16 Q/K/V、FP32 softmax/state merge、相同权重和
+采样流程；没有裁剪 token/head/layer 或复用样本答案。数值次序变化可能使文本
+相对历史实现出现确定性分岔，因此本地吞吐输出不被当作 accuracy 证明；提交前
+fixed accuracy `K=1.0`，且平台最终评测已通过。
 
 ## 合规边界
 

@@ -5,6 +5,8 @@
 H11.5 + H10.8 累计优化不依赖新增的性能控制环境变量，两项优化均由源码中的
 设备、dtype 和精确 shape gate 自动命中。当前提交新增的 H10-only rocBLAS
 profile 是显式 opt-in；评测启动前必须 source `scripts/cscc_gfx936_env.sh`。
+page784 split/merge、低 live-range GQA6、row2 GEMV 和连续 M-RoPE 路径同样
+由源码 gate 自动选择，不新增隐藏环境变量。
 
 尤其是：
 
@@ -60,6 +62,10 @@ PyTorch/HIP/gfx936/rocBLAS/hipBLASLt validators；scope、环境、哈希或结�
 | `GPU_MEMORY_UTILIZATION` | `0.95` | 固定显存利用率参数 |
 
 本提交不覆盖这些值，也不修改启动脚本。
+
+以上是已通过平台评测的初赛单卡配置。决赛如指定多卡数量、并行方式或新的
+显存/服务参数，须按决赛规则另行配置和复验；本提交未私自预设这些尚未公布
+的参数。
 
 ## GPU 与动态库环境
 

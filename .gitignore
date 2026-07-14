@@ -255,5 +255,8 @@ id_ed25519
 *.pth
 *.onnx
 *.gguf
-goal_runs/
-testdata/
+/debug_info/
+/debug_infos/
+/goal_runs/
+/testdata/
+/accuracy_debug/

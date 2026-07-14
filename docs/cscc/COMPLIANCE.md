@@ -4,11 +4,14 @@
 
 | 要求 | 本仓库材料 |
 | --- | --- |
-| 完整源代码 | `vllm/`、`csrc/`、`cmake/`、`setup.py`、`pyproject.toml` 等 |
-| 编译脚本 | `scripts/build_cscc_wheel.sh`、`BUILD.md` |
-| 环境变量说明 | `ENVIRONMENT.md` |
-| 优化方案与贡献 | `docs/cscc/OPTIMIZATION.md`、`docs/cscc/RESULTS.md` |
-| 第三方声明 | README 顶部、`THIRD_PARTY_NOTICES.md`、`LICENSE` |
+| 第12条：完整源码与平台编译 | `vllm/`、`csrc/`、`cmake/`、`setup.py`、`pyproject.toml`、`scripts/build_cscc_wheel.sh`、`BUILD.md` |
+| 第13条：逐项环境变量、取值、用途 | `ENVIRONMENT.md`、`scripts/cscc_gfx936_env.sh` |
+| 第14条：路线、贡献、汇总与性能对比 | `docs/cscc/OPTIMIZATION.md`、`docs/cscc/RESULTS.md` |
+| 第15条：平台运行与第三方披露 | README 顶部、`THIRD_PARTY_NOTICES.md`、`LICENSE` |
+
+截至 2026-07-15，当前提交已通过组委会平台评测并进入决赛，证明本阶段平台
+构建/运行/评测链路已接受。本文不伪造或推断平台未公布的详细分数；本地性能
+证据单独标注在 `RESULTS.md`。
 
 ## 最终候选源码
 
@@ -77,6 +80,9 @@ sha256sum -c evidence/manifests/h10_only_submission.sha256
 - 最终候选改动不含 H10.10 K6144 pair-reduce gate 或 ABI marker；
 - 最终候选改动不含 H10.9 强制 hipBLAS backend 切换；
 - 本次改动未新增模型权重持久化量化、重排或跨样本结果缓存；
+- 本次改动不含结构化/非结构化剪枝、层/通道/head/token 跳过或 early exit；
+- 正式配置不启用 speculative decoding、draft/MTP/辅助模型；完整 vLLM 中的
+  上游通用模块不等于本提交启用了这些禁用能力；
 - 最终评测未启用 prefix cache；
 - 本次改动未新增 prompt/数据集特判；
 - page784 路径仅按设备、dtype、GQA/head、cache block 和张量 shape gate，
@@ -85,6 +91,8 @@ sha256sum -c evidence/manifests/h10_only_submission.sha256
   文件或评测边界；
 - H10-only 环境变量全部公开记录在 `ENVIRONMENT.md` 和
   `scripts/cscc_gfx936_env.sh`；没有隐藏性能开关。
+- page784/GQA6 的归约排布变化不修改权重、模型结构、causal mask、采样参数
+  或输出接口；完整 token/head/layer 计算均保留。
 
 ## 仓库排除项
 
@@ -94,9 +102,13 @@ sha256sum -c evidence/manifests/h10_only_submission.sha256
 - `*.whl`、`*.so`
 - `*.safetensors`、`*.pt`、`*.pth`、`*.onnx`、`*.gguf`
 - 模型权重、原始 benchmark/accuracy 输出或 goal_runs
+- `debug_info/`、`debug_infos/`、服务日志、prediction/result JSON 和字节码
 - `.env`、`config.env`、credential、token、私钥
 
-预编译产物不能替代完整源码。
+预编译产物不能替代完整源码。审计曾发现历史开发证据目录包含 460 个日志、
+预测/结果文件和 trace；这些文件不参与构建或运行，已从当前提交树删除并加入
+`.gitignore`。为避免破坏已通过评测提交的可追溯性，没有改写 Git 历史；当前
+HEAD 的评测 checkout 不再包含这些产物。
 
 ## 已知格式项
 
@@ -108,9 +120,9 @@ Python 语义、编译或运行。除这两处外，冻结源码差分没有其�
 ## 提交前验证
 
 1. baseline 15 项源码和 H10-only 增量哈希全部通过；
-2. 新增 GQA6 文件已被 Git 跟踪；
-3. 构建脚本 `bash -n` 通过；
-4. 无模型、wheel、native binary、测试数据或凭据；
-5. README 第一屏包含第三方声明；
+2. GQA6、page784 wrapper、MRoPE runner、TunableOp loader/profile 均被 Git 跟踪；
+3. 构建脚本 `bash -n`、Python 语法检查和官方容器源码构建通过；
+4. 当前 checkout 无模型、wheel、native binary、测试数据、调试输出或凭据；
+5. README 与优化说明顶部均包含第三方声明，FlashAttention API 也已披露；
 6. Git remote URL 不含用户名或密码；
-7. 远端 commit 与本地远程容器 commit SHA 一致。
+7. 推送后复核远端 `pra` 与本地远程容器 commit SHA 一致。
