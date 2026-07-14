@@ -1,0 +1,156 @@
+process_order,process_id,process_title,node_index,node_name,op,target,shape,dtype,users,args,kwargs
+1,runtime_inputs,Runtime FX inputs,0,arg0_1,placeholder,arg0_1,"[3,4096]",torch.int64,"[""index""]",(),{}
+1,runtime_inputs,Runtime FX inputs,1,arg1_1,placeholder,arg1_1,"[4096,5120]",torch.bfloat16,"[""add""]",(),{}
+1,runtime_inputs,Runtime FX inputs,2,arg2_1,placeholder,arg2_1,"[4096,5120]",torch.bfloat16,"[""add""]",(),{}
+2,pre_attention_residual_rmsnorm,Pre-attention residual add and input RMSNorm,3,_param_constant0,get_attr,_param_constant0,[5120],torch.bfloat16,"[""detach""]",(),{}
+2,pre_attention_residual_rmsnorm,Pre-attention residual add and input RMSNorm,4,detach,call_function,aten.detach.default,[5120],torch.bfloat16,"[""_to_copy_1""]","(_param_constant0,)",{}
+2,pre_attention_residual_rmsnorm,Pre-attention residual add and input RMSNorm,5,add,call_function,aten.add.Tensor,"[4096,5120]",torch.bfloat16,"[""_to_copy"", ""add_9""]","(arg1_1, arg2_1)",{}
+2,pre_attention_residual_rmsnorm,Pre-attention residual add and input RMSNorm,6,_to_copy,call_function,aten._to_copy.default,"[4096,5120]",torch.float32,"[""mul"", ""pow_1""]","(add,)",{'dtype': torch.float32}
+2,pre_attention_residual_rmsnorm,Pre-attention residual add and input RMSNorm,7,pow_1,call_function,aten.pow.Tensor_Scalar,"[4096,5120]",torch.float32,"[""mean""]","(_to_copy, 2)",{}
+2,pre_attention_residual_rmsnorm,Pre-attention residual add and input RMSNorm,8,mean,call_function,aten.mean.dim,"[4096,1]",torch.float32,"[""add_1""]","(pow_1, [-1], True)",{}
+2,pre_attention_residual_rmsnorm,Pre-attention residual add and input RMSNorm,9,add_1,call_function,aten.add.Tensor,"[4096,1]",torch.float32,"[""rsqrt""]","(mean, 1e-06)",{}
+2,pre_attention_residual_rmsnorm,Pre-attention residual add and input RMSNorm,10,rsqrt,call_function,aten.rsqrt.default,"[4096,1]",torch.float32,"[""mul""]","(add_1,)",{}
+2,pre_attention_residual_rmsnorm,Pre-attention residual add and input RMSNorm,11,mul,call_function,aten.mul.Tensor,"[4096,5120]",torch.float32,"[""mul_1""]","(_to_copy, rsqrt)",{}
+2,pre_attention_residual_rmsnorm,Pre-attention residual add and input RMSNorm,12,_to_copy_1,call_function,aten._to_copy.default,[5120],torch.float32,"[""add_2""]","(detach,)",{'dtype': torch.float32}
+2,pre_attention_residual_rmsnorm,Pre-attention residual add and input RMSNorm,13,add_2,call_function,aten.add.Tensor,[5120],torch.float32,"[""mul_1""]","(_to_copy_1, 1.0)",{}
+2,pre_attention_residual_rmsnorm,Pre-attention residual add and input RMSNorm,14,mul_1,call_function,aten.mul.Tensor,"[4096,5120]",torch.float32,"[""_to_copy_2""]","(mul, add_2)",{}
+2,pre_attention_residual_rmsnorm,Pre-attention residual add and input RMSNorm,15,_to_copy_2,call_function,aten._to_copy.default,"[4096,5120]",torch.bfloat16,"[""empty_like"", ""mm""]","(mul_1,)",{'dtype': torch.bfloat16}
+3,qkv_projection_and_split,Fused Q/gate/K/V projection and head reshape,17,_param_constant1,get_attr,_param_constant1,"[14336,5120]",torch.bfloat16,"[""t""]",(),{}
+3,qkv_projection_and_split,Fused Q/gate/K/V projection and head reshape,18,t,call_function,aten.t.default,"[5120,14336]",torch.bfloat16,"[""mm""]","(_param_constant1,)",{}
+3,qkv_projection_and_split,Fused Q/gate/K/V projection and head reshape,19,mm,call_function,aten.mm.default,"[4096,14336]",torch.bfloat16,"[""split_with_sizes""]","(_to_copy_2, t)",{}
+3,qkv_projection_and_split,Fused Q/gate/K/V projection and head reshape,20,split_with_sizes,call_function,aten.split_with_sizes.default,null,,"[""getitem"", ""getitem_1"", ""getitem_2""]","(mm, [12288, 1024, 1024], -1)",{}
+3,qkv_projection_and_split,Fused Q/gate/K/V projection and head reshape,21,getitem,call_function,<built-in function getitem>,"[4096,12288]",torch.bfloat16,"[""view""]","(split_with_sizes, 0)",{}
+3,qkv_projection_and_split,Fused Q/gate/K/V projection and head reshape,22,getitem_1,call_function,<built-in function getitem>,"[4096,1024]",torch.bfloat16,"[""view_3""]","(split_with_sizes, 1)",{}
+3,qkv_projection_and_split,Fused Q/gate/K/V projection and head reshape,23,getitem_2,call_function,<built-in function getitem>,"[4096,1024]",torch.bfloat16,"[""view_12""]","(split_with_sizes, 2)",{}
+3,qkv_projection_and_split,Fused Q/gate/K/V projection and head reshape,24,view,call_function,aten.view.default,"[4096,24,512]",torch.bfloat16,"[""split""]","(getitem, [4096, 24, -1])",{}
+3,qkv_projection_and_split,Fused Q/gate/K/V projection and head reshape,25,split,call_function,aten.split.Tensor,null,,"[""getitem_3"", ""getitem_4""]","(view, 256, -1)",{}
+3,qkv_projection_and_split,Fused Q/gate/K/V projection and head reshape,26,getitem_3,call_function,<built-in function getitem>,"[4096,24,256]",torch.bfloat16,"[""clone""]","(split, 0)",{}
+3,qkv_projection_and_split,Fused Q/gate/K/V projection and head reshape,27,getitem_4,call_function,<built-in function getitem>,"[4096,24,256]",torch.bfloat16,"[""clone_1""]","(split, 1)",{}
+3,qkv_projection_and_split,Fused Q/gate/K/V projection and head reshape,28,clone,call_function,aten.clone.default,"[4096,24,256]",torch.bfloat16,"[""_unsafe_view""]","(getitem_3,)",{'memory_format': torch.contiguous_format}
+3,qkv_projection_and_split,Fused Q/gate/K/V projection and head reshape,29,_unsafe_view,call_function,aten._unsafe_view.default,"[4096,6144]",torch.bfloat16,"[""view_1""]","(clone, [4096, 6144])",{}
+3,qkv_projection_and_split,Fused Q/gate/K/V projection and head reshape,30,clone_1,call_function,aten.clone.default,"[4096,24,256]",torch.bfloat16,"[""_unsafe_view_1""]","(getitem_4,)",{'memory_format': torch.contiguous_format}
+3,qkv_projection_and_split,Fused Q/gate/K/V projection and head reshape,31,_unsafe_view_1,call_function,aten._unsafe_view.default,"[4096,6144]",torch.bfloat16,"[""sigmoid""]","(clone_1, [4096, 6144])",{}
+4,q_head_rmsnorm,Q head RMSNorm,32,view_1,call_function,aten.view.default,"[4096,24,256]",torch.bfloat16,"[""_to_copy_3""]","(_unsafe_view, [-1, 24, 256])",{}
+4,q_head_rmsnorm,Q head RMSNorm,33,_param_constant2,get_attr,_param_constant2,[256],torch.bfloat16,"[""detach_1""]",(),{}
+4,q_head_rmsnorm,Q head RMSNorm,34,detach_1,call_function,aten.detach.default,[256],torch.bfloat16,"[""_to_copy_4""]","(_param_constant2,)",{}
+4,q_head_rmsnorm,Q head RMSNorm,35,_to_copy_3,call_function,aten._to_copy.default,"[4096,24,256]",torch.float32,"[""mul_2"", ""pow_2""]","(view_1,)",{'dtype': torch.float32}
+4,q_head_rmsnorm,Q head RMSNorm,36,pow_2,call_function,aten.pow.Tensor_Scalar,"[4096,24,256]",torch.float32,"[""mean_1""]","(_to_copy_3, 2)",{}
+4,q_head_rmsnorm,Q head RMSNorm,37,mean_1,call_function,aten.mean.dim,"[4096,24,1]",torch.float32,"[""add_3""]","(pow_2, [-1], True)",{}
+4,q_head_rmsnorm,Q head RMSNorm,38,add_3,call_function,aten.add.Tensor,"[4096,24,1]",torch.float32,"[""rsqrt_1""]","(mean_1, 1e-06)",{}
+4,q_head_rmsnorm,Q head RMSNorm,39,rsqrt_1,call_function,aten.rsqrt.default,"[4096,24,1]",torch.float32,"[""mul_2""]","(add_3,)",{}
+4,q_head_rmsnorm,Q head RMSNorm,40,mul_2,call_function,aten.mul.Tensor,"[4096,24,256]",torch.float32,"[""mul_3""]","(_to_copy_3, rsqrt_1)",{}
+4,q_head_rmsnorm,Q head RMSNorm,41,_to_copy_4,call_function,aten._to_copy.default,[256],torch.float32,"[""add_4""]","(detach_1,)",{'dtype': torch.float32}
+4,q_head_rmsnorm,Q head RMSNorm,42,add_4,call_function,aten.add.Tensor,[256],torch.float32,"[""mul_3""]","(_to_copy_4, 1.0)",{}
+4,q_head_rmsnorm,Q head RMSNorm,43,mul_3,call_function,aten.mul.Tensor,"[4096,24,256]",torch.float32,"[""_to_copy_5""]","(mul_2, add_4)",{}
+4,q_head_rmsnorm,Q head RMSNorm,44,_to_copy_5,call_function,aten._to_copy.default,"[4096,24,256]",torch.bfloat16,"[""view_2""]","(mul_3,)",{'dtype': torch.bfloat16}
+4,q_head_rmsnorm,Q head RMSNorm,45,view_2,call_function,aten.view.default,"[4096,6144]",torch.bfloat16,"[""view_5""]","(_to_copy_5, [-1, 6144])",{}
+5,k_head_rmsnorm,K head RMSNorm,46,view_3,call_function,aten.view.default,"[4096,4,256]",torch.bfloat16,"[""_to_copy_6""]","(getitem_1, [-1, 4, 256])",{}
+5,k_head_rmsnorm,K head RMSNorm,47,_param_constant3,get_attr,_param_constant3,[256],torch.bfloat16,"[""detach_2""]",(),{}
+5,k_head_rmsnorm,K head RMSNorm,48,detach_2,call_function,aten.detach.default,[256],torch.bfloat16,"[""_to_copy_7""]","(_param_constant3,)",{}
+5,k_head_rmsnorm,K head RMSNorm,49,_to_copy_6,call_function,aten._to_copy.default,"[4096,4,256]",torch.float32,"[""mul_4"", ""pow_3""]","(view_3,)",{'dtype': torch.float32}
+5,k_head_rmsnorm,K head RMSNorm,50,pow_3,call_function,aten.pow.Tensor_Scalar,"[4096,4,256]",torch.float32,"[""mean_2""]","(_to_copy_6, 2)",{}
+5,k_head_rmsnorm,K head RMSNorm,51,mean_2,call_function,aten.mean.dim,"[4096,4,1]",torch.float32,"[""add_5""]","(pow_3, [-1], True)",{}
+5,k_head_rmsnorm,K head RMSNorm,52,add_5,call_function,aten.add.Tensor,"[4096,4,1]",torch.float32,"[""rsqrt_2""]","(mean_2, 1e-06)",{}
+5,k_head_rmsnorm,K head RMSNorm,53,rsqrt_2,call_function,aten.rsqrt.default,"[4096,4,1]",torch.float32,"[""mul_4""]","(add_5,)",{}
+5,k_head_rmsnorm,K head RMSNorm,54,mul_4,call_function,aten.mul.Tensor,"[4096,4,256]",torch.float32,"[""mul_5""]","(_to_copy_6, rsqrt_2)",{}
+5,k_head_rmsnorm,K head RMSNorm,55,_to_copy_7,call_function,aten._to_copy.default,[256],torch.float32,"[""add_6""]","(detach_2,)",{'dtype': torch.float32}
+5,k_head_rmsnorm,K head RMSNorm,56,add_6,call_function,aten.add.Tensor,[256],torch.float32,"[""mul_5""]","(_to_copy_7, 1.0)",{}
+5,k_head_rmsnorm,K head RMSNorm,57,mul_5,call_function,aten.mul.Tensor,"[4096,4,256]",torch.float32,"[""_to_copy_8""]","(mul_4, add_6)",{}
+5,k_head_rmsnorm,K head RMSNorm,58,_to_copy_8,call_function,aten._to_copy.default,"[4096,4,256]",torch.bfloat16,"[""view_4""]","(mul_5,)",{'dtype': torch.bfloat16}
+5,k_head_rmsnorm,K head RMSNorm,59,view_4,call_function,aten.view.default,"[4096,1024]",torch.bfloat16,"[""view_7""]","(_to_copy_8, [-1, 1024])",{}
+6,mrope_table_lookup,MROPE cos/sin table lookup and axis remap,60,_tensor_constant0,get_attr,_tensor_constant0,"[1048576,64]",torch.bfloat16,"[""index""]",(),{}
+6,mrope_table_lookup,MROPE cos/sin table lookup and axis remap,61,index,call_function,aten.index.Tensor,"[3,4096,64]",torch.bfloat16,"[""split_1""]","(_tensor_constant0, [arg0_1])",{}
+6,mrope_table_lookup,MROPE cos/sin table lookup and axis remap,62,split_1,call_function,aten.split.Tensor,null,,"[""getitem_5"", ""getitem_6""]","(index, 32, -1)",{}
+6,mrope_table_lookup,MROPE cos/sin table lookup and axis remap,63,getitem_5,call_function,<built-in function getitem>,"[3,4096,32]",torch.bfloat16,"[""select"", ""select_1"", ""select_2""]","(split_1, 0)",{}
+6,mrope_table_lookup,MROPE cos/sin table lookup and axis remap,64,getitem_6,call_function,<built-in function getitem>,"[3,4096,32]",torch.bfloat16,"[""select_3"", ""select_4"", ""select_5""]","(split_1, 1)",{}
+6,mrope_table_lookup,MROPE cos/sin table lookup and axis remap,65,select,call_function,aten.select.int,"[4096,32]",torch.bfloat16,"[""clone_2""]","(getitem_5, 0, 0)",{}
+6,mrope_table_lookup,MROPE cos/sin table lookup and axis remap,66,clone_2,call_function,aten.clone.default,"[4096,32]",torch.bfloat16,"[""slice_2"", ""slice_4"", ""unsqueeze"", ""unsqueeze_2""]","(select,)",{}
+6,mrope_table_lookup,MROPE cos/sin table lookup and axis remap,67,select_1,call_function,aten.select.int,"[4096,32]",torch.bfloat16,"[""slice_1""]","(getitem_5, 0, 1)",{}
+6,mrope_table_lookup,MROPE cos/sin table lookup and axis remap,68,slice_1,call_function,aten.slice.Tensor,"[4096,11]",torch.bfloat16,"[""copy_""]","(select_1, 1, 1, 33, 3)",{}
+6,mrope_table_lookup,MROPE cos/sin table lookup and axis remap,69,slice_2,call_function,aten.slice.Tensor,"[4096,11]",torch.bfloat16,"[""copy_""]","(clone_2, 1, 1, 33, 3)",{}
+6,mrope_table_lookup,MROPE cos/sin table lookup and axis remap,70,copy_,call_function,aten.copy_.default,"[4096,11]",torch.bfloat16,[],"(slice_2, slice_1)",{}
+6,mrope_table_lookup,MROPE cos/sin table lookup and axis remap,71,select_2,call_function,aten.select.int,"[4096,32]",torch.bfloat16,"[""slice_3""]","(getitem_5, 0, 2)",{}
+6,mrope_table_lookup,MROPE cos/sin table lookup and axis remap,72,slice_3,call_function,aten.slice.Tensor,"[4096,10]",torch.bfloat16,"[""copy__1""]","(select_2, 1, 2, 30, 3)",{}
+6,mrope_table_lookup,MROPE cos/sin table lookup and axis remap,73,slice_4,call_function,aten.slice.Tensor,"[4096,10]",torch.bfloat16,"[""copy__1""]","(clone_2, 1, 2, 30, 3)",{}
+6,mrope_table_lookup,MROPE cos/sin table lookup and axis remap,74,copy__1,call_function,aten.copy_.default,"[4096,10]",torch.bfloat16,[],"(slice_4, slice_3)",{}
+6,mrope_table_lookup,MROPE cos/sin table lookup and axis remap,75,select_3,call_function,aten.select.int,"[4096,32]",torch.bfloat16,"[""clone_3""]","(getitem_6, 0, 0)",{}
+6,mrope_table_lookup,MROPE cos/sin table lookup and axis remap,76,clone_3,call_function,aten.clone.default,"[4096,32]",torch.bfloat16,"[""slice_6"", ""slice_8"", ""unsqueeze_1"", ""unsqueeze_3""]","(select_3,)",{}
+6,mrope_table_lookup,MROPE cos/sin table lookup and axis remap,77,select_4,call_function,aten.select.int,"[4096,32]",torch.bfloat16,"[""slice_5""]","(getitem_6, 0, 1)",{}
+6,mrope_table_lookup,MROPE cos/sin table lookup and axis remap,78,slice_5,call_function,aten.slice.Tensor,"[4096,11]",torch.bfloat16,"[""copy__2""]","(select_4, 1, 1, 33, 3)",{}
+6,mrope_table_lookup,MROPE cos/sin table lookup and axis remap,79,slice_6,call_function,aten.slice.Tensor,"[4096,11]",torch.bfloat16,"[""copy__2""]","(clone_3, 1, 1, 33, 3)",{}
+6,mrope_table_lookup,MROPE cos/sin table lookup and axis remap,80,copy__2,call_function,aten.copy_.default,"[4096,11]",torch.bfloat16,[],"(slice_6, slice_5)",{}
+6,mrope_table_lookup,MROPE cos/sin table lookup and axis remap,81,select_5,call_function,aten.select.int,"[4096,32]",torch.bfloat16,"[""slice_7""]","(getitem_6, 0, 2)",{}
+6,mrope_table_lookup,MROPE cos/sin table lookup and axis remap,82,slice_7,call_function,aten.slice.Tensor,"[4096,10]",torch.bfloat16,"[""copy__3""]","(select_5, 1, 2, 30, 3)",{}
+6,mrope_table_lookup,MROPE cos/sin table lookup and axis remap,83,slice_8,call_function,aten.slice.Tensor,"[4096,10]",torch.bfloat16,"[""copy__3""]","(clone_3, 1, 2, 30, 3)",{}
+6,mrope_table_lookup,MROPE cos/sin table lookup and axis remap,84,copy__3,call_function,aten.copy_.default,"[4096,10]",torch.bfloat16,[],"(slice_8, slice_7)",{}
+7,q_rope_apply,Q RoPE application,85,view_5,call_function,aten.view.default,"[4096,24,256]",torch.bfloat16,"[""slice_10"", ""slice_9""]","(view_2, [4096, -1, 256])",{}
+7,q_rope_apply,Q RoPE application,86,slice_9,call_function,aten.slice.Tensor,"[4096,24,64]",torch.bfloat16,"[""split_2""]","(view_5, 2, 0, 64)",{}
+7,q_rope_apply,Q RoPE application,87,slice_10,call_function,aten.slice.Tensor,"[4096,24,192]",torch.bfloat16,"[""cat_1""]","(view_5, 2, 64, 9223372036854775807)",{}
+7,q_rope_apply,Q RoPE application,88,unsqueeze,call_function,aten.unsqueeze.default,"[4096,1,32]",torch.bfloat16,"[""mul_6"", ""mul_8""]","(clone_2, -2)",{}
+7,q_rope_apply,Q RoPE application,89,unsqueeze_1,call_function,aten.unsqueeze.default,"[4096,1,32]",torch.bfloat16,"[""mul_7"", ""mul_9""]","(clone_3, -2)",{}
+7,q_rope_apply,Q RoPE application,90,split_2,call_function,aten.split.Tensor,null,,"[""getitem_7"", ""getitem_8""]","(slice_9, 32, -1)",{}
+7,q_rope_apply,Q RoPE application,91,getitem_7,call_function,<built-in function getitem>,"[4096,24,32]",torch.bfloat16,"[""mul_6"", ""mul_9""]","(split_2, 0)",{}
+7,q_rope_apply,Q RoPE application,92,getitem_8,call_function,<built-in function getitem>,"[4096,24,32]",torch.bfloat16,"[""mul_7"", ""mul_8""]","(split_2, 1)",{}
+7,q_rope_apply,Q RoPE application,93,mul_6,call_function,aten.mul.Tensor,"[4096,24,32]",torch.bfloat16,"[""sub""]","(getitem_7, unsqueeze)",{}
+7,q_rope_apply,Q RoPE application,94,mul_7,call_function,aten.mul.Tensor,"[4096,24,32]",torch.bfloat16,"[""sub""]","(getitem_8, unsqueeze_1)",{}
+7,q_rope_apply,Q RoPE application,95,sub,call_function,aten.sub.Tensor,"[4096,24,32]",torch.bfloat16,"[""cat""]","(mul_6, mul_7)",{}
+7,q_rope_apply,Q RoPE application,96,mul_8,call_function,aten.mul.Tensor,"[4096,24,32]",torch.bfloat16,"[""add_7""]","(getitem_8, unsqueeze)",{}
+7,q_rope_apply,Q RoPE application,97,mul_9,call_function,aten.mul.Tensor,"[4096,24,32]",torch.bfloat16,"[""add_7""]","(getitem_7, unsqueeze_1)",{}
+7,q_rope_apply,Q RoPE application,98,add_7,call_function,aten.add.Tensor,"[4096,24,32]",torch.bfloat16,"[""cat""]","(mul_8, mul_9)",{}
+7,q_rope_apply,Q RoPE application,99,cat,call_function,aten.cat.default,"[4096,24,64]",torch.bfloat16,"[""cat_1""]","([sub, add_7], -1)",{}
+7,q_rope_apply,Q RoPE application,100,cat_1,call_function,aten.cat.default,"[4096,24,256]",torch.bfloat16,"[""view_6""]","([cat, slice_10], -1)",{}
+7,q_rope_apply,Q RoPE application,101,view_6,call_function,aten.view.default,"[4096,6144]",torch.bfloat16,"[""view_9""]","(cat_1, [4096, 6144])",{}
+8,k_rope_apply,K RoPE application,102,view_7,call_function,aten.view.default,"[4096,4,256]",torch.bfloat16,"[""slice_11"", ""slice_12""]","(view_4, [4096, -1, 256])",{}
+8,k_rope_apply,K RoPE application,103,slice_11,call_function,aten.slice.Tensor,"[4096,4,64]",torch.bfloat16,"[""split_3""]","(view_7, 2, 0, 64)",{}
+8,k_rope_apply,K RoPE application,104,slice_12,call_function,aten.slice.Tensor,"[4096,4,192]",torch.bfloat16,"[""cat_3""]","(view_7, 2, 64, 9223372036854775807)",{}
+8,k_rope_apply,K RoPE application,105,unsqueeze_2,call_function,aten.unsqueeze.default,"[4096,1,32]",torch.bfloat16,"[""mul_10"", ""mul_12""]","(clone_2, -2)",{}
+8,k_rope_apply,K RoPE application,106,unsqueeze_3,call_function,aten.unsqueeze.default,"[4096,1,32]",torch.bfloat16,"[""mul_11"", ""mul_13""]","(clone_3, -2)",{}
+8,k_rope_apply,K RoPE application,107,split_3,call_function,aten.split.Tensor,null,,"[""getitem_10"", ""getitem_9""]","(slice_11, 32, -1)",{}
+8,k_rope_apply,K RoPE application,108,getitem_9,call_function,<built-in function getitem>,"[4096,4,32]",torch.bfloat16,"[""mul_10"", ""mul_13""]","(split_3, 0)",{}
+8,k_rope_apply,K RoPE application,109,getitem_10,call_function,<built-in function getitem>,"[4096,4,32]",torch.bfloat16,"[""mul_11"", ""mul_12""]","(split_3, 1)",{}
+8,k_rope_apply,K RoPE application,110,mul_10,call_function,aten.mul.Tensor,"[4096,4,32]",torch.bfloat16,"[""sub_1""]","(getitem_9, unsqueeze_2)",{}
+8,k_rope_apply,K RoPE application,111,mul_11,call_function,aten.mul.Tensor,"[4096,4,32]",torch.bfloat16,"[""sub_1""]","(getitem_10, unsqueeze_3)",{}
+8,k_rope_apply,K RoPE application,112,sub_1,call_function,aten.sub.Tensor,"[4096,4,32]",torch.bfloat16,"[""cat_2""]","(mul_10, mul_11)",{}
+8,k_rope_apply,K RoPE application,113,mul_12,call_function,aten.mul.Tensor,"[4096,4,32]",torch.bfloat16,"[""add_8""]","(getitem_10, unsqueeze_2)",{}
+8,k_rope_apply,K RoPE application,114,mul_13,call_function,aten.mul.Tensor,"[4096,4,32]",torch.bfloat16,"[""add_8""]","(getitem_9, unsqueeze_3)",{}
+8,k_rope_apply,K RoPE application,115,add_8,call_function,aten.add.Tensor,"[4096,4,32]",torch.bfloat16,"[""cat_2""]","(mul_12, mul_13)",{}
+8,k_rope_apply,K RoPE application,116,cat_2,call_function,aten.cat.default,"[4096,4,64]",torch.bfloat16,"[""cat_3""]","([sub_1, add_8], -1)",{}
+8,k_rope_apply,K RoPE application,117,cat_3,call_function,aten.cat.default,"[4096,4,256]",torch.bfloat16,"[""view_8""]","([cat_2, slice_12], -1)",{}
+8,k_rope_apply,K RoPE application,118,view_8,call_function,aten.view.default,"[4096,1024]",torch.bfloat16,"[""view_11""]","(cat_3, [4096, 1024])",{}
+9,vllm_attention_and_kv_cache,vLLM attention and KV cache update,119,empty,call_function,aten.empty.memory_format,"[4096,6144]",torch.bfloat16,"[""view_10""]","([4096, 6144],)","{'dtype': torch.bfloat16, 'device': device(type='cuda', index=0), 'pin_memory': False}"
+9,vllm_attention_and_kv_cache,vLLM attention and KV cache update,120,view_9,call_function,aten.view.default,"[4096,24,256]",torch.bfloat16,"[""unified_attention_with_output""]","(view_6, [-1, 24, 256])",{}
+9,vllm_attention_and_kv_cache,vLLM attention and KV cache update,121,view_10,call_function,aten.view.default,"[4096,24,256]",torch.bfloat16,"[""unified_attention_with_output"", ""view_13""]","(empty, [-1, 24, 256])",{}
+9,vllm_attention_and_kv_cache,vLLM attention and KV cache update,122,view_11,call_function,aten.view.default,"[4096,4,256]",torch.bfloat16,"[""unified_attention_with_output"", ""unified_kv_cache_update""]","(view_8, [-1, 4, 256])",{}
+9,vllm_attention_and_kv_cache,vLLM attention and KV cache update,123,view_12,call_function,aten.view.default,"[4096,4,256]",torch.bfloat16,"[""unified_attention_with_output"", ""unified_kv_cache_update""]","(getitem_2, [-1, 4, 256])",{}
+9,vllm_attention_and_kv_cache,vLLM attention and KV cache update,124,unified_kv_cache_update,call_function,vllm.unified_kv_cache_update.default,[0],torch.bfloat16,"[""unified_attention_with_output""]","(view_11, view_12, 'language_model.model.layers.59.self_attn.attn')",{}
+9,vllm_attention_and_kv_cache,vLLM attention and KV cache update,125,unified_attention_with_output,call_function,vllm.unified_attention_with_output.default,null,,[],"(view_9, view_11, view_12, view_10, 'language_model.model.layers.59.self_attn.attn', None, None, unified_kv_cache_update)",{}
+10,attention_gate_projection_residual,"Attention gate, output projection, and residual",16,empty_like,call_function,aten.empty_like.default,"[4096,5120]",torch.bfloat16,"[""copy__4""]","(_to_copy_2,)",{'pin_memory': False}
+10,attention_gate_projection_residual,"Attention gate, output projection, and residual",126,view_13,call_function,aten.view.default,"[4096,6144]",torch.bfloat16,"[""mul_14""]","(view_10, [-1, 6144])",{}
+10,attention_gate_projection_residual,"Attention gate, output projection, and residual",127,sigmoid,call_function,aten.sigmoid.default,"[4096,6144]",torch.bfloat16,"[""mul_14""]","(_unsafe_view_1,)",{}
+10,attention_gate_projection_residual,"Attention gate, output projection, and residual",128,mul_14,call_function,aten.mul.Tensor,"[4096,6144]",torch.bfloat16,"[""mm_1""]","(view_13, sigmoid)",{}
+10,attention_gate_projection_residual,"Attention gate, output projection, and residual",129,_param_constant4,get_attr,_param_constant4,"[5120,6144]",torch.bfloat16,"[""t_1""]",(),{}
+10,attention_gate_projection_residual,"Attention gate, output projection, and residual",130,t_1,call_function,aten.t.default,"[6144,5120]",torch.bfloat16,"[""mm_1""]","(_param_constant4,)",{}
+10,attention_gate_projection_residual,"Attention gate, output projection, and residual",131,mm_1,call_function,aten.mm.default,"[4096,5120]",torch.bfloat16,"[""copy__4""]","(mul_14, t_1)",{}
+10,attention_gate_projection_residual,"Attention gate, output projection, and residual",132,copy__4,call_function,aten.copy_.default,"[4096,5120]",torch.bfloat16,"[""add_9""]","(empty_like, mm_1)",{}
+10,attention_gate_projection_residual,"Attention gate, output projection, and residual",135,add_9,call_function,aten.add.Tensor,"[4096,5120]",torch.bfloat16,"[""_to_copy_9"", ""output""]","(copy__4, add)",{}
+11,post_attention_rmsnorm,Post-attention RMSNorm,133,_param_constant5,get_attr,_param_constant5,[5120],torch.bfloat16,"[""detach_3""]",(),{}
+11,post_attention_rmsnorm,Post-attention RMSNorm,134,detach_3,call_function,aten.detach.default,[5120],torch.bfloat16,"[""_to_copy_10""]","(_param_constant5,)",{}
+11,post_attention_rmsnorm,Post-attention RMSNorm,136,_to_copy_9,call_function,aten._to_copy.default,"[4096,5120]",torch.float32,"[""mul_15"", ""pow_4""]","(add_9,)",{'dtype': torch.float32}
+11,post_attention_rmsnorm,Post-attention RMSNorm,137,pow_4,call_function,aten.pow.Tensor_Scalar,"[4096,5120]",torch.float32,"[""mean_3""]","(_to_copy_9, 2)",{}
+11,post_attention_rmsnorm,Post-attention RMSNorm,138,mean_3,call_function,aten.mean.dim,"[4096,1]",torch.float32,"[""add_10""]","(pow_4, [-1], True)",{}
+11,post_attention_rmsnorm,Post-attention RMSNorm,139,add_10,call_function,aten.add.Tensor,"[4096,1]",torch.float32,"[""rsqrt_3""]","(mean_3, 1e-06)",{}
+11,post_attention_rmsnorm,Post-attention RMSNorm,140,rsqrt_3,call_function,aten.rsqrt.default,"[4096,1]",torch.float32,"[""mul_15""]","(add_10,)",{}
+11,post_attention_rmsnorm,Post-attention RMSNorm,141,mul_15,call_function,aten.mul.Tensor,"[4096,5120]",torch.float32,"[""mul_16""]","(_to_copy_9, rsqrt_3)",{}
+11,post_attention_rmsnorm,Post-attention RMSNorm,142,_to_copy_10,call_function,aten._to_copy.default,[5120],torch.float32,"[""add_11""]","(detach_3,)",{'dtype': torch.float32}
+11,post_attention_rmsnorm,Post-attention RMSNorm,143,add_11,call_function,aten.add.Tensor,[5120],torch.float32,"[""mul_16""]","(_to_copy_10, 1.0)",{}
+11,post_attention_rmsnorm,Post-attention RMSNorm,144,mul_16,call_function,aten.mul.Tensor,"[4096,5120]",torch.float32,"[""_to_copy_11""]","(mul_15, add_11)",{}
+11,post_attention_rmsnorm,Post-attention RMSNorm,145,_to_copy_11,call_function,aten._to_copy.default,"[4096,5120]",torch.bfloat16,"[""mm_2""]","(mul_16,)",{'dtype': torch.bfloat16}
+12,mlp_and_layer_output,MLP and layer output tuple,146,_param_constant6,get_attr,_param_constant6,"[34816,5120]",torch.bfloat16,"[""t_2""]",(),{}
+12,mlp_and_layer_output,MLP and layer output tuple,147,t_2,call_function,aten.t.default,"[5120,34816]",torch.bfloat16,"[""mm_2""]","(_param_constant6,)",{}
+12,mlp_and_layer_output,MLP and layer output tuple,148,mm_2,call_function,aten.mm.default,"[4096,34816]",torch.bfloat16,"[""silu_and_mul""]","(_to_copy_11, t_2)",{}
+12,mlp_and_layer_output,MLP and layer output tuple,149,empty_1,call_function,aten.empty.memory_format,"[4096,17408]",torch.bfloat16,"[""mm_3"", ""silu_and_mul""]","([4096, 17408],)","{'dtype': torch.bfloat16, 'device': device(type='cuda', index=0), 'pin_memory': False}"
+12,mlp_and_layer_output,MLP and layer output tuple,150,silu_and_mul,call_function,_C.silu_and_mul.default,null,,[],"(empty_1, mm_2)",{}
+12,mlp_and_layer_output,MLP and layer output tuple,151,_param_constant7,get_attr,_param_constant7,"[5120,17408]",torch.bfloat16,"[""t_3""]",(),{}
+12,mlp_and_layer_output,MLP and layer output tuple,152,t_3,call_function,aten.t.default,"[17408,5120]",torch.bfloat16,"[""mm_3""]","(_param_constant7,)",{}
+12,mlp_and_layer_output,MLP and layer output tuple,153,mm_3,call_function,aten.mm.default,"[4096,5120]",torch.bfloat16,"[""output""]","(empty_1, t_3)",{}
+12,mlp_and_layer_output,MLP and layer output tuple,154,output,output,output,null,,[],"((mm_3, add_9),)",{}

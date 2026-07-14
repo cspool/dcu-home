@@ -1,0 +1,196 @@
+  - .args:
+      - .address_space:  global
+        .offset:         0
+        .size:           8
+        .value_kind:     global_buffer
+      - .address_space:  global
+        .offset:         8
+        .size:           8
+        .value_kind:     global_buffer
+      - .address_space:  global
+        .offset:         16
+        .size:           8
+        .value_kind:     global_buffer
+      - .address_space:  global
+        .offset:         24
+        .size:           8
+        .value_kind:     global_buffer
+      - .address_space:  global
+        .offset:         32
+        .size:           8
+        .value_kind:     global_buffer
+      - .address_space:  global
+        .offset:         40
+        .size:           8
+        .value_kind:     global_buffer
+      - .offset:         48
+        .size:           4
+        .value_kind:     by_value
+      - .address_space:  global
+        .offset:         56
+        .size:           8
+        .value_kind:     global_buffer
+      - .address_space:  global
+        .offset:         64
+        .size:           8
+        .value_kind:     global_buffer
+      - .offset:         72
+        .size:           4
+        .value_kind:     by_value
+      - .offset:         80
+        .size:           8
+        .value_kind:     by_value
+      - .offset:         88
+        .size:           8
+        .value_kind:     by_value
+      - .offset:         96
+        .size:           8
+        .value_kind:     by_value
+      - .offset:         104
+        .size:           8
+        .value_kind:     by_value
+      - .offset:         112
+        .size:           8
+        .value_kind:     by_value
+      - .offset:         120
+        .size:           8
+        .value_kind:     by_value
+      - .offset:         128
+        .size:           8
+        .value_kind:     by_value
+      - .offset:         136
+        .size:           8
+        .value_kind:     by_value
+      - .offset:         144
+        .size:           8
+        .value_kind:     by_value
+      - .offset:         152
+        .size:           8
+        .value_kind:     by_value
+      - .offset:         160
+        .size:           8
+        .value_kind:     by_value
+      - .address_space:  global
+        .offset:         168
+        .size:           8
+        .value_kind:     global_buffer
+      - .offset:         176
+        .size:           4
+        .value_kind:     by_value
+      - .address_space:  global
+        .offset:         184
+        .size:           8
+        .value_kind:     global_buffer
+      - .address_space:  global
+        .offset:         192
+        .size:           8
+        .value_kind:     global_buffer
+    .group_segment_fixed_size: 0
+    .kernarg_segment_align: 8
+    .kernarg_segment_size: 200
+    .language:       OpenCL C
+    .language_version:
+      - 2
+      - 0
+    .max_flat_workgroup_size: 256
+    .name:           kernel_unified_attention_2d_gqa6
+    .private_segment_fixed_size: 0
+    .sgpr_count:     87
+    .sgpr_spill_count: 0
+    .symbol:         kernel_unified_attention_2d_gqa6.kd
+    .unfolded_args:
+      - .address_space:  global
+        .offset:         0
+        .size:           8
+        .value_kind:     global_buffer
+      - .address_space:  global
+        .offset:         8
+        .size:           8
+        .value_kind:     global_buffer
+      - .address_space:  global
+        .offset:         16
+        .size:           8
+        .value_kind:     global_buffer
+      - .address_space:  global
+        .offset:         24
+        .size:           8
+        .value_kind:     global_buffer
+      - .address_space:  global
+        .offset:         32
+        .size:           8
+        .value_kind:     global_buffer
+      - .address_space:  global
+        .offset:         40
+        .size:           8
+        .value_kind:     global_buffer
+      - .offset:         48
+        .size:           4
+        .value_kind:     by_value
+      - .address_space:  global
+        .offset:         56
+        .size:           8
+        .value_kind:     global_buffer
+      - .address_space:  global
+        .offset:         64
+        .size:           8
+        .value_kind:     global_buffer
+      - .offset:         72
+        .size:           4
+        .value_kind:     by_value
+      - .offset:         80
+        .size:           8
+        .value_kind:     by_value
+      - .offset:         88
+        .size:           8
+        .value_kind:     by_value
+      - .offset:         96
+        .size:           8
+        .value_kind:     by_value
+      - .offset:         104
+        .size:           8
+        .value_kind:     by_value
+      - .offset:         112
+        .size:           8
+        .value_kind:     by_value
+      - .offset:         120
+        .size:           8
+        .value_kind:     by_value
+      - .offset:         128
+        .size:           8
+        .value_kind:     by_value
+      - .offset:         136
+        .size:           8
+        .value_kind:     by_value
+      - .offset:         144
+        .size:           8
+        .value_kind:     by_value
+      - .offset:         152
+        .size:           8
+        .value_kind:     by_value
+      - .offset:         160
+        .size:           8
+        .value_kind:     by_value
+      - .address_space:  global
+        .offset:         168
+        .size:           8
+        .value_kind:     global_buffer
+      - .offset:         176
+        .size:           4
+        .value_kind:     by_value
+      - .address_space:  global
+        .offset:         184
+        .size:           8
+        .value_kind:     global_buffer
+      - .address_space:  global
+        .offset:         192
+        .size:           8
+        .value_kind:     global_buffer
+    .uses_dynamic_stack: false
+    .vgpr_count:     216
+    .vgpr_spill_count: 0
+    .wavefront_size: 64
+amdhsa.target:   'amdgcn-amd-amdhsa--gfx936:xnack-'
+amdhsa.version:
+  - 1
+  - 2
+...

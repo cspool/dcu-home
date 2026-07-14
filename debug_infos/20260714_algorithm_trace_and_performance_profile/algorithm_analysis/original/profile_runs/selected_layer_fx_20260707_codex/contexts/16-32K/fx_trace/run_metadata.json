@@ -1,0 +1,63 @@
+{
+  "analysis_type": "vllm_qwen35_selected_layer_fx_trace",
+  "captured_by_layer": {
+    "3": 1,
+    "31": 1,
+    "59": 1
+  },
+  "captured_events": [
+    "input1_layer3",
+    "input2_layer31",
+    "input4_layer59"
+  ],
+  "context": "16-32K",
+  "evidence_boundary": {
+    "offline_fx_dag": "cloned fixed inputs are replayed with make_fx; generation output comes from eager layer forward",
+    "runtime_sampling": "selected decoder-layer inputs are cloned at runtime layer entry"
+  },
+  "expected_event_outputs": [
+    "fx_graph.py",
+    "fx_graph.txt",
+    "fx_nodes.json",
+    "fx_graph_module.pt",
+    "fx_graph_module/",
+    "fx_trace_metadata.json"
+  ],
+  "fx_sample_count": 3,
+  "fx_trace_count": 3,
+  "fx_trace_error_count": 0,
+  "layerwise_source": "./profile_runs/patch_trace_20260707_codex",
+  "max_samples_per_layer": 0,
+  "metadata_aggregation": {
+    "reason": "vLLM worker processes can exit after the tracing worker and otherwise overwrite run metadata.",
+    "source": "fx_layer_trace_manifest.csv and fx_layer_events.csv",
+    "updated_by": "summarize_selected_layer_fx_trace.py"
+  },
+  "observed_layer_event_count": 1856,
+  "outputs": {
+    "fx_layer_events": "profile_runs/selected_layer_fx_20260707_codex/contexts/16-32K/fx_trace/fx_layer_events.csv",
+    "fx_layer_trace_manifest": "profile_runs/selected_layer_fx_20260707_codex/contexts/16-32K/fx_trace/fx_layer_trace_manifest.csv",
+    "run_metadata": "profile_runs/selected_layer_fx_20260707_codex/contexts/16-32K/fx_trace/run_metadata.json"
+  },
+  "patch_errors": [],
+  "pid": 51737,
+  "selected_layer_rationale": "layer3 is the dominant full-attention outlier across all contexts; layer31 is the long-context-specific outlier; layer59 is a stable late-layer representative. Event ids use the hottest observed chunk for each selected layer/context from the layerwise patch trace.",
+  "target_any_forward_layers": [],
+  "target_event_keys": [
+    "input1_layer3",
+    "input2_layer31",
+    "input4_layer59"
+  ],
+  "target_phases": [
+    "prefill_chunk"
+  ],
+  "targets": "1:3,2:31,4:59",
+  "trace_strategy": "runtime_eager_layer_forward_then_inline_fixed_input_make_fx",
+  "tracing_options": {
+    "_allow_non_fake_inputs": true,
+    "pre_dispatch": false,
+    "record_module_stack": true,
+    "record_stack_traces": false,
+    "tracing_mode": "fake"
+  }
+}

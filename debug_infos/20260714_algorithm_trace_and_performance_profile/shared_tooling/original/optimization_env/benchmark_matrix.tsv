@@ -1,0 +1,9 @@
+case_id	context	max_num_batched_tokens	max_num_seqs	gpu_memory_utilization	purpose
+baseline_4096_all	all	4096	128	0.95	current default baseline
+chunk_6144_all	all	6144	128	0.95	reduce prefill chunks while keeping moderate memory pressure
+chunk_8192_all	all	8192	128	0.95	primary long-context candidate
+chunk_12288_all	all	12288	128	0.95	aggressive long-context candidate
+chunk_8192_4-8K	4-8K	8192	128	0.95	context-specific sanity case
+chunk_8192_8-16K	8-16K	8192	128	0.95	context-specific long prefill case
+chunk_8192_16-32K	16-32K	8192	128	0.95	context-specific longest prefill case
+

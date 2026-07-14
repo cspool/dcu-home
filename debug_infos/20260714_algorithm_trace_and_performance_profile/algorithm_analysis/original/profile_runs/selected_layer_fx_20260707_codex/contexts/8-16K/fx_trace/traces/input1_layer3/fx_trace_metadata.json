@@ -1,0 +1,99 @@
+{
+  "context": "8-16K",
+  "engine_step_id": 1,
+  "event_id": "input1_layer3",
+  "forward_id": 1,
+  "graph_module_tensor_storage": {
+    "buffers": 1,
+    "bytes_avoided_estimate": 878728192,
+    "enabled": true,
+    "parameters": 8,
+    "tensor_attributes": 0
+  },
+  "input_binding": {
+    "flat_inputs": [
+      {
+        "flat_index": 0,
+        "source": "kwarg",
+        "source_name": "positions"
+      },
+      {
+        "flat_index": 1,
+        "source": "kwarg",
+        "source_name": "hidden_states"
+      },
+      {
+        "flat_index": 2,
+        "source": "kwarg",
+        "source_name": "residual"
+      }
+    ],
+    "keyword_names": [
+      "positions",
+      "hidden_states",
+      "residual"
+    ],
+    "positional_arg_count": 0
+  },
+  "node_count": 155,
+  "outputs": {
+    "fx_graph_module_dir": "profile_runs/selected_layer_fx_20260707_codex/contexts/8-16K/fx_trace/traces/input1_layer3/fx_graph_module",
+    "fx_graph_module_pt": "profile_runs/selected_layer_fx_20260707_codex/contexts/8-16K/fx_trace/traces/input1_layer3/fx_graph_module.pt",
+    "fx_graph_py": "profile_runs/selected_layer_fx_20260707_codex/contexts/8-16K/fx_trace/traces/input1_layer3/fx_graph.py",
+    "fx_graph_txt": "profile_runs/selected_layer_fx_20260707_codex/contexts/8-16K/fx_trace/traces/input1_layer3/fx_graph.txt",
+    "fx_nodes_json": "profile_runs/selected_layer_fx_20260707_codex/contexts/8-16K/fx_trace/traces/input1_layer3/fx_nodes.json"
+  },
+  "phase": "prefill_chunk",
+  "q_len": 4096,
+  "save_errors": [],
+  "specialization": {
+    "kind": "vllm_decoder_layer_fixed_runtime_input",
+    "layer_class": "vllm.model_executor.models.qwen3_5.Qwen3_5DecoderLayer",
+    "layer_idx": 3,
+    "layer_type": "full_attention",
+    "note": "FX replay runs after the eager layer output is produced, while vLLM forward context is still active.",
+    "original_forward": "vllm.model_executor.models.qwen3_next.Qwen3NextDecoderLayer.forward",
+    "runtime_inputs": {
+      "args": {
+        "tuple": []
+      },
+      "kwargs": {
+        "hidden_states": {
+          "device": "cuda:0",
+          "dtype": "torch.bfloat16",
+          "requires_grad": false,
+          "shape": [
+            4096,
+            5120
+          ]
+        },
+        "positions": {
+          "device": "cuda:0",
+          "dtype": "torch.int64",
+          "requires_grad": false,
+          "shape": [
+            3,
+            4096
+          ]
+        },
+        "residual": {
+          "device": "cuda:0",
+          "dtype": "torch.bfloat16",
+          "requires_grad": false,
+          "shape": [
+            4096,
+            5120
+          ]
+        }
+      }
+    }
+  },
+  "target": "input1_layer3:layer3.forward",
+  "tracing_options": {
+    "_allow_non_fake_inputs": true,
+    "pre_dispatch": false,
+    "record_module_stack": true,
+    "record_stack_traces": false,
+    "tracing_mode": "fake"
+  }
+}

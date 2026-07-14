@@ -1,0 +1,2 @@
+Index,KernelName,gpu-id,queue-id,queue-index,pid,tid,grd,wgr,lds,scr,arch_vgpr,accum_vgpr,sgpr,wave_size,sig,obj,SQ_INSTS_LDS,SQ_ACTIVE_INST_LDS,SQ_WAIT_INST_LDS,SQ_LDS_BANK_CONFLICT,SQ_LDS_ADDR_CONFLICT,SQ_INSTS_MMOP,SQ_ACTIVE_INST_MMOP
+4,"kernel_unified_attention_2d_gqa6.kd",8,0,14,469622,469622,52224,256,32768,0,216,0,96,64,0x0,0x7fc3619c8dc0,54989376,69203706,122376261,93189120,323232,20686848,41373696

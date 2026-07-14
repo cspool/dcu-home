@@ -1,0 +1,20 @@
+ninja: Entering directory `build/temp.linux-x86_64-cpython-310'
+[1/2] Running hipify on _rocm_C extension source files.
+/public/home/tangyu408/vllm_cscc/build/temp.linux-x86_64-cpython-310/csrc/cuda_compat.h -> /public/home/tangyu408/vllm_cscc/build/temp.linux-x86_64-cpython-310/csrc/hip_compat.h [skipped, already hipified]
+/public/home/tangyu408/vllm_cscc/build/temp.linux-x86_64-cpython-310/csrc/rocm/skinny_gemms.cu -> /public/home/tangyu408/vllm_cscc/build/temp.linux-x86_64-cpython-310/csrc/rocm/skinny_gemms.hip [ok]
+/public/home/tangyu408/vllm_cscc/build/temp.linux-x86_64-cpython-310/csrc/attention/attention_generic.cuh -> /public/home/tangyu408/vllm_cscc/build/temp.linux-x86_64-cpython-310/csrc/attention/attention_generic.cuh [skipped, no changes]
+/public/home/tangyu408/vllm_cscc/build/temp.linux-x86_64-cpython-310/csrc/attention/dtype_fp8.cuh -> /public/home/tangyu408/vllm_cscc/build/temp.linux-x86_64-cpython-310/csrc/attention/dtype_fp8.cuh [skipped, no changes]
+/public/home/tangyu408/vllm_cscc/build/temp.linux-x86_64-cpython-310/csrc/attention/dtype_float32.cuh -> /public/home/tangyu408/vllm_cscc/build/temp.linux-x86_64-cpython-310/csrc/attention/dtype_float32.cuh [skipped, no changes]
+/public/home/tangyu408/vllm_cscc/build/temp.linux-x86_64-cpython-310/csrc/attention/dtype_float16.cuh -> /public/home/tangyu408/vllm_cscc/build/temp.linux-x86_64-cpython-310/csrc/attention/dtype_float16_hip.cuh [skipped, already hipified]
+/public/home/tangyu408/vllm_cscc/build/temp.linux-x86_64-cpython-310/csrc/attention/dtype_bfloat16.cuh -> /public/home/tangyu408/vllm_cscc/build/temp.linux-x86_64-cpython-310/csrc/attention/dtype_bfloat16_hip.cuh [skipped, already hipified]
+/public/home/tangyu408/vllm_cscc/build/temp.linux-x86_64-cpython-310/csrc/attention/attention_dtypes.h -> /public/home/tangyu408/vllm_cscc/build/temp.linux-x86_64-cpython-310/csrc/attention/attention_dtypes_hip.h [skipped, already hipified]
+/public/home/tangyu408/vllm_cscc/build/temp.linux-x86_64-cpython-310/csrc/quantization/w8a8/fp8/amd/quant_utils.cuh -> /public/home/tangyu408/vllm_cscc/build/temp.linux-x86_64-cpython-310/csrc/quantization/w8a8/fp8/amd/quant_utils_hip.cuh [skipped, already hipified]
+/public/home/tangyu408/vllm_cscc/build/temp.linux-x86_64-cpython-310/csrc/rocm/attention.cu -> /public/home/tangyu408/vllm_cscc/build/temp.linux-x86_64-cpython-310/csrc/rocm/attention.hip [skipped, already hipified]
+Successfully preprocessed all matching files.
+Total number of unsupported CUDA function calls: 0
+
+
+Total number of replaced kernel launches: 17
+/public/home/tangyu408/vllm_cscc/build/temp.linux-x86_64-cpython-310/csrc/rocm/skinny_gemms.hip
+/public/home/tangyu408/vllm_cscc/build/temp.linux-x86_64-cpython-310/csrc/rocm/attention.hip
+[2/2] Building HIP object CMakeFiles/_rocm_C.dir/csrc/rocm/skinny_gemms.hip.o

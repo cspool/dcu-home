@@ -1,0 +1,2 @@
+Index,KernelName,gpu-id,queue-id,queue-index,pid,tid,grd,wgr,lds,scr,arch_vgpr,accum_vgpr,sgpr,wave_size,sig,obj,SQ_INSTS_MMOP,SQ_ACTIVE_INST_MMOP,SQ_INSTS_VALU,SQ_ACTIVE_INST_VALU,SQ_WAVES,DispatchNs,BeginNs,EndNs,CompleteNs
+6,"fused_recurrent_gated_delta_rule_packed_decode_kernel.kd",8,0,12,465174,465174,12288,64,512,0,136,0,80,64,0x0,0x7f059f5b0b00,0,0,258048,267264,192,2875254772063811,2875257723630609,2875257723652209,2875257723670728

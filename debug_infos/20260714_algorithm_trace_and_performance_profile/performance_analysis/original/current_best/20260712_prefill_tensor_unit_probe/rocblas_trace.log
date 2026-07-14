@@ -1,0 +1,5 @@
+rocblas_create_handle,atomics_allowed
+rocblas_set_stream,0,atomics_allowed
+rocblas_set_atomics_mode,atomics_allowed,atomics_allowed
+rocblas_set_math_mode,0,atomics_allowed
+rocblas_gemm_ex,T,N,34816,512,5120,1,0x7fe2d2200000,bf16_r,5120,0x7fe2f6800000,bf16_r,5120,0,0x7fe2cfe00000,bf16_r,34816,0x7fe2cfe00000,bf16_r,34816,f32_r,0,0,none,atomics_allowed

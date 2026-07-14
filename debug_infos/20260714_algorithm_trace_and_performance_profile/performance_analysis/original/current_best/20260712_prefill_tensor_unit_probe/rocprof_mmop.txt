@@ -1,0 +1,4 @@
+# Runtime matrix-operation and vector-operation counters for the representative
+# prefill rocBLAS kernel.  The kernel clause is a substring filter.
+pmc : SQ_INSTS_MMOP SQ_ACTIVE_INST_MMOP SQ_INSTS_VALU SQ_ACTIVE_INST_VALU SQ_WAVES
+kernel: Cijk_Alik_Bljk_BBH_MT256x256x16

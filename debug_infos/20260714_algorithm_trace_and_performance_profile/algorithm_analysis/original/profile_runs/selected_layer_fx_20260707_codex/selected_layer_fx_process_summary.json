@@ -1,0 +1,178 @@
+{
+  "all_nodes_assigned": true,
+  "analysis_type": "qwen35_selected_layer_fx_process_reconstruction_summary",
+  "event_count": 9,
+  "items": [
+    {
+      "assigned_node_count": 155,
+      "context": "16-32K",
+      "duplicate_assignment_indices": [],
+      "event_id": "input1_layer3",
+      "forward_id": "1",
+      "layer_id": "3",
+      "node_count": 155,
+      "outputs": {
+        "fx_process_nodes_csv": "profile_runs/selected_layer_fx_20260707_codex/contexts/16-32K/fx_trace/traces/input1_layer3/fx_process_nodes.csv",
+        "fx_process_reconstruction_json": "profile_runs/selected_layer_fx_20260707_codex/contexts/16-32K/fx_trace/traces/input1_layer3/fx_process_reconstruction.json",
+        "fx_process_reconstruction_md": "profile_runs/selected_layer_fx_20260707_codex/contexts/16-32K/fx_trace/traces/input1_layer3/fx_process_reconstruction.md"
+      },
+      "process_count": 12,
+      "q_len": "4096",
+      "trace_dir": "profile_runs/selected_layer_fx_20260707_codex/contexts/16-32K/fx_trace/traces/input1_layer3",
+      "unassigned_node_indices": []
+    },
+    {
+      "assigned_node_count": 155,
+      "context": "16-32K",
+      "duplicate_assignment_indices": [],
+      "event_id": "input2_layer31",
+      "forward_id": "2",
+      "layer_id": "31",
+      "node_count": 155,
+      "outputs": {
+        "fx_process_nodes_csv": "profile_runs/selected_layer_fx_20260707_codex/contexts/16-32K/fx_trace/traces/input2_layer31/fx_process_nodes.csv",
+        "fx_process_reconstruction_json": "profile_runs/selected_layer_fx_20260707_codex/contexts/16-32K/fx_trace/traces/input2_layer31/fx_process_reconstruction.json",
+        "fx_process_reconstruction_md": "profile_runs/selected_layer_fx_20260707_codex/contexts/16-32K/fx_trace/traces/input2_layer31/fx_process_reconstruction.md"
+      },
+      "process_count": 12,
+      "q_len": "4096",
+      "trace_dir": "profile_runs/selected_layer_fx_20260707_codex/contexts/16-32K/fx_trace/traces/input2_layer31",
+      "unassigned_node_indices": []
+    },
+    {
+      "assigned_node_count": 155,
+      "context": "16-32K",
+      "duplicate_assignment_indices": [],
+      "event_id": "input4_layer59",
+      "forward_id": "4",
+      "layer_id": "59",
+      "node_count": 155,
+      "outputs": {
+        "fx_process_nodes_csv": "profile_runs/selected_layer_fx_20260707_codex/contexts/16-32K/fx_trace/traces/input4_layer59/fx_process_nodes.csv",
+        "fx_process_reconstruction_json": "profile_runs/selected_layer_fx_20260707_codex/contexts/16-32K/fx_trace/traces/input4_layer59/fx_process_reconstruction.json",
+        "fx_process_reconstruction_md": "profile_runs/selected_layer_fx_20260707_codex/contexts/16-32K/fx_trace/traces/input4_layer59/fx_process_reconstruction.md"
+      },
+      "process_count": 12,
+      "q_len": "4096",
+      "trace_dir": "profile_runs/selected_layer_fx_20260707_codex/contexts/16-32K/fx_trace/traces/input4_layer59",
+      "unassigned_node_indices": []
+    },
+    {
+      "assigned_node_count": 155,
+      "context": "4-8K",
+      "duplicate_assignment_indices": [],
+      "event_id": "input1_layer3",
+      "forward_id": "1",
+      "layer_id": "3",
+      "node_count": 155,
+      "outputs": {
+        "fx_process_nodes_csv": "profile_runs/selected_layer_fx_20260707_codex/contexts/4-8K/fx_trace/traces/input1_layer3/fx_process_nodes.csv",
+        "fx_process_reconstruction_json": "profile_runs/selected_layer_fx_20260707_codex/contexts/4-8K/fx_trace/traces/input1_layer3/fx_process_reconstruction.json",
+        "fx_process_reconstruction_md": "profile_runs/selected_layer_fx_20260707_codex/contexts/4-8K/fx_trace/traces/input1_layer3/fx_process_reconstruction.md"
+      },
+      "process_count": 12,
+      "q_len": "4096",
+      "trace_dir": "profile_runs/selected_layer_fx_20260707_codex/contexts/4-8K/fx_trace/traces/input1_layer3",
+      "unassigned_node_indices": []
+    },
+    {
+      "assigned_node_count": 155,
+      "context": "4-8K",
+      "duplicate_assignment_indices": [],
+      "event_id": "input1_layer31",
+      "forward_id": "1",
+      "layer_id": "31",
+      "node_count": 155,
+      "outputs": {
+        "fx_process_nodes_csv": "profile_runs/selected_layer_fx_20260707_codex/contexts/4-8K/fx_trace/traces/input1_layer31/fx_process_nodes.csv",
+        "fx_process_reconstruction_json": "profile_runs/selected_layer_fx_20260707_codex/contexts/4-8K/fx_trace/traces/input1_layer31/fx_process_reconstruction.json",
+        "fx_process_reconstruction_md": "profile_runs/selected_layer_fx_20260707_codex/contexts/4-8K/fx_trace/traces/input1_layer31/fx_process_reconstruction.md"
+      },
+      "process_count": 12,
+      "q_len": "4096",
+      "trace_dir": "profile_runs/selected_layer_fx_20260707_codex/contexts/4-8K/fx_trace/traces/input1_layer31",
+      "unassigned_node_indices": []
+    },
+    {
+      "assigned_node_count": 155,
+      "context": "4-8K",
+      "duplicate_assignment_indices": [],
+      "event_id": "input1_layer59",
+      "forward_id": "1",
+      "layer_id": "59",
+      "node_count": 155,
+      "outputs": {
+        "fx_process_nodes_csv": "profile_runs/selected_layer_fx_20260707_codex/contexts/4-8K/fx_trace/traces/input1_layer59/fx_process_nodes.csv",
+        "fx_process_reconstruction_json": "profile_runs/selected_layer_fx_20260707_codex/contexts/4-8K/fx_trace/traces/input1_layer59/fx_process_reconstruction.json",
+        "fx_process_reconstruction_md": "profile_runs/selected_layer_fx_20260707_codex/contexts/4-8K/fx_trace/traces/input1_layer59/fx_process_reconstruction.md"
+      },
+      "process_count": 12,
+      "q_len": "4096",
+      "trace_dir": "profile_runs/selected_layer_fx_20260707_codex/contexts/4-8K/fx_trace/traces/input1_layer59",
+      "unassigned_node_indices": []
+    },
+    {
+      "assigned_node_count": 155,
+      "context": "8-16K",
+      "duplicate_assignment_indices": [],
+      "event_id": "input1_layer3",
+      "forward_id": "1",
+      "layer_id": "3",
+      "node_count": 155,
+      "outputs": {
+        "fx_process_nodes_csv": "profile_runs/selected_layer_fx_20260707_codex/contexts/8-16K/fx_trace/traces/input1_layer3/fx_process_nodes.csv",
+        "fx_process_reconstruction_json": "profile_runs/selected_layer_fx_20260707_codex/contexts/8-16K/fx_trace/traces/input1_layer3/fx_process_reconstruction.json",
+        "fx_process_reconstruction_md": "profile_runs/selected_layer_fx_20260707_codex/contexts/8-16K/fx_trace/traces/input1_layer3/fx_process_reconstruction.md"
+      },
+      "process_count": 12,
+      "q_len": "4096",
+      "trace_dir": "profile_runs/selected_layer_fx_20260707_codex/contexts/8-16K/fx_trace/traces/input1_layer3",
+      "unassigned_node_indices": []
+    },
+    {
+      "assigned_node_count": 155,
+      "context": "8-16K",
+      "duplicate_assignment_indices": [],
+      "event_id": "input3_layer59",
+      "forward_id": "3",
+      "layer_id": "59",
+      "node_count": 155,
+      "outputs": {
+        "fx_process_nodes_csv": "profile_runs/selected_layer_fx_20260707_codex/contexts/8-16K/fx_trace/traces/input3_layer59/fx_process_nodes.csv",
+        "fx_process_reconstruction_json": "profile_runs/selected_layer_fx_20260707_codex/contexts/8-16K/fx_trace/traces/input3_layer59/fx_process_reconstruction.json",
+        "fx_process_reconstruction_md": "profile_runs/selected_layer_fx_20260707_codex/contexts/8-16K/fx_trace/traces/input3_layer59/fx_process_reconstruction.md"
+      },
+      "process_count": 12,
+      "q_len": "4096",
+      "trace_dir": "profile_runs/selected_layer_fx_20260707_codex/contexts/8-16K/fx_trace/traces/input3_layer59",
+      "unassigned_node_indices": []
+    },
+    {
+      "assigned_node_count": 155,
+      "context": "8-16K",
+      "duplicate_assignment_indices": [],
+      "event_id": "input4_layer31",
+      "forward_id": "4",
+      "layer_id": "31",
+      "node_count": 155,
+      "outputs": {
+        "fx_process_nodes_csv": "profile_runs/selected_layer_fx_20260707_codex/contexts/8-16K/fx_trace/traces/input4_layer31/fx_process_nodes.csv",
+        "fx_process_reconstruction_json": "profile_runs/selected_layer_fx_20260707_codex/contexts/8-16K/fx_trace/traces/input4_layer31/fx_process_reconstruction.json",
+        "fx_process_reconstruction_md": "profile_runs/selected_layer_fx_20260707_codex/contexts/8-16K/fx_trace/traces/input4_layer31/fx_process_reconstruction.md"
+      },
+      "process_count": 12,
+      "q_len": "1685",
+      "trace_dir": "profile_runs/selected_layer_fx_20260707_codex/contexts/8-16K/fx_trace/traces/input4_layer31",
+      "unassigned_node_indices": []
+    }
+  ],
+  "no_duplicate_assignments": true,
+  "node_count_set": [
+    155
+  ],
+  "process_count_set": [
+    12
+  ],
+  "run_dir": "profile_runs/selected_layer_fx_20260707_codex",
+  "visualization": "profile_runs/selected_layer_fx_20260707_codex/selected_layer_fx_process_visualization.md"
+}

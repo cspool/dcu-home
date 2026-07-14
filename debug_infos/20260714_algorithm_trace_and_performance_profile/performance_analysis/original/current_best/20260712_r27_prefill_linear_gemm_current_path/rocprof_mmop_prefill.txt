@@ -1,0 +1,6 @@
+# One-dispatch diagnostic counters. This is not a performance benchmark.
+# GRBM_GUI_ACTIVE is included because raw MMOP counts alone are not an occupancy
+# percentage. If the profiler cannot schedule all blocks together, split GRBM
+# and SQ into separate passes over the same one-dispatch shape.
+pmc : SQ_INSTS_MMOP SQ_INSTS_MMOP_BF16 SQ_ACTIVE_INST_MMOP SQ_INSTS_VALU SQ_ACTIVE_INST_VALU SQ_WAVES GRBM_GUI_ACTIVE
+kernel: Cijk_Alik_Bljk_BBH_MT256x256x16

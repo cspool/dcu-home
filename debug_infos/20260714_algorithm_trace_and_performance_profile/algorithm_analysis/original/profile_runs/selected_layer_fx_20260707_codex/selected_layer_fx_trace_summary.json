@@ -1,0 +1,149 @@
+[
+  {
+    "benchmark": {
+      "completed": 1,
+      "failed": 0,
+      "mean_e2el_ms": 50239.989198278636,
+      "mean_tpot_ms": 528.3253273334016,
+      "mean_ttft_ms": 38616.8319969438,
+      "total_input_tokens": 20574,
+      "total_output_tokens": 23
+    },
+    "captured_events": [
+      "input1_layer3",
+      "input2_layer31",
+      "input4_layer59"
+    ],
+    "error_row_count": 0,
+    "errors": [],
+    "fx_sample_count": 3,
+    "fx_trace_count": 3,
+    "fx_trace_error_count": 0,
+    "label": "16-32K",
+    "layer_events_path": "profile_runs/selected_layer_fx_20260707_codex/contexts/16-32K/fx_trace/fx_layer_events.csv",
+    "manifest_path": "profile_runs/selected_layer_fx_20260707_codex/contexts/16-32K/fx_trace/fx_layer_trace_manifest.csv",
+    "manifest_row_count": 3,
+    "metadata_path": "profile_runs/selected_layer_fx_20260707_codex/contexts/16-32K/fx_trace/run_metadata.json",
+    "metadata_present": true,
+    "missing_artifacts": {},
+    "node_counts": {
+      "input1_layer3": 155,
+      "input2_layer31": 155,
+      "input4_layer59": 155
+    },
+    "observed_layer_event_count": 1856,
+    "ok_row_count": 3,
+    "result_path": "profile_runs/selected_layer_fx_20260707_codex/contexts/16-32K/result.json",
+    "target_event_keys": [
+      "input1_layer3",
+      "input2_layer31",
+      "input4_layer59"
+    ],
+    "validation": {
+      "all_manifest_rows_ok": true,
+      "all_ok_rows_have_artifacts": true,
+      "benchmark_completed": true,
+      "benchmark_failed_zero": true,
+      "has_manifest_rows": true,
+      "metadata_present": true
+    }
+  },
+  {
+    "benchmark": {
+      "completed": 1,
+      "failed": 0,
+      "mean_e2el_ms": 66873.12483089045,
+      "mean_tpot_ms": 522.5589405745268,
+      "mean_ttft_ms": 21410.497000906616,
+      "total_input_tokens": 7574,
+      "total_output_tokens": 88
+    },
+    "captured_events": [
+      "input1_layer3",
+      "input1_layer31",
+      "input1_layer59"
+    ],
+    "error_row_count": 0,
+    "errors": [],
+    "fx_sample_count": 3,
+    "fx_trace_count": 3,
+    "fx_trace_error_count": 0,
+    "label": "4-8K",
+    "layer_events_path": "profile_runs/selected_layer_fx_20260707_codex/contexts/4-8K/fx_trace/fx_layer_events.csv",
+    "manifest_path": "profile_runs/selected_layer_fx_20260707_codex/contexts/4-8K/fx_trace/fx_layer_trace_manifest.csv",
+    "manifest_row_count": 3,
+    "metadata_path": "profile_runs/selected_layer_fx_20260707_codex/contexts/4-8K/fx_trace/run_metadata.json",
+    "metadata_present": true,
+    "missing_artifacts": {},
+    "node_counts": {
+      "input1_layer3": 155,
+      "input1_layer31": 155,
+      "input1_layer59": 155
+    },
+    "observed_layer_event_count": 5760,
+    "ok_row_count": 3,
+    "result_path": "profile_runs/selected_layer_fx_20260707_codex/contexts/4-8K/result.json",
+    "target_event_keys": [
+      "input1_layer3",
+      "input1_layer31",
+      "input1_layer59"
+    ],
+    "validation": {
+      "all_manifest_rows_ok": true,
+      "all_ok_rows_have_artifacts": true,
+      "benchmark_completed": true,
+      "benchmark_failed_zero": true,
+      "has_manifest_rows": true,
+      "metadata_present": true
+    }
+  },
+  {
+    "benchmark": {
+      "completed": 1,
+      "failed": 0,
+      "mean_e2el_ms": 74434.02941478416,
+      "mean_tpot_ms": 532.1744358535487,
+      "mean_ttft_ms": 26006.155752111226,
+      "total_input_tokens": 13962,
+      "total_output_tokens": 92
+    },
+    "captured_events": [
+      "input1_layer3",
+      "input3_layer59",
+      "input4_layer31"
+    ],
+    "error_row_count": 0,
+    "errors": [],
+    "fx_sample_count": 3,
+    "fx_trace_count": 3,
+    "fx_trace_error_count": 0,
+    "label": "8-16K",
+    "layer_events_path": "profile_runs/selected_layer_fx_20260707_codex/contexts/8-16K/fx_trace/fx_layer_events.csv",
+    "manifest_path": "profile_runs/selected_layer_fx_20260707_codex/contexts/8-16K/fx_trace/fx_layer_trace_manifest.csv",
+    "manifest_row_count": 3,
+    "metadata_path": "profile_runs/selected_layer_fx_20260707_codex/contexts/8-16K/fx_trace/run_metadata.json",
+    "metadata_present": true,
+    "missing_artifacts": {},
+    "node_counts": {
+      "input1_layer3": 155,
+      "input3_layer59": 155,
+      "input4_layer31": 155
+    },
+    "observed_layer_event_count": 6144,
+    "ok_row_count": 3,
+    "result_path": "profile_runs/selected_layer_fx_20260707_codex/contexts/8-16K/result.json",
+    "target_event_keys": [
+      "input1_layer3",
+      "input3_layer59",
+      "input4_layer31"
+    ],
+    "validation": {
+      "all_manifest_rows_ok": true,
+      "all_ok_rows_have_artifacts": true,
+      "benchmark_completed": true,
+      "benchmark_failed_zero": true,
+      "has_manifest_rows": true,
+      "metadata_present": true
+    }
+  }
+]

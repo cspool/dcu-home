@@ -1,0 +1,1 @@
+{"argv0":"vllm","context":"16-32K","errors":[],"event_index":1,"event_type":"patch_loaded","patches":["engine","scheduler","model_runner","v1_model_runner","attention","kv_cache","sampler","qwen35"],"pid":34834,"ppid":31681,"ts_ns":2410813245027765}

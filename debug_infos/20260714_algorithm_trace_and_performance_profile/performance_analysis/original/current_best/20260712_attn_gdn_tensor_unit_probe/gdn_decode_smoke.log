@@ -1,0 +1,9 @@
+WARNING 07-13 00:22:09 [rocm.py:42] Failed to import from vllm._C with ModuleNotFoundError("No module named 'vllm._C'")
+Traceback (most recent call last):
+  File "/public/home/tangyu408/testdata/goal_runs/20260712_attn_gdn_tensor_unit_probe/probe_gdn_decode.py", line 64, in <module>
+    main()
+  File "/public/home/tangyu408/testdata/goal_runs/20260712_attn_gdn_tensor_unit_probe/probe_gdn_decode.py", line 44, in main
+    fused_recurrent_gated_delta_rule_packed_decode(
+  File "/public/home/tangyu408/vllm_cscc/vllm/model_executor/layers/fla/ops/fused_recurrent.py", line 429, in fused_recurrent_gated_delta_rule_packed_decode
+    raise ValueError(
+ValueError: Invalid head config inferred from mixed_qkv: H=48, HV=16.

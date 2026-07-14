@@ -1,0 +1,5684 @@
+[
+  {
+    "args": "()",
+    "index": 0,
+    "kwargs": "{}",
+    "meta": {
+      "tensor_meta": [
+        [
+          3,
+          1685
+        ],
+        "torch.int64",
+        false,
+        [
+          1685,
+          1
+        ],
+        "torch.contiguous_format",
+        false,
+        {}
+      ],
+      "val": {
+        "device": "cuda:0",
+        "dtype": "torch.int64",
+        "requires_grad": false,
+        "shape": [
+          3,
+          1685
+        ]
+      }
+    },
+    "name": "arg0_1",
+    "op": "placeholder",
+    "target": "arg0_1",
+    "users": [
+      "index"
+    ]
+  },
+  {
+    "args": "()",
+    "index": 1,
+    "kwargs": "{}",
+    "meta": {
+      "tensor_meta": [
+        [
+          1685,
+          5120
+        ],
+        "torch.bfloat16",
+        false,
+        [
+          5120,
+          1
+        ],
+        "torch.contiguous_format",
+        false,
+        {}
+      ],
+      "val": {
+        "device": "cuda:0",
+        "dtype": "torch.bfloat16",
+        "requires_grad": false,
+        "shape": [
+          1685,
+          5120
+        ]
+      }
+    },
+    "name": "arg1_1",
+    "op": "placeholder",
+    "target": "arg1_1",
+    "users": [
+      "add"
+    ]
+  },
+  {
+    "args": "()",
+    "index": 2,
+    "kwargs": "{}",
+    "meta": {
+      "tensor_meta": [
+        [
+          1685,
+          5120
+        ],
+        "torch.bfloat16",
+        false,
+        [
+          5120,
+          1
+        ],
+        "torch.contiguous_format",
+        false,
+        {}
+      ],
+      "val": {
+        "device": "cuda:0",
+        "dtype": "torch.bfloat16",
+        "requires_grad": false,
+        "shape": [
+          1685,
+          5120
+        ]
+      }
+    },
+    "name": "arg2_1",
+    "op": "placeholder",
+    "target": "arg2_1",
+    "users": [
+      "add"
+    ]
+  },
+  {
+    "args": "()",
+    "index": 3,
+    "kwargs": "{}",
+    "meta": {
+      "val": {
+        "device": "cuda:0",
+        "dtype": "torch.bfloat16",
+        "requires_grad": false,
+        "shape": [
+          5120
+        ]
+      }
+    },
+    "name": "_param_constant0",
+    "op": "get_attr",
+    "target": "_param_constant0",
+    "users": [
+      "detach"
+    ]
+  },
+  {
+    "args": "(_param_constant0,)",
+    "index": 4,
+    "kwargs": "{}",
+    "meta": {
+      "tensor_meta": [
+        [
+          5120
+        ],
+        "torch.bfloat16",
+        false,
+        [
+          1
+        ],
+        "torch.contiguous_format",
+        false,
+        {}
+      ],
+      "val": {
+        "device": "cuda:0",
+        "dtype": "torch.bfloat16",
+        "requires_grad": false,
+        "shape": [
+          5120
+        ]
+      }
+    },
+    "name": "detach",
+    "op": "call_function",
+    "target": "aten.detach.default",
+    "users": [
+      "_to_copy_1"
+    ]
+  },
+  {
+    "args": "(arg1_1, arg2_1)",
+    "index": 5,
+    "kwargs": "{}",
+    "meta": {
+      "tensor_meta": [
+        [
+          1685,
+          5120
+        ],
+        "torch.bfloat16",
+        false,
+        [
+          5120,
+          1
+        ],
+        "torch.contiguous_format",
+        false,
+        {}
+      ],
+      "val": {
+        "device": "cuda:0",
+        "dtype": "torch.bfloat16",
+        "requires_grad": false,
+        "shape": [
+          1685,
+          5120
+        ]
+      }
+    },
+    "name": "add",
+    "op": "call_function",
+    "target": "aten.add.Tensor",
+    "users": [
+      "_to_copy",
+      "add_9"
+    ]
+  },
+  {
+    "args": "(add,)",
+    "index": 6,
+    "kwargs": "{'dtype': torch.float32}",
+    "meta": {
+      "tensor_meta": [
+        [
+          1685,
+          5120
+        ],
+        "torch.float32",
+        false,
+        [
+          5120,
+          1
+        ],
+        "torch.contiguous_format",
+        false,
+        {}
+      ],
+      "val": {
+        "device": "cuda:0",
+        "dtype": "torch.float32",
+        "requires_grad": false,
+        "shape": [
+          1685,
+          5120
+        ]
+      }
+    },
+    "name": "_to_copy",
+    "op": "call_function",
+    "target": "aten._to_copy.default",
+    "users": [
+      "mul",
+      "pow_1"
+    ]
+  },
+  {
+    "args": "(_to_copy, 2)",
+    "index": 7,
+    "kwargs": "{}",
+    "meta": {
+      "tensor_meta": [
+        [
+          1685,
+          5120
+        ],
+        "torch.float32",
+        false,
+        [
+          5120,
+          1
+        ],
+        "torch.contiguous_format",
+        false,
+        {}
+      ],
+      "val": {
+        "device": "cuda:0",
+        "dtype": "torch.float32",
+        "requires_grad": false,
+        "shape": [
+          1685,
+          5120
+        ]
+      }
+    },
+    "name": "pow_1",
+    "op": "call_function",
+    "target": "aten.pow.Tensor_Scalar",
+    "users": [
+      "mean"
+    ]
+  },
+  {
+    "args": "(pow_1, [-1], True)",
+    "index": 8,
+    "kwargs": "{}",
+    "meta": {
+      "tensor_meta": [
+        [
+          1685,
+          1
+        ],
+        "torch.float32",
+        false,
+        [
+          1,
+          1
+        ],
+        "torch.contiguous_format",
+        false,
+        {}
+      ],
+      "val": {
+        "device": "cuda:0",
+        "dtype": "torch.float32",
+        "requires_grad": false,
+        "shape": [
+          1685,
+          1
+        ]
+      }
+    },
+    "name": "mean",
+    "op": "call_function",
+    "target": "aten.mean.dim",
+    "users": [
+      "add_1"
+    ]
+  },
+  {
+    "args": "(mean, 1e-06)",
+    "index": 9,
+    "kwargs": "{}",
+    "meta": {
+      "tensor_meta": [
+        [
+          1685,
+          1
+        ],
+        "torch.float32",
+        false,
+        [
+          1,
+          1
+        ],
+        "torch.contiguous_format",
+        false,
+        {}
+      ],
+      "val": {
+        "device": "cuda:0",
+        "dtype": "torch.float32",
+        "requires_grad": false,
+        "shape": [
+          1685,
+          1
+        ]
+      }
+    },
+    "name": "add_1",
+    "op": "call_function",
+    "target": "aten.add.Tensor",
+    "users": [
+      "rsqrt"
+    ]
+  },
+  {
+    "args": "(add_1,)",
+    "index": 10,
+    "kwargs": "{}",
+    "meta": {
+      "tensor_meta": [
+        [
+          1685,
+          1
+        ],
+        "torch.float32",
+        false,
+        [
+          1,
+          1
+        ],
+        "torch.contiguous_format",
+        false,
+        {}
+      ],
+      "val": {
+        "device": "cuda:0",
+        "dtype": "torch.float32",
+        "requires_grad": false,
+        "shape": [
+          1685,
+          1
+        ]
+      }
+    },
+    "name": "rsqrt",
+    "op": "call_function",
+    "target": "aten.rsqrt.default",
+    "users": [
+      "mul"
+    ]
+  },
+  {
+    "args": "(_to_copy, rsqrt)",
+    "index": 11,
+    "kwargs": "{}",
+    "meta": {
+      "tensor_meta": [
+        [
+          1685,
+          5120
+        ],
+        "torch.float32",
+        false,
+        [
+          5120,
+          1
+        ],
+        "torch.contiguous_format",
+        false,
+        {}
+      ],
+      "val": {
+        "device": "cuda:0",
+        "dtype": "torch.float32",
+        "requires_grad": false,
+        "shape": [
+          1685,
+          5120
+        ]
+      }
+    },
+    "name": "mul",
+    "op": "call_function",
+    "target": "aten.mul.Tensor",
+    "users": [
+      "mul_1"
+    ]
+  },
+  {
+    "args": "(detach,)",
+    "index": 12,
+    "kwargs": "{'dtype': torch.float32}",
+    "meta": {
+      "tensor_meta": [
+        [
+          5120
+        ],
+        "torch.float32",
+        false,
+        [
+          1
+        ],
+        "torch.contiguous_format",
+        false,
+        {}
+      ],
+      "val": {
+        "device": "cuda:0",
+        "dtype": "torch.float32",
+        "requires_grad": false,
+        "shape": [
+          5120
+        ]
+      }
+    },
+    "name": "_to_copy_1",
+    "op": "call_function",
+    "target": "aten._to_copy.default",
+    "users": [
+      "add_2"
+    ]
+  },
+  {
+    "args": "(_to_copy_1, 1.0)",
+    "index": 13,
+    "kwargs": "{}",
+    "meta": {
+      "tensor_meta": [
+        [
+          5120
+        ],
+        "torch.float32",
+        false,
+        [
+          1
+        ],
+        "torch.contiguous_format",
+        false,
+        {}
+      ],
+      "val": {
+        "device": "cuda:0",
+        "dtype": "torch.float32",
+        "requires_grad": false,
+        "shape": [
+          5120
+        ]
+      }
+    },
+    "name": "add_2",
+    "op": "call_function",
+    "target": "aten.add.Tensor",
+    "users": [
+      "mul_1"
+    ]
+  },
+  {
+    "args": "(mul, add_2)",
+    "index": 14,
+    "kwargs": "{}",
+    "meta": {
+      "tensor_meta": [
+        [
+          1685,
+          5120
+        ],
+        "torch.float32",
+        false,
+        [
+          5120,
+          1
+        ],
+        "torch.contiguous_format",
+        false,
+        {}
+      ],
+      "val": {
+        "device": "cuda:0",
+        "dtype": "torch.float32",
+        "requires_grad": false,
+        "shape": [
+          1685,
+          5120
+        ]
+      }
+    },
+    "name": "mul_1",
+    "op": "call_function",
+    "target": "aten.mul.Tensor",
+    "users": [
+      "_to_copy_2"
+    ]
+  },
+  {
+    "args": "(mul_1,)",
+    "index": 15,
+    "kwargs": "{'dtype': torch.bfloat16}",
+    "meta": {
+      "tensor_meta": [
+        [
+          1685,
+          5120
+        ],
+        "torch.bfloat16",
+        false,
+        [
+          5120,
+          1
+        ],
+        "torch.contiguous_format",
+        false,
+        {}
+      ],
+      "val": {
+        "device": "cuda:0",
+        "dtype": "torch.bfloat16",
+        "requires_grad": false,
+        "shape": [
+          1685,
+          5120
+        ]
+      }
+    },
+    "name": "_to_copy_2",
+    "op": "call_function",
+    "target": "aten._to_copy.default",
+    "users": [
+      "empty_like",
+      "mm"
+    ]
+  },
+  {
+    "args": "(_to_copy_2,)",
+    "index": 16,
+    "kwargs": "{'pin_memory': False}",
+    "meta": {
+      "tensor_meta": [
+        [
+          1685,
+          5120
+        ],
+        "torch.bfloat16",
+        false,
+        [
+          5120,
+          1
+        ],
+        "torch.contiguous_format",
+        false,
+        {}
+      ],
+      "val": {
+        "device": "cuda:0",
+        "dtype": "torch.bfloat16",
+        "requires_grad": false,
+        "shape": [
+          1685,
+          5120
+        ]
+      }
+    },
+    "name": "empty_like",
+    "op": "call_function",
+    "target": "aten.empty_like.default",
+    "users": [
+      "copy__4"
+    ]
+  },
+  {
+    "args": "()",
+    "index": 17,
+    "kwargs": "{}",
+    "meta": {
+      "val": {
+        "device": "cuda:0",
+        "dtype": "torch.bfloat16",
+        "requires_grad": false,
+        "shape": [
+          14336,
+          5120
+        ]
+      }
+    },
+    "name": "_param_constant1",
+    "op": "get_attr",
+    "target": "_param_constant1",
+    "users": [
+      "t"
+    ]
+  },
+  {
+    "args": "(_param_constant1,)",
+    "index": 18,
+    "kwargs": "{}",
+    "meta": {
+      "tensor_meta": [
+        [
+          5120,
+          14336
+        ],
+        "torch.bfloat16",
+        false,
+        [
+          1,
+          5120
+        ],
+        null,
+        false,
+        {}
+      ],
+      "val": {
+        "device": "cuda:0",
+        "dtype": "torch.bfloat16",
+        "requires_grad": false,
+        "shape": [
+          5120,
+          14336
+        ]
+      }
+    },
+    "name": "t",
+    "op": "call_function",
+    "target": "aten.t.default",
+    "users": [
+      "mm"
+    ]
+  },
+  {
+    "args": "(_to_copy_2, t)",
+    "index": 19,
+    "kwargs": "{}",
+    "meta": {
+      "tensor_meta": [
+        [
+          1685,
+          14336
+        ],
+        "torch.bfloat16",
+        false,
+        [
+          14336,
+          1
+        ],
+        "torch.contiguous_format",
+        false,
+        {}
+      ],
+      "val": {
+        "device": "cuda:0",
+        "dtype": "torch.bfloat16",
+        "requires_grad": false,
+        "shape": [
+          1685,
+          14336
+        ]
+      }
+    },
+    "name": "mm",
+    "op": "call_function",
+    "target": "aten.mm.default",
+    "users": [
+      "split_with_sizes"
+    ]
+  },
+  {
+    "args": "(mm, [12288, 1024, 1024], -1)",
+    "index": 20,
+    "kwargs": "{}",
+    "meta": {
+      "val": [
+        {
+          "device": "cuda:0",
+          "dtype": "torch.bfloat16",
+          "requires_grad": false,
+          "shape": [
+            1685,
+            12288
+          ]
+        },
+        {
+          "device": "cuda:0",
+          "dtype": "torch.bfloat16",
+          "requires_grad": false,
+          "shape": [
+            1685,
+            1024
+          ]
+        },
+        {
+          "device": "cuda:0",
+          "dtype": "torch.bfloat16",
+          "requires_grad": false,
+          "shape": [
+            1685,
+            1024
+          ]
+        }
+      ]
+    },
+    "name": "split_with_sizes",
+    "op": "call_function",
+    "target": "aten.split_with_sizes.default",
+    "users": [
+      "getitem",
+      "getitem_1",
+      "getitem_2"
+    ]
+  },
+  {
+    "args": "(split_with_sizes, 0)",
+    "index": 21,
+    "kwargs": "{}",
+    "meta": {
+      "tensor_meta": [
+        [
+          1685,
+          12288
+        ],
+        "torch.bfloat16",
+        false,
+        [
+          14336,
+          1
+        ],
+        null,
+        false,
+        {}
+      ],
+      "val": {
+        "device": "cuda:0",
+        "dtype": "torch.bfloat16",
+        "requires_grad": false,
+        "shape": [
+          1685,
+          12288
+        ]
+      }
+    },
+    "name": "getitem",
+    "op": "call_function",
+    "target": "<built-in function getitem>",
+    "users": [
+      "view"
+    ]
+  },
+  {
+    "args": "(split_with_sizes, 1)",
+    "index": 22,
+    "kwargs": "{}",
+    "meta": {
+      "tensor_meta": [
+        [
+          1685,
+          1024
+        ],
+        "torch.bfloat16",
+        false,
+        [
+          14336,
+          1
+        ],
+        null,
+        false,
+        {}
+      ],
+      "val": {
+        "device": "cuda:0",
+        "dtype": "torch.bfloat16",
+        "requires_grad": false,
+        "shape": [
+          1685,
+          1024
+        ]
+      }
+    },
+    "name": "getitem_1",
+    "op": "call_function",
+    "target": "<built-in function getitem>",
+    "users": [
+      "view_3"
+    ]
+  },
+  {
+    "args": "(split_with_sizes, 2)",
+    "index": 23,
+    "kwargs": "{}",
+    "meta": {
+      "tensor_meta": [
+        [
+          1685,
+          1024
+        ],
+        "torch.bfloat16",
+        false,
+        [
+          14336,
+          1
+        ],
+        null,
+        false,
+        {}
+      ],
+      "val": {
+        "device": "cuda:0",
+        "dtype": "torch.bfloat16",
+        "requires_grad": false,
+        "shape": [
+          1685,
+          1024
+        ]
+      }
+    },
+    "name": "getitem_2",
+    "op": "call_function",
+    "target": "<built-in function getitem>",
+    "users": [
+      "view_12"
+    ]
+  },
+  {
+    "args": "(getitem, [1685, 24, -1])",
+    "index": 24,
+    "kwargs": "{}",
+    "meta": {
+      "tensor_meta": [
+        [
+          1685,
+          24,
+          512
+        ],
+        "torch.bfloat16",
+        false,
+        [
+          14336,
+          512,
+          1
+        ],
+        null,
+        false,
+        {}
+      ],
+      "val": {
+        "device": "cuda:0",
+        "dtype": "torch.bfloat16",
+        "requires_grad": false,
+        "shape": [
+          1685,
+          24,
+          512
+        ]
+      }
+    },
+    "name": "view",
+    "op": "call_function",
+    "target": "aten.view.default",
+    "users": [
+      "split"
+    ]
+  },
+  {
+    "args": "(view, 256, -1)",
+    "index": 25,
+    "kwargs": "{}",
+    "meta": {
+      "val": [
+        {
+          "device": "cuda:0",
+          "dtype": "torch.bfloat16",
+          "requires_grad": false,
+          "shape": [
+            1685,
+            24,
+            256
+          ]
+        },
+        {
+          "device": "cuda:0",
+          "dtype": "torch.bfloat16",
+          "requires_grad": false,
+          "shape": [
+            1685,
+            24,
+            256
+          ]
+        }
+      ]
+    },
+    "name": "split",
+    "op": "call_function",
+    "target": "aten.split.Tensor",
+    "users": [
+      "getitem_3",
+      "getitem_4"
+    ]
+  },
+  {
+    "args": "(split, 0)",
+    "index": 26,
+    "kwargs": "{}",
+    "meta": {
+      "tensor_meta": [
+        [
+          1685,
+          24,
+          256
+        ],
+        "torch.bfloat16",
+        false,
+        [
+          14336,
+          512,
+          1
+        ],
+        null,
+        false,
+        {}
+      ],
+      "val": {
+        "device": "cuda:0",
+        "dtype": "torch.bfloat16",
+        "requires_grad": false,
+        "shape": [
+          1685,
+          24,
+          256
+        ]
+      }
+    },
+    "name": "getitem_3",
+    "op": "call_function",
+    "target": "<built-in function getitem>",
+    "users": [
+      "clone"
+    ]
+  },
+  {
+    "args": "(split, 1)",
+    "index": 27,
+    "kwargs": "{}",
+    "meta": {
+      "tensor_meta": [
+        [
+          1685,
+          24,
+          256
+        ],
+        "torch.bfloat16",
+        false,
+        [
+          14336,
+          512,
+          1
+        ],
+        null,
+        false,
+        {}
+      ],
+      "val": {
+        "device": "cuda:0",
+        "dtype": "torch.bfloat16",
+        "requires_grad": false,
+        "shape": [
+          1685,
+          24,
+          256
+        ]
+      }
+    },
+    "name": "getitem_4",
+    "op": "call_function",
+    "target": "<built-in function getitem>",
+    "users": [
+      "clone_1"
+    ]
+  },
+  {
+    "args": "(getitem_3,)",
+    "index": 28,
+    "kwargs": "{'memory_format': torch.contiguous_format}",
+    "meta": {
+      "tensor_meta": [
+        [
+          1685,
+          24,
+          256
+        ],
+        "torch.bfloat16",
+        false,
+        [
+          6144,
+          256,
+          1
+        ],
+        "torch.contiguous_format",
+        false,
+        {}
+      ],
+      "val": {
+        "device": "cuda:0",
+        "dtype": "torch.bfloat16",
+        "requires_grad": false,
+        "shape": [
+          1685,
+          24,
+          256
+        ]
+      }
+    },
+    "name": "clone",
+    "op": "call_function",
+    "target": "aten.clone.default",
+    "users": [
+      "_unsafe_view"
+    ]
+  },
+  {
+    "args": "(clone, [1685, 6144])",
+    "index": 29,
+    "kwargs": "{}",
+    "meta": {
+      "tensor_meta": [
+        [
+          1685,
+          6144
+        ],
+        "torch.bfloat16",
+        false,
+        [
+          6144,
+          1
+        ],
+        "torch.contiguous_format",
+        false,
+        {}
+      ],
+      "val": {
+        "device": "cuda:0",
+        "dtype": "torch.bfloat16",
+        "requires_grad": false,
+        "shape": [
+          1685,
+          6144
+        ]
+      }
+    },
+    "name": "_unsafe_view",
+    "op": "call_function",
+    "target": "aten._unsafe_view.default",
+    "users": [
+      "view_1"
+    ]
+  },
+  {
+    "args": "(getitem_4,)",
+    "index": 30,
+    "kwargs": "{'memory_format': torch.contiguous_format}",
+    "meta": {
+      "tensor_meta": [
+        [
+          1685,
+          24,
+          256
+        ],
+        "torch.bfloat16",
+        false,
+        [
+          6144,
+          256,
+          1
+        ],
+        "torch.contiguous_format",
+        false,
+        {}
+      ],
+      "val": {
+        "device": "cuda:0",
+        "dtype": "torch.bfloat16",
+        "requires_grad": false,
+        "shape": [
+          1685,
+          24,
+          256
+        ]
+      }
+    },
+    "name": "clone_1",
+    "op": "call_function",
+    "target": "aten.clone.default",
+    "users": [
+      "_unsafe_view_1"
+    ]
+  },
+  {
+    "args": "(clone_1, [1685, 6144])",
+    "index": 31,
+    "kwargs": "{}",
+    "meta": {
+      "tensor_meta": [
+        [
+          1685,
+          6144
+        ],
+        "torch.bfloat16",
+        false,
+        [
+          6144,
+          1
+        ],
+        "torch.contiguous_format",
+        false,
+        {}
+      ],
+      "val": {
+        "device": "cuda:0",
+        "dtype": "torch.bfloat16",
+        "requires_grad": false,
+        "shape": [
+          1685,
+          6144
+        ]
+      }
+    },
+    "name": "_unsafe_view_1",
+    "op": "call_function",
+    "target": "aten._unsafe_view.default",
+    "users": [
+      "sigmoid"
+    ]
+  },
+  {
+    "args": "(_unsafe_view, [-1, 24, 256])",
+    "index": 32,
+    "kwargs": "{}",
+    "meta": {
+      "tensor_meta": [
+        [
+          1685,
+          24,
+          256
+        ],
+        "torch.bfloat16",
+        false,
+        [
+          6144,
+          256,
+          1
+        ],
+        "torch.contiguous_format",
+        false,
+        {}
+      ],
+      "val": {
+        "device": "cuda:0",
+        "dtype": "torch.bfloat16",
+        "requires_grad": false,
+        "shape": [
+          1685,
+          24,
+          256
+        ]
+      }
+    },
+    "name": "view_1",
+    "op": "call_function",
+    "target": "aten.view.default",
+    "users": [
+      "_to_copy_3"
+    ]
+  },
+  {
+    "args": "()",
+    "index": 33,
+    "kwargs": "{}",
+    "meta": {
+      "val": {
+        "device": "cuda:0",
+        "dtype": "torch.bfloat16",
+        "requires_grad": false,
+        "shape": [
+          256
+        ]
+      }
+    },
+    "name": "_param_constant2",
+    "op": "get_attr",
+    "target": "_param_constant2",
+    "users": [
+      "detach_1"
+    ]
+  },
+  {
+    "args": "(_param_constant2,)",
+    "index": 34,
+    "kwargs": "{}",
+    "meta": {
+      "tensor_meta": [
+        [
+          256
+        ],
+        "torch.bfloat16",
+        false,
+        [
+          1
+        ],
+        "torch.contiguous_format",
+        false,
+        {}
+      ],
+      "val": {
+        "device": "cuda:0",
+        "dtype": "torch.bfloat16",
+        "requires_grad": false,
+        "shape": [
+          256
+        ]
+      }
+    },
+    "name": "detach_1",
+    "op": "call_function",
+    "target": "aten.detach.default",
+    "users": [
+      "_to_copy_4"
+    ]
+  },
+  {
+    "args": "(view_1,)",
+    "index": 35,
+    "kwargs": "{'dtype': torch.float32}",
+    "meta": {
+      "tensor_meta": [
+        [
+          1685,
+          24,
+          256
+        ],
+        "torch.float32",
+        false,
+        [
+          6144,
+          256,
+          1
+        ],
+        "torch.contiguous_format",
+        false,
+        {}
+      ],
+      "val": {
+        "device": "cuda:0",
+        "dtype": "torch.float32",
+        "requires_grad": false,
+        "shape": [
+          1685,
+          24,
+          256
+        ]
+      }
+    },
+    "name": "_to_copy_3",
+    "op": "call_function",
+    "target": "aten._to_copy.default",
+    "users": [
+      "mul_2",
+      "pow_2"
+    ]
+  },
+  {
+    "args": "(_to_copy_3, 2)",
+    "index": 36,
+    "kwargs": "{}",
+    "meta": {
+      "tensor_meta": [
+        [
+          1685,
+          24,
+          256
+        ],
+        "torch.float32",
+        false,
+        [
+          6144,
+          256,
+          1
+        ],
+        "torch.contiguous_format",
+        false,
+        {}
+      ],
+      "val": {
+        "device": "cuda:0",
+        "dtype": "torch.float32",
+        "requires_grad": false,
+        "shape": [
+          1685,
+          24,
+          256
+        ]
+      }
+    },
+    "name": "pow_2",
+    "op": "call_function",
+    "target": "aten.pow.Tensor_Scalar",
+    "users": [
+      "mean_1"
+    ]
+  },
+  {
+    "args": "(pow_2, [-1], True)",
+    "index": 37,
+    "kwargs": "{}",
+    "meta": {
+      "tensor_meta": [
+        [
+          1685,
+          24,
+          1
+        ],
+        "torch.float32",
+        false,
+        [
+          24,
+          1,
+          1
+        ],
+        "torch.contiguous_format",
+        false,
+        {}
+      ],
+      "val": {
+        "device": "cuda:0",
+        "dtype": "torch.float32",
+        "requires_grad": false,
+        "shape": [
+          1685,
+          24,
+          1
+        ]
+      }
+    },
+    "name": "mean_1",
+    "op": "call_function",
+    "target": "aten.mean.dim",
+    "users": [
+      "add_3"
+    ]
+  },
+  {
+    "args": "(mean_1, 1e-06)",
+    "index": 38,
+    "kwargs": "{}",
+    "meta": {
+      "tensor_meta": [
+        [
+          1685,
+          24,
+          1
+        ],
+        "torch.float32",
+        false,
+        [
+          24,
+          1,
+          1
+        ],
+        "torch.contiguous_format",
+        false,
+        {}
+      ],
+      "val": {
+        "device": "cuda:0",
+        "dtype": "torch.float32",
+        "requires_grad": false,
+        "shape": [
+          1685,
+          24,
+          1
+        ]
+      }
+    },
+    "name": "add_3",
+    "op": "call_function",
+    "target": "aten.add.Tensor",
+    "users": [
+      "rsqrt_1"
+    ]
+  },
+  {
+    "args": "(add_3,)",
+    "index": 39,
+    "kwargs": "{}",
+    "meta": {
+      "tensor_meta": [
+        [
+          1685,
+          24,
+          1
+        ],
+        "torch.float32",
+        false,
+        [
+          24,
+          1,
+          1
+        ],
+        "torch.contiguous_format",
+        false,
+        {}
+      ],
+      "val": {
+        "device": "cuda:0",
+        "dtype": "torch.float32",
+        "requires_grad": false,
+        "shape": [
+          1685,
+          24,
+          1
+        ]
+      }
+    },
+    "name": "rsqrt_1",
+    "op": "call_function",
+    "target": "aten.rsqrt.default",
+    "users": [
+      "mul_2"
+    ]
+  },
+  {
+    "args": "(_to_copy_3, rsqrt_1)",
+    "index": 40,
+    "kwargs": "{}",
+    "meta": {
+      "tensor_meta": [
+        [
+          1685,
+          24,
+          256
+        ],
+        "torch.float32",
+        false,
+        [
+          6144,
+          256,
+          1
+        ],
+        "torch.contiguous_format",
+        false,
+        {}
+      ],
+      "val": {
+        "device": "cuda:0",
+        "dtype": "torch.float32",
+        "requires_grad": false,
+        "shape": [
+          1685,
+          24,
+          256
+        ]
+      }
+    },
+    "name": "mul_2",
+    "op": "call_function",
+    "target": "aten.mul.Tensor",
+    "users": [
+      "mul_3"
+    ]
+  },
+  {
+    "args": "(detach_1,)",
+    "index": 41,
+    "kwargs": "{'dtype': torch.float32}",
+    "meta": {
+      "tensor_meta": [
+        [
+          256
+        ],
+        "torch.float32",
+        false,
+        [
+          1
+        ],
+        "torch.contiguous_format",
+        false,
+        {}
+      ],
+      "val": {
+        "device": "cuda:0",
+        "dtype": "torch.float32",
+        "requires_grad": false,
+        "shape": [
+          256
+        ]
+      }
+    },
+    "name": "_to_copy_4",
+    "op": "call_function",
+    "target": "aten._to_copy.default",
+    "users": [
+      "add_4"
+    ]
+  },
+  {
+    "args": "(_to_copy_4, 1.0)",
+    "index": 42,
+    "kwargs": "{}",
+    "meta": {
+      "tensor_meta": [
+        [
+          256
+        ],
+        "torch.float32",
+        false,
+        [
+          1
+        ],
+        "torch.contiguous_format",
+        false,
+        {}
+      ],
+      "val": {
+        "device": "cuda:0",
+        "dtype": "torch.float32",
+        "requires_grad": false,
+        "shape": [
+          256
+        ]
+      }
+    },
+    "name": "add_4",
+    "op": "call_function",
+    "target": "aten.add.Tensor",
+    "users": [
+      "mul_3"
+    ]
+  },
+  {
+    "args": "(mul_2, add_4)",
+    "index": 43,
+    "kwargs": "{}",
+    "meta": {
+      "tensor_meta": [
+        [
+          1685,
+          24,
+          256
+        ],
+        "torch.float32",
+        false,
+        [
+          6144,
+          256,
+          1
+        ],
+        "torch.contiguous_format",
+        false,
+        {}
+      ],
+      "val": {
+        "device": "cuda:0",
+        "dtype": "torch.float32",
+        "requires_grad": false,
+        "shape": [
+          1685,
+          24,
+          256
+        ]
+      }
+    },
+    "name": "mul_3",
+    "op": "call_function",
+    "target": "aten.mul.Tensor",
+    "users": [
+      "_to_copy_5"
+    ]
+  },
+  {
+    "args": "(mul_3,)",
+    "index": 44,
+    "kwargs": "{'dtype': torch.bfloat16}",
+    "meta": {
+      "tensor_meta": [
+        [
+          1685,
+          24,
+          256
+        ],
+        "torch.bfloat16",
+        false,
+        [
+          6144,
+          256,
+          1
+        ],
+        "torch.contiguous_format",
+        false,
+        {}
+      ],
+      "val": {
+        "device": "cuda:0",
+        "dtype": "torch.bfloat16",
+        "requires_grad": false,
+        "shape": [
+          1685,
+          24,
+          256
+        ]
+      }
+    },
+    "name": "_to_copy_5",
+    "op": "call_function",
+    "target": "aten._to_copy.default",
+    "users": [
+      "view_2"
+    ]
+  },
+  {
+    "args": "(_to_copy_5, [-1, 6144])",
+    "index": 45,
+    "kwargs": "{}",
+    "meta": {
+      "tensor_meta": [
+        [
+          1685,
+          6144
+        ],
+        "torch.bfloat16",
+        false,
+        [
+          6144,
+          1
+        ],
+        "torch.contiguous_format",
+        false,
+        {}
+      ],
+      "val": {
+        "device": "cuda:0",
+        "dtype": "torch.bfloat16",
+        "requires_grad": false,
+        "shape": [
+          1685,
+          6144
+        ]
+      }
+    },
+    "name": "view_2",
+    "op": "call_function",
+    "target": "aten.view.default",
+    "users": [
+      "view_5"
+    ]
+  },
+  {
+    "args": "(getitem_1, [-1, 4, 256])",
+    "index": 46,
+    "kwargs": "{}",
+    "meta": {
+      "tensor_meta": [
+        [
+          1685,
+          4,
+          256
+        ],
+        "torch.bfloat16",
+        false,
+        [
+          14336,
+          256,
+          1
+        ],
+        null,
+        false,
+        {}
+      ],
+      "val": {
+        "device": "cuda:0",
+        "dtype": "torch.bfloat16",
+        "requires_grad": false,
+        "shape": [
+          1685,
+          4,
+          256
+        ]
+      }
+    },
+    "name": "view_3",
+    "op": "call_function",
+    "target": "aten.view.default",
+    "users": [
+      "_to_copy_6"
+    ]
+  },
+  {
+    "args": "()",
+    "index": 47,
+    "kwargs": "{}",
+    "meta": {
+      "val": {
+        "device": "cuda:0",
+        "dtype": "torch.bfloat16",
+        "requires_grad": false,
+        "shape": [
+          256
+        ]
+      }
+    },
+    "name": "_param_constant3",
+    "op": "get_attr",
+    "target": "_param_constant3",
+    "users": [
+      "detach_2"
+    ]
+  },
+  {
+    "args": "(_param_constant3,)",
+    "index": 48,
+    "kwargs": "{}",
+    "meta": {
+      "tensor_meta": [
+        [
+          256
+        ],
+        "torch.bfloat16",
+        false,
+        [
+          1
+        ],
+        "torch.contiguous_format",
+        false,
+        {}
+      ],
+      "val": {
+        "device": "cuda:0",
+        "dtype": "torch.bfloat16",
+        "requires_grad": false,
+        "shape": [
+          256
+        ]
+      }
+    },
+    "name": "detach_2",
+    "op": "call_function",
+    "target": "aten.detach.default",
+    "users": [
+      "_to_copy_7"
+    ]
+  },
+  {
+    "args": "(view_3,)",
+    "index": 49,
+    "kwargs": "{'dtype': torch.float32}",
+    "meta": {
+      "tensor_meta": [
+        [
+          1685,
+          4,
+          256
+        ],
+        "torch.float32",
+        false,
+        [
+          1024,
+          256,
+          1
+        ],
+        "torch.contiguous_format",
+        false,
+        {}
+      ],
+      "val": {
+        "device": "cuda:0",
+        "dtype": "torch.float32",
+        "requires_grad": false,
+        "shape": [
+          1685,
+          4,
+          256
+        ]
+      }
+    },
+    "name": "_to_copy_6",
+    "op": "call_function",
+    "target": "aten._to_copy.default",
+    "users": [
+      "mul_4",
+      "pow_3"
+    ]
+  },
+  {
+    "args": "(_to_copy_6, 2)",
+    "index": 50,
+    "kwargs": "{}",
+    "meta": {
+      "tensor_meta": [
+        [
+          1685,
+          4,
+          256
+        ],
+        "torch.float32",
+        false,
+        [
+          1024,
+          256,
+          1
+        ],
+        "torch.contiguous_format",
+        false,
+        {}
+      ],
+      "val": {
+        "device": "cuda:0",
+        "dtype": "torch.float32",
+        "requires_grad": false,
+        "shape": [
+          1685,
+          4,
+          256
+        ]
+      }
+    },
+    "name": "pow_3",
+    "op": "call_function",
+    "target": "aten.pow.Tensor_Scalar",
+    "users": [
+      "mean_2"
+    ]
+  },
+  {
+    "args": "(pow_3, [-1], True)",
+    "index": 51,
+    "kwargs": "{}",
+    "meta": {
+      "tensor_meta": [
+        [
+          1685,
+          4,
+          1
+        ],
+        "torch.float32",
+        false,
+        [
+          4,
+          1,
+          1
+        ],
+        "torch.contiguous_format",
+        false,
+        {}
+      ],
+      "val": {
+        "device": "cuda:0",
+        "dtype": "torch.float32",
+        "requires_grad": false,
+        "shape": [
+          1685,
+          4,
+          1
+        ]
+      }
+    },
+    "name": "mean_2",
+    "op": "call_function",
+    "target": "aten.mean.dim",
+    "users": [
+      "add_5"
+    ]
+  },
+  {
+    "args": "(mean_2, 1e-06)",
+    "index": 52,
+    "kwargs": "{}",
+    "meta": {
+      "tensor_meta": [
+        [
+          1685,
+          4,
+          1
+        ],
+        "torch.float32",
+        false,
+        [
+          4,
+          1,
+          1
+        ],
+        "torch.contiguous_format",
+        false,
+        {}
+      ],
+      "val": {
+        "device": "cuda:0",
+        "dtype": "torch.float32",
+        "requires_grad": false,
+        "shape": [
+          1685,
+          4,
+          1
+        ]
+      }
+    },
+    "name": "add_5",
+    "op": "call_function",
+    "target": "aten.add.Tensor",
+    "users": [
+      "rsqrt_2"
+    ]
+  },
+  {
+    "args": "(add_5,)",
+    "index": 53,
+    "kwargs": "{}",
+    "meta": {
+      "tensor_meta": [
+        [
+          1685,
+          4,
+          1
+        ],
+        "torch.float32",
+        false,
+        [
+          4,
+          1,
+          1
+        ],
+        "torch.contiguous_format",
+        false,
+        {}
+      ],
+      "val": {
+        "device": "cuda:0",
+        "dtype": "torch.float32",
+        "requires_grad": false,
+        "shape": [
+          1685,
+          4,
+          1
+        ]
+      }
+    },
+    "name": "rsqrt_2",
+    "op": "call_function",
+    "target": "aten.rsqrt.default",
+    "users": [
+      "mul_4"
+    ]
+  },
+  {
+    "args": "(_to_copy_6, rsqrt_2)",
+    "index": 54,
+    "kwargs": "{}",
+    "meta": {
+      "tensor_meta": [
+        [
+          1685,
+          4,
+          256
+        ],
+        "torch.float32",
+        false,
+        [
+          1024,
+          256,
+          1
+        ],
+        "torch.contiguous_format",
+        false,
+        {}
+      ],
+      "val": {
+        "device": "cuda:0",
+        "dtype": "torch.float32",
+        "requires_grad": false,
+        "shape": [
+          1685,
+          4,
+          256
+        ]
+      }
+    },
+    "name": "mul_4",
+    "op": "call_function",
+    "target": "aten.mul.Tensor",
+    "users": [
+      "mul_5"
+    ]
+  },
+  {
+    "args": "(detach_2,)",
+    "index": 55,
+    "kwargs": "{'dtype': torch.float32}",
+    "meta": {
+      "tensor_meta": [
+        [
+          256
+        ],
+        "torch.float32",
+        false,
+        [
+          1
+        ],
+        "torch.contiguous_format",
+        false,
+        {}
+      ],
+      "val": {
+        "device": "cuda:0",
+        "dtype": "torch.float32",
+        "requires_grad": false,
+        "shape": [
+          256
+        ]
+      }
+    },
+    "name": "_to_copy_7",
+    "op": "call_function",
+    "target": "aten._to_copy.default",
+    "users": [
+      "add_6"
+    ]
+  },
+  {
+    "args": "(_to_copy_7, 1.0)",
+    "index": 56,
+    "kwargs": "{}",
+    "meta": {
+      "tensor_meta": [
+        [
+          256
+        ],
+        "torch.float32",
+        false,
+        [
+          1
+        ],
+        "torch.contiguous_format",
+        false,
+        {}
+      ],
+      "val": {
+        "device": "cuda:0",
+        "dtype": "torch.float32",
+        "requires_grad": false,
+        "shape": [
+          256
+        ]
+      }
+    },
+    "name": "add_6",
+    "op": "call_function",
+    "target": "aten.add.Tensor",
+    "users": [
+      "mul_5"
+    ]
+  },
+  {
+    "args": "(mul_4, add_6)",
+    "index": 57,
+    "kwargs": "{}",
+    "meta": {
+      "tensor_meta": [
+        [
+          1685,
+          4,
+          256
+        ],
+        "torch.float32",
+        false,
+        [
+          1024,
+          256,
+          1
+        ],
+        "torch.contiguous_format",
+        false,
+        {}
+      ],
+      "val": {
+        "device": "cuda:0",
+        "dtype": "torch.float32",
+        "requires_grad": false,
+        "shape": [
+          1685,
+          4,
+          256
+        ]
+      }
+    },
+    "name": "mul_5",
+    "op": "call_function",
+    "target": "aten.mul.Tensor",
+    "users": [
+      "_to_copy_8"
+    ]
+  },
+  {
+    "args": "(mul_5,)",
+    "index": 58,
+    "kwargs": "{'dtype': torch.bfloat16}",
+    "meta": {
+      "tensor_meta": [
+        [
+          1685,
+          4,
+          256
+        ],
+        "torch.bfloat16",
+        false,
+        [
+          1024,
+          256,
+          1
+        ],
+        "torch.contiguous_format",
+        false,
+        {}
+      ],
+      "val": {
+        "device": "cuda:0",
+        "dtype": "torch.bfloat16",
+        "requires_grad": false,
+        "shape": [
+          1685,
+          4,
+          256
+        ]
+      }
+    },
+    "name": "_to_copy_8",
+    "op": "call_function",
+    "target": "aten._to_copy.default",
+    "users": [
+      "view_4"
+    ]
+  },
+  {
+    "args": "(_to_copy_8, [-1, 1024])",
+    "index": 59,
+    "kwargs": "{}",
+    "meta": {
+      "tensor_meta": [
+        [
+          1685,
+          1024
+        ],
+        "torch.bfloat16",
+        false,
+        [
+          1024,
+          1
+        ],
+        "torch.contiguous_format",
+        false,
+        {}
+      ],
+      "val": {
+        "device": "cuda:0",
+        "dtype": "torch.bfloat16",
+        "requires_grad": false,
+        "shape": [
+          1685,
+          1024
+        ]
+      }
+    },
+    "name": "view_4",
+    "op": "call_function",
+    "target": "aten.view.default",
+    "users": [
+      "view_7"
+    ]
+  },
+  {
+    "args": "()",
+    "index": 60,
+    "kwargs": "{}",
+    "meta": {
+      "val": {
+        "device": "cuda:0",
+        "dtype": "torch.bfloat16",
+        "requires_grad": false,
+        "shape": [
+          1048576,
+          64
+        ]
+      }
+    },
+    "name": "_tensor_constant0",
+    "op": "get_attr",
+    "target": "_tensor_constant0",
+    "users": [
+      "index"
+    ]
+  },
+  {
+    "args": "(_tensor_constant0, [arg0_1])",
+    "index": 61,
+    "kwargs": "{}",
+    "meta": {
+      "tensor_meta": [
+        [
+          3,
+          1685,
+          64
+        ],
+        "torch.bfloat16",
+        false,
+        [
+          107840,
+          64,
+          1
+        ],
+        "torch.contiguous_format",
+        false,
+        {}
+      ],
+      "val": {
+        "device": "cuda:0",
+        "dtype": "torch.bfloat16",
+        "requires_grad": false,
+        "shape": [
+          3,
+          1685,
+          64
+        ]
+      }
+    },
+    "name": "index",
+    "op": "call_function",
+    "target": "aten.index.Tensor",
+    "users": [
+      "split_1"
+    ]
+  },
+  {
+    "args": "(index, 32, -1)",
+    "index": 62,
+    "kwargs": "{}",
+    "meta": {
+      "val": [
+        {
+          "device": "cuda:0",
+          "dtype": "torch.bfloat16",
+          "requires_grad": false,
+          "shape": [
+            3,
+            1685,
+            32
+          ]
+        },
+        {
+          "device": "cuda:0",
+          "dtype": "torch.bfloat16",
+          "requires_grad": false,
+          "shape": [
+            3,
+            1685,
+            32
+          ]
+        }
+      ]
+    },
+    "name": "split_1",
+    "op": "call_function",
+    "target": "aten.split.Tensor",
+    "users": [
+      "getitem_5",
+      "getitem_6"
+    ]
+  },
+  {
+    "args": "(split_1, 0)",
+    "index": 63,
+    "kwargs": "{}",
+    "meta": {
+      "tensor_meta": [
+        [
+          3,
+          1685,
+          32
+        ],
+        "torch.bfloat16",
+        false,
+        [
+          107840,
+          64,
+          1
+        ],
+        null,
+        false,
+        {}
+      ],
+      "val": {
+        "device": "cuda:0",
+        "dtype": "torch.bfloat16",
+        "requires_grad": false,
+        "shape": [
+          3,
+          1685,
+          32
+        ]
+      }
+    },
+    "name": "getitem_5",
+    "op": "call_function",
+    "target": "<built-in function getitem>",
+    "users": [
+      "select",
+      "select_1",
+      "select_2"
+    ]
+  },
+  {
+    "args": "(split_1, 1)",
+    "index": 64,
+    "kwargs": "{}",
+    "meta": {
+      "tensor_meta": [
+        [
+          3,
+          1685,
+          32
+        ],
+        "torch.bfloat16",
+        false,
+        [
+          107840,
+          64,
+          1
+        ],
+        null,
+        false,
+        {}
+      ],
+      "val": {
+        "device": "cuda:0",
+        "dtype": "torch.bfloat16",
+        "requires_grad": false,
+        "shape": [
+          3,
+          1685,
+          32
+        ]
+      }
+    },
+    "name": "getitem_6",
+    "op": "call_function",
+    "target": "<built-in function getitem>",
+    "users": [
+      "select_3",
+      "select_4",
+      "select_5"
+    ]
+  },
+  {
+    "args": "(getitem_5, 0, 0)",
+    "index": 65,
+    "kwargs": "{}",
+    "meta": {
+      "tensor_meta": [
+        [
+          1685,
+          32
+        ],
+        "torch.bfloat16",
+        false,
+        [
+          64,
+          1
+        ],
+        null,
+        false,
+        {}
+      ],
+      "val": {
+        "device": "cuda:0",
+        "dtype": "torch.bfloat16",
+        "requires_grad": false,
+        "shape": [
+          1685,
+          32
+        ]
+      }
+    },
+    "name": "select",
+    "op": "call_function",
+    "target": "aten.select.int",
+    "users": [
+      "clone_2"
+    ]
+  },
+  {
+    "args": "(select,)",
+    "index": 66,
+    "kwargs": "{}",
+    "meta": {
+      "tensor_meta": [
+        [
+          1685,
+          32
+        ],
+        "torch.bfloat16",
+        false,
+        [
+          32,
+          1
+        ],
+        "torch.contiguous_format",
+        false,
+        {}
+      ],
+      "val": {
+        "device": "cuda:0",
+        "dtype": "torch.bfloat16",
+        "requires_grad": false,
+        "shape": [
+          1685,
+          32
+        ]
+      }
+    },
+    "name": "clone_2",
+    "op": "call_function",
+    "target": "aten.clone.default",
+    "users": [
+      "slice_2",
+      "slice_4",
+      "unsqueeze",
+      "unsqueeze_2"
+    ]
+  },
+  {
+    "args": "(getitem_5, 0, 1)",
+    "index": 67,
+    "kwargs": "{}",
+    "meta": {
+      "tensor_meta": [
+        [
+          1685,
+          32
+        ],
+        "torch.bfloat16",
+        false,
+        [
+          64,
+          1
+        ],
+        null,
+        false,
+        {}
+      ],
+      "val": {
+        "device": "cuda:0",
+        "dtype": "torch.bfloat16",
+        "requires_grad": false,
+        "shape": [
+          1685,
+          32
+        ]
+      }
+    },
+    "name": "select_1",
+    "op": "call_function",
+    "target": "aten.select.int",
+    "users": [
+      "slice_1"
+    ]
+  },
+  {
+    "args": "(select_1, 1, 1, 33, 3)",
+    "index": 68,
+    "kwargs": "{}",
+    "meta": {
+      "tensor_meta": [
+        [
+          1685,
+          11
+        ],
+        "torch.bfloat16",
+        false,
+        [
+          64,
+          3
+        ],
+        null,
+        false,
+        {}
+      ],
+      "val": {
+        "device": "cuda:0",
+        "dtype": "torch.bfloat16",
+        "requires_grad": false,
+        "shape": [
+          1685,
+          11
+        ]
+      }
+    },
+    "name": "slice_1",
+    "op": "call_function",
+    "target": "aten.slice.Tensor",
+    "users": [
+      "copy_"
+    ]
+  },
+  {
+    "args": "(clone_2, 1, 1, 33, 3)",
+    "index": 69,
+    "kwargs": "{}",
+    "meta": {
+      "tensor_meta": [
+        [
+          1685,
+          11
+        ],
+        "torch.bfloat16",
+        false,
+        [
+          32,
+          3
+        ],
+        null,
+        false,
+        {}
+      ],
+      "val": {
+        "device": "cuda:0",
+        "dtype": "torch.bfloat16",
+        "requires_grad": false,
+        "shape": [
+          1685,
+          11
+        ]
+      }
+    },
+    "name": "slice_2",
+    "op": "call_function",
+    "target": "aten.slice.Tensor",
+    "users": [
+      "copy_"
+    ]
+  },
+  {
+    "args": "(slice_2, slice_1)",
+    "index": 70,
+    "kwargs": "{}",
+    "meta": {
+      "tensor_meta": [
+        [
+          1685,
+          11
+        ],
+        "torch.bfloat16",
+        false,
+        [
+          32,
+          3
+        ],
+        null,
+        false,
+        {}
+      ],
+      "val": {
+        "device": "cuda:0",
+        "dtype": "torch.bfloat16",
+        "requires_grad": false,
+        "shape": [
+          1685,
+          11
+        ]
+      }
+    },
+    "name": "copy_",
+    "op": "call_function",
+    "target": "aten.copy_.default",
+    "users": []
+  },
+  {
+    "args": "(getitem_5, 0, 2)",
+    "index": 71,
+    "kwargs": "{}",
+    "meta": {
+      "tensor_meta": [
+        [
+          1685,
+          32
+        ],
+        "torch.bfloat16",
+        false,
+        [
+          64,
+          1
+        ],
+        null,
+        false,
+        {}
+      ],
+      "val": {
+        "device": "cuda:0",
+        "dtype": "torch.bfloat16",
+        "requires_grad": false,
+        "shape": [
+          1685,
+          32
+        ]
+      }
+    },
+    "name": "select_2",
+    "op": "call_function",
+    "target": "aten.select.int",
+    "users": [
+      "slice_3"
+    ]
+  },
+  {
+    "args": "(select_2, 1, 2, 30, 3)",
+    "index": 72,
+    "kwargs": "{}",
+    "meta": {
+      "tensor_meta": [
+        [
+          1685,
+          10
+        ],
+        "torch.bfloat16",
+        false,
+        [
+          64,
+          3
+        ],
+        null,
+        false,
+        {}
+      ],
+      "val": {
+        "device": "cuda:0",
+        "dtype": "torch.bfloat16",
+        "requires_grad": false,
+        "shape": [
+          1685,
+          10
+        ]
+      }
+    },
+    "name": "slice_3",
+    "op": "call_function",
+    "target": "aten.slice.Tensor",
+    "users": [
+      "copy__1"
+    ]
+  },
+  {
+    "args": "(clone_2, 1, 2, 30, 3)",
+    "index": 73,
+    "kwargs": "{}",
+    "meta": {
+      "tensor_meta": [
+        [
+          1685,
+          10
+        ],
+        "torch.bfloat16",
+        false,
+        [
+          32,
+          3
+        ],
+        null,
+        false,
+        {}
+      ],
+      "val": {
+        "device": "cuda:0",
+        "dtype": "torch.bfloat16",
+        "requires_grad": false,
+        "shape": [
+          1685,
+          10
+        ]
+      }
+    },
+    "name": "slice_4",
+    "op": "call_function",
+    "target": "aten.slice.Tensor",
+    "users": [
+      "copy__1"
+    ]
+  },
+  {
+    "args": "(slice_4, slice_3)",
+    "index": 74,
+    "kwargs": "{}",
+    "meta": {
+      "tensor_meta": [
+        [
+          1685,
+          10
+        ],
+        "torch.bfloat16",
+        false,
+        [
+          32,
+          3
+        ],
+        null,
+        false,
+        {}
+      ],
+      "val": {
+        "device": "cuda:0",
+        "dtype": "torch.bfloat16",
+        "requires_grad": false,
+        "shape": [
+          1685,
+          10
+        ]
+      }
+    },
+    "name": "copy__1",
+    "op": "call_function",
+    "target": "aten.copy_.default",
+    "users": []
+  },
+  {
+    "args": "(getitem_6, 0, 0)",
+    "index": 75,
+    "kwargs": "{}",
+    "meta": {
+      "tensor_meta": [
+        [
+          1685,
+          32
+        ],
+        "torch.bfloat16",
+        false,
+        [
+          64,
+          1
+        ],
+        null,
+        false,
+        {}
+      ],
+      "val": {
+        "device": "cuda:0",
+        "dtype": "torch.bfloat16",
+        "requires_grad": false,
+        "shape": [
+          1685,
+          32
+        ]
+      }
+    },
+    "name": "select_3",
+    "op": "call_function",
+    "target": "aten.select.int",
+    "users": [
+      "clone_3"
+    ]
+  },
+  {
+    "args": "(select_3,)",
+    "index": 76,
+    "kwargs": "{}",
+    "meta": {
+      "tensor_meta": [
+        [
+          1685,
+          32
+        ],
+        "torch.bfloat16",
+        false,
+        [
+          32,
+          1
+        ],
+        "torch.contiguous_format",
+        false,
+        {}
+      ],
+      "val": {
+        "device": "cuda:0",
+        "dtype": "torch.bfloat16",
+        "requires_grad": false,
+        "shape": [
+          1685,
+          32
+        ]
+      }
+    },
+    "name": "clone_3",
+    "op": "call_function",
+    "target": "aten.clone.default",
+    "users": [
+      "slice_6",
+      "slice_8",
+      "unsqueeze_1",
+      "unsqueeze_3"
+    ]
+  },
+  {
+    "args": "(getitem_6, 0, 1)",
+    "index": 77,
+    "kwargs": "{}",
+    "meta": {
+      "tensor_meta": [
+        [
+          1685,
+          32
+        ],
+        "torch.bfloat16",
+        false,
+        [
+          64,
+          1
+        ],
+        null,
+        false,
+        {}
+      ],
+      "val": {
+        "device": "cuda:0",
+        "dtype": "torch.bfloat16",
+        "requires_grad": false,
+        "shape": [
+          1685,
+          32
+        ]
+      }
+    },
+    "name": "select_4",
+    "op": "call_function",
+    "target": "aten.select.int",
+    "users": [
+      "slice_5"
+    ]
+  },
+  {
+    "args": "(select_4, 1, 1, 33, 3)",
+    "index": 78,
+    "kwargs": "{}",
+    "meta": {
+      "tensor_meta": [
+        [
+          1685,
+          11
+        ],
+        "torch.bfloat16",
+        false,
+        [
+          64,
+          3
+        ],
+        null,
+        false,
+        {}
+      ],
+      "val": {
+        "device": "cuda:0",
+        "dtype": "torch.bfloat16",
+        "requires_grad": false,
+        "shape": [
+          1685,
+          11
+        ]
+      }
+    },
+    "name": "slice_5",
+    "op": "call_function",
+    "target": "aten.slice.Tensor",
+    "users": [
+      "copy__2"
+    ]
+  },
+  {
+    "args": "(clone_3, 1, 1, 33, 3)",
+    "index": 79,
+    "kwargs": "{}",
+    "meta": {
+      "tensor_meta": [
+        [
+          1685,
+          11
+        ],
+        "torch.bfloat16",
+        false,
+        [
+          32,
+          3
+        ],
+        null,
+        false,
+        {}
+      ],
+      "val": {
+        "device": "cuda:0",
+        "dtype": "torch.bfloat16",
+        "requires_grad": false,
+        "shape": [
+          1685,
+          11
+        ]
+      }
+    },
+    "name": "slice_6",
+    "op": "call_function",
+    "target": "aten.slice.Tensor",
+    "users": [
+      "copy__2"
+    ]
+  },
+  {
+    "args": "(slice_6, slice_5)",
+    "index": 80,
+    "kwargs": "{}",
+    "meta": {
+      "tensor_meta": [
+        [
+          1685,
+          11
+        ],
+        "torch.bfloat16",
+        false,
+        [
+          32,
+          3
+        ],
+        null,
+        false,
+        {}
+      ],
+      "val": {
+        "device": "cuda:0",
+        "dtype": "torch.bfloat16",
+        "requires_grad": false,
+        "shape": [
+          1685,
+          11
+        ]
+      }
+    },
+    "name": "copy__2",
+    "op": "call_function",
+    "target": "aten.copy_.default",
+    "users": []
+  },
+  {
+    "args": "(getitem_6, 0, 2)",
+    "index": 81,
+    "kwargs": "{}",
+    "meta": {
+      "tensor_meta": [
+        [
+          1685,
+          32
+        ],
+        "torch.bfloat16",
+        false,
+        [
+          64,
+          1
+        ],
+        null,
+        false,
+        {}
+      ],
+      "val": {
+        "device": "cuda:0",
+        "dtype": "torch.bfloat16",
+        "requires_grad": false,
+        "shape": [
+          1685,
+          32
+        ]
+      }
+    },
+    "name": "select_5",
+    "op": "call_function",
+    "target": "aten.select.int",
+    "users": [
+      "slice_7"
+    ]
+  },
+  {
+    "args": "(select_5, 1, 2, 30, 3)",
+    "index": 82,
+    "kwargs": "{}",
+    "meta": {
+      "tensor_meta": [
+        [
+          1685,
+          10
+        ],
+        "torch.bfloat16",
+        false,
+        [
+          64,
+          3
+        ],
+        null,
+        false,
+        {}
+      ],
+      "val": {
+        "device": "cuda:0",
+        "dtype": "torch.bfloat16",
+        "requires_grad": false,
+        "shape": [
+          1685,
+          10
+        ]
+      }
+    },
+    "name": "slice_7",
+    "op": "call_function",
+    "target": "aten.slice.Tensor",
+    "users": [
+      "copy__3"
+    ]
+  },
+  {
+    "args": "(clone_3, 1, 2, 30, 3)",
+    "index": 83,
+    "kwargs": "{}",
+    "meta": {
+      "tensor_meta": [
+        [
+          1685,
+          10
+        ],
+        "torch.bfloat16",
+        false,
+        [
+          32,
+          3
+        ],
+        null,
+        false,
+        {}
+      ],
+      "val": {
+        "device": "cuda:0",
+        "dtype": "torch.bfloat16",
+        "requires_grad": false,
+        "shape": [
+          1685,
+          10
+        ]
+      }
+    },
+    "name": "slice_8",
+    "op": "call_function",
+    "target": "aten.slice.Tensor",
+    "users": [
+      "copy__3"
+    ]
+  },
+  {
+    "args": "(slice_8, slice_7)",
+    "index": 84,
+    "kwargs": "{}",
+    "meta": {
+      "tensor_meta": [
+        [
+          1685,
+          10
+        ],
+        "torch.bfloat16",
+        false,
+        [
+          32,
+          3
+        ],
+        null,
+        false,
+        {}
+      ],
+      "val": {
+        "device": "cuda:0",
+        "dtype": "torch.bfloat16",
+        "requires_grad": false,
+        "shape": [
+          1685,
+          10
+        ]
+      }
+    },
+    "name": "copy__3",
+    "op": "call_function",
+    "target": "aten.copy_.default",
+    "users": []
+  },
+  {
+    "args": "(view_2, [1685, -1, 256])",
+    "index": 85,
+    "kwargs": "{}",
+    "meta": {
+      "tensor_meta": [
+        [
+          1685,
+          24,
+          256
+        ],
+        "torch.bfloat16",
+        false,
+        [
+          6144,
+          256,
+          1
+        ],
+        "torch.contiguous_format",
+        false,
+        {}
+      ],
+      "val": {
+        "device": "cuda:0",
+        "dtype": "torch.bfloat16",
+        "requires_grad": false,
+        "shape": [
+          1685,
+          24,
+          256
+        ]
+      }
+    },
+    "name": "view_5",
+    "op": "call_function",
+    "target": "aten.view.default",
+    "users": [
+      "slice_10",
+      "slice_9"
+    ]
+  },
+  {
+    "args": "(view_5, 2, 0, 64)",
+    "index": 86,
+    "kwargs": "{}",
+    "meta": {
+      "tensor_meta": [
+        [
+          1685,
+          24,
+          64
+        ],
+        "torch.bfloat16",
+        false,
+        [
+          6144,
+          256,
+          1
+        ],
+        null,
+        false,
+        {}
+      ],
+      "val": {
+        "device": "cuda:0",
+        "dtype": "torch.bfloat16",
+        "requires_grad": false,
+        "shape": [
+          1685,
+          24,
+          64
+        ]
+      }
+    },
+    "name": "slice_9",
+    "op": "call_function",
+    "target": "aten.slice.Tensor",
+    "users": [
+      "split_2"
+    ]
+  },
+  {
+    "args": "(view_5, 2, 64, 9223372036854775807)",
+    "index": 87,
+    "kwargs": "{}",
+    "meta": {
+      "tensor_meta": [
+        [
+          1685,
+          24,
+          192
+        ],
+        "torch.bfloat16",
+        false,
+        [
+          6144,
+          256,
+          1
+        ],
+        null,
+        false,
+        {}
+      ],
+      "val": {
+        "device": "cuda:0",
+        "dtype": "torch.bfloat16",
+        "requires_grad": false,
+        "shape": [
+          1685,
+          24,
+          192
+        ]
+      }
+    },
+    "name": "slice_10",
+    "op": "call_function",
+    "target": "aten.slice.Tensor",
+    "users": [
+      "cat_1"
+    ]
+  },
+  {
+    "args": "(clone_2, -2)",
+    "index": 88,
+    "kwargs": "{}",
+    "meta": {
+      "tensor_meta": [
+        [
+          1685,
+          1,
+          32
+        ],
+        "torch.bfloat16",
+        false,
+        [
+          32,
+          32,
+          1
+        ],
+        "torch.contiguous_format",
+        false,
+        {}
+      ],
+      "val": {
+        "device": "cuda:0",
+        "dtype": "torch.bfloat16",
+        "requires_grad": false,
+        "shape": [
+          1685,
+          1,
+          32
+        ]
+      }
+    },
+    "name": "unsqueeze",
+    "op": "call_function",
+    "target": "aten.unsqueeze.default",
+    "users": [
+      "mul_6",
+      "mul_8"
+    ]
+  },
+  {
+    "args": "(clone_3, -2)",
+    "index": 89,
+    "kwargs": "{}",
+    "meta": {
+      "tensor_meta": [
+        [
+          1685,
+          1,
+          32
+        ],
+        "torch.bfloat16",
+        false,
+        [
+          32,
+          32,
+          1
+        ],
+        "torch.contiguous_format",
+        false,
+        {}
+      ],
+      "val": {
+        "device": "cuda:0",
+        "dtype": "torch.bfloat16",
+        "requires_grad": false,
+        "shape": [
+          1685,
+          1,
+          32
+        ]
+      }
+    },
+    "name": "unsqueeze_1",
+    "op": "call_function",
+    "target": "aten.unsqueeze.default",
+    "users": [
+      "mul_7",
+      "mul_9"
+    ]
+  },
+  {
+    "args": "(slice_9, 32, -1)",
+    "index": 90,
+    "kwargs": "{}",
+    "meta": {
+      "val": [
+        {
+          "device": "cuda:0",
+          "dtype": "torch.bfloat16",
+          "requires_grad": false,
+          "shape": [
+            1685,
+            24,
+            32
+          ]
+        },
+        {
+          "device": "cuda:0",
+          "dtype": "torch.bfloat16",
+          "requires_grad": false,
+          "shape": [
+            1685,
+            24,
+            32
+          ]
+        }
+      ]
+    },
+    "name": "split_2",
+    "op": "call_function",
+    "target": "aten.split.Tensor",
+    "users": [
+      "getitem_7",
+      "getitem_8"
+    ]
+  },
+  {
+    "args": "(split_2, 0)",
+    "index": 91,
+    "kwargs": "{}",
+    "meta": {
+      "tensor_meta": [
+        [
+          1685,
+          24,
+          32
+        ],
+        "torch.bfloat16",
+        false,
+        [
+          6144,
+          256,
+          1
+        ],
+        null,
+        false,
+        {}
+      ],
+      "val": {
+        "device": "cuda:0",
+        "dtype": "torch.bfloat16",
+        "requires_grad": false,
+        "shape": [
+          1685,
+          24,
+          32
+        ]
+      }
+    },
+    "name": "getitem_7",
+    "op": "call_function",
+    "target": "<built-in function getitem>",
+    "users": [
+      "mul_6",
+      "mul_9"
+    ]
+  },
+  {
+    "args": "(split_2, 1)",
+    "index": 92,
+    "kwargs": "{}",
+    "meta": {
+      "tensor_meta": [
+        [
+          1685,
+          24,
+          32
+        ],
+        "torch.bfloat16",
+        false,
+        [
+          6144,
+          256,
+          1
+        ],
+        null,
+        false,
+        {}
+      ],
+      "val": {
+        "device": "cuda:0",
+        "dtype": "torch.bfloat16",
+        "requires_grad": false,
+        "shape": [
+          1685,
+          24,
+          32
+        ]
+      }
+    },
+    "name": "getitem_8",
+    "op": "call_function",
+    "target": "<built-in function getitem>",
+    "users": [
+      "mul_7",
+      "mul_8"
+    ]
+  },
+  {
+    "args": "(getitem_7, unsqueeze)",
+    "index": 93,
+    "kwargs": "{}",
+    "meta": {
+      "tensor_meta": [
+        [
+          1685,
+          24,
+          32
+        ],
+        "torch.bfloat16",
+        false,
+        [
+          768,
+          32,
+          1
+        ],
+        "torch.contiguous_format",
+        false,
+        {}
+      ],
+      "val": {
+        "device": "cuda:0",
+        "dtype": "torch.bfloat16",
+        "requires_grad": false,
+        "shape": [
+          1685,
+          24,
+          32
+        ]
+      }
+    },
+    "name": "mul_6",
+    "op": "call_function",
+    "target": "aten.mul.Tensor",
+    "users": [
+      "sub"
+    ]
+  },
+  {
+    "args": "(getitem_8, unsqueeze_1)",
+    "index": 94,
+    "kwargs": "{}",
+    "meta": {
+      "tensor_meta": [
+        [
+          1685,
+          24,
+          32
+        ],
+        "torch.bfloat16",
+        false,
+        [
+          768,
+          32,
+          1
+        ],
+        "torch.contiguous_format",
+        false,
+        {}
+      ],
+      "val": {
+        "device": "cuda:0",
+        "dtype": "torch.bfloat16",
+        "requires_grad": false,
+        "shape": [
+          1685,
+          24,
+          32
+        ]
+      }
+    },
+    "name": "mul_7",
+    "op": "call_function",
+    "target": "aten.mul.Tensor",
+    "users": [
+      "sub"
+    ]
+  },
+  {
+    "args": "(mul_6, mul_7)",
+    "index": 95,
+    "kwargs": "{}",
+    "meta": {
+      "tensor_meta": [
+        [
+          1685,
+          24,
+          32
+        ],
+        "torch.bfloat16",
+        false,
+        [
+          768,
+          32,
+          1
+        ],
+        "torch.contiguous_format",
+        false,
+        {}
+      ],
+      "val": {
+        "device": "cuda:0",
+        "dtype": "torch.bfloat16",
+        "requires_grad": false,
+        "shape": [
+          1685,
+          24,
+          32
+        ]
+      }
+    },
+    "name": "sub",
+    "op": "call_function",
+    "target": "aten.sub.Tensor",
+    "users": [
+      "cat"
+    ]
+  },
+  {
+    "args": "(getitem_8, unsqueeze)",
+    "index": 96,
+    "kwargs": "{}",
+    "meta": {
+      "tensor_meta": [
+        [
+          1685,
+          24,
+          32
+        ],
+        "torch.bfloat16",
+        false,
+        [
+          768,
+          32,
+          1
+        ],
+        "torch.contiguous_format",
+        false,
+        {}
+      ],
+      "val": {
+        "device": "cuda:0",
+        "dtype": "torch.bfloat16",
+        "requires_grad": false,
+        "shape": [
+          1685,
+          24,
+          32
+        ]
+      }
+    },
+    "name": "mul_8",
+    "op": "call_function",
+    "target": "aten.mul.Tensor",
+    "users": [
+      "add_7"
+    ]
+  },
+  {
+    "args": "(getitem_7, unsqueeze_1)",
+    "index": 97,
+    "kwargs": "{}",
+    "meta": {
+      "tensor_meta": [
+        [
+          1685,
+          24,
+          32
+        ],
+        "torch.bfloat16",
+        false,
+        [
+          768,
+          32,
+          1
+        ],
+        "torch.contiguous_format",
+        false,
+        {}
+      ],
+      "val": {
+        "device": "cuda:0",
+        "dtype": "torch.bfloat16",
+        "requires_grad": false,
+        "shape": [
+          1685,
+          24,
+          32
+        ]
+      }
+    },
+    "name": "mul_9",
+    "op": "call_function",
+    "target": "aten.mul.Tensor",
+    "users": [
+      "add_7"
+    ]
+  },
+  {
+    "args": "(mul_8, mul_9)",
+    "index": 98,
+    "kwargs": "{}",
+    "meta": {
+      "tensor_meta": [
+        [
+          1685,
+          24,
+          32
+        ],
+        "torch.bfloat16",
+        false,
+        [
+          768,
+          32,
+          1
+        ],
+        "torch.contiguous_format",
+        false,
+        {}
+      ],
+      "val": {
+        "device": "cuda:0",
+        "dtype": "torch.bfloat16",
+        "requires_grad": false,
+        "shape": [
+          1685,
+          24,
+          32
+        ]
+      }
+    },
+    "name": "add_7",
+    "op": "call_function",
+    "target": "aten.add.Tensor",
+    "users": [
+      "cat"
+    ]
+  },
+  {
+    "args": "([sub, add_7], -1)",
+    "index": 99,
+    "kwargs": "{}",
+    "meta": {
+      "tensor_meta": [
+        [
+          1685,
+          24,
+          64
+        ],
+        "torch.bfloat16",
+        false,
+        [
+          1536,
+          64,
+          1
+        ],
+        "torch.contiguous_format",
+        false,
+        {}
+      ],
+      "val": {
+        "device": "cuda:0",
+        "dtype": "torch.bfloat16",
+        "requires_grad": false,
+        "shape": [
+          1685,
+          24,
+          64
+        ]
+      }
+    },
+    "name": "cat",
+    "op": "call_function",
+    "target": "aten.cat.default",
+    "users": [
+      "cat_1"
+    ]
+  },
+  {
+    "args": "([cat, slice_10], -1)",
+    "index": 100,
+    "kwargs": "{}",
+    "meta": {
+      "tensor_meta": [
+        [
+          1685,
+          24,
+          256
+        ],
+        "torch.bfloat16",
+        false,
+        [
+          6144,
+          256,
+          1
+        ],
+        "torch.contiguous_format",
+        false,
+        {}
+      ],
+      "val": {
+        "device": "cuda:0",
+        "dtype": "torch.bfloat16",
+        "requires_grad": false,
+        "shape": [
+          1685,
+          24,
+          256
+        ]
+      }
+    },
+    "name": "cat_1",
+    "op": "call_function",
+    "target": "aten.cat.default",
+    "users": [
+      "view_6"
+    ]
+  },
+  {
+    "args": "(cat_1, [1685, 6144])",
+    "index": 101,
+    "kwargs": "{}",
+    "meta": {
+      "tensor_meta": [
+        [
+          1685,
+          6144
+        ],
+        "torch.bfloat16",
+        false,
+        [
+          6144,
+          1
+        ],
+        "torch.contiguous_format",
+        false,
+        {}
+      ],
+      "val": {
+        "device": "cuda:0",
+        "dtype": "torch.bfloat16",
+        "requires_grad": false,
+        "shape": [
+          1685,
+          6144
+        ]
+      }
+    },
+    "name": "view_6",
+    "op": "call_function",
+    "target": "aten.view.default",
+    "users": [
+      "view_9"
+    ]
+  },
+  {
+    "args": "(view_4, [1685, -1, 256])",
+    "index": 102,
+    "kwargs": "{}",
+    "meta": {
+      "tensor_meta": [
+        [
+          1685,
+          4,
+          256
+        ],
+        "torch.bfloat16",
+        false,
+        [
+          1024,
+          256,
+          1
+        ],
+        "torch.contiguous_format",
+        false,
+        {}
+      ],
+      "val": {
+        "device": "cuda:0",
+        "dtype": "torch.bfloat16",
+        "requires_grad": false,
+        "shape": [
+          1685,
+          4,
+          256
+        ]
+      }
+    },
+    "name": "view_7",
+    "op": "call_function",
+    "target": "aten.view.default",
+    "users": [
+      "slice_11",
+      "slice_12"
+    ]
+  },
+  {
+    "args": "(view_7, 2, 0, 64)",
+    "index": 103,
+    "kwargs": "{}",
+    "meta": {
+      "tensor_meta": [
+        [
+          1685,
+          4,
+          64
+        ],
+        "torch.bfloat16",
+        false,
+        [
+          1024,
+          256,
+          1
+        ],
+        null,
+        false,
+        {}
+      ],
+      "val": {
+        "device": "cuda:0",
+        "dtype": "torch.bfloat16",
+        "requires_grad": false,
+        "shape": [
+          1685,
+          4,
+          64
+        ]
+      }
+    },
+    "name": "slice_11",
+    "op": "call_function",
+    "target": "aten.slice.Tensor",
+    "users": [
+      "split_3"
+    ]
+  },
+  {
+    "args": "(view_7, 2, 64, 9223372036854775807)",
+    "index": 104,
+    "kwargs": "{}",
+    "meta": {
+      "tensor_meta": [
+        [
+          1685,
+          4,
+          192
+        ],
+        "torch.bfloat16",
+        false,
+        [
+          1024,
+          256,
+          1
+        ],
+        null,
+        false,
+        {}
+      ],
+      "val": {
+        "device": "cuda:0",
+        "dtype": "torch.bfloat16",
+        "requires_grad": false,
+        "shape": [
+          1685,
+          4,
+          192
+        ]
+      }
+    },
+    "name": "slice_12",
+    "op": "call_function",
+    "target": "aten.slice.Tensor",
+    "users": [
+      "cat_3"
+    ]
+  },
+  {
+    "args": "(clone_2, -2)",
+    "index": 105,
+    "kwargs": "{}",
+    "meta": {
+      "tensor_meta": [
+        [
+          1685,
+          1,
+          32
+        ],
+        "torch.bfloat16",
+        false,
+        [
+          32,
+          32,
+          1
+        ],
+        "torch.contiguous_format",
+        false,
+        {}
+      ],
+      "val": {
+        "device": "cuda:0",
+        "dtype": "torch.bfloat16",
+        "requires_grad": false,
+        "shape": [
+          1685,
+          1,
+          32
+        ]
+      }
+    },
+    "name": "unsqueeze_2",
+    "op": "call_function",
+    "target": "aten.unsqueeze.default",
+    "users": [
+      "mul_10",
+      "mul_12"
+    ]
+  },
+  {
+    "args": "(clone_3, -2)",
+    "index": 106,
+    "kwargs": "{}",
+    "meta": {
+      "tensor_meta": [
+        [
+          1685,
+          1,
+          32
+        ],
+        "torch.bfloat16",
+        false,
+        [
+          32,
+          32,
+          1
+        ],
+        "torch.contiguous_format",
+        false,
+        {}
+      ],
+      "val": {
+        "device": "cuda:0",
+        "dtype": "torch.bfloat16",
+        "requires_grad": false,
+        "shape": [
+          1685,
+          1,
+          32
+        ]
+      }
+    },
+    "name": "unsqueeze_3",
+    "op": "call_function",
+    "target": "aten.unsqueeze.default",
+    "users": [
+      "mul_11",
+      "mul_13"
+    ]
+  },
+  {
+    "args": "(slice_11, 32, -1)",
+    "index": 107,
+    "kwargs": "{}",
+    "meta": {
+      "val": [
+        {
+          "device": "cuda:0",
+          "dtype": "torch.bfloat16",
+          "requires_grad": false,
+          "shape": [
+            1685,
+            4,
+            32
+          ]
+        },
+        {
+          "device": "cuda:0",
+          "dtype": "torch.bfloat16",
+          "requires_grad": false,
+          "shape": [
+            1685,
+            4,
+            32
+          ]
+        }
+      ]
+    },
+    "name": "split_3",
+    "op": "call_function",
+    "target": "aten.split.Tensor",
+    "users": [
+      "getitem_10",
+      "getitem_9"
+    ]
+  },
+  {
+    "args": "(split_3, 0)",
+    "index": 108,
+    "kwargs": "{}",
+    "meta": {
+      "tensor_meta": [
+        [
+          1685,
+          4,
+          32
+        ],
+        "torch.bfloat16",
+        false,
+        [
+          1024,
+          256,
+          1
+        ],
+        null,
+        false,
+        {}
+      ],
+      "val": {
+        "device": "cuda:0",
+        "dtype": "torch.bfloat16",
+        "requires_grad": false,
+        "shape": [
+          1685,
+          4,
+          32
+        ]
+      }
+    },
+    "name": "getitem_9",
+    "op": "call_function",
+    "target": "<built-in function getitem>",
+    "users": [
+      "mul_10",
+      "mul_13"
+    ]
+  },
+  {
+    "args": "(split_3, 1)",
+    "index": 109,
+    "kwargs": "{}",
+    "meta": {
+      "tensor_meta": [
+        [
+          1685,
+          4,
+          32
+        ],
+        "torch.bfloat16",
+        false,
+        [
+          1024,
+          256,
+          1
+        ],
+        null,
+        false,
+        {}
+      ],
+      "val": {
+        "device": "cuda:0",
+        "dtype": "torch.bfloat16",
+        "requires_grad": false,
+        "shape": [
+          1685,
+          4,
+          32
+        ]
+      }
+    },
+    "name": "getitem_10",
+    "op": "call_function",
+    "target": "<built-in function getitem>",
+    "users": [
+      "mul_11",
+      "mul_12"
+    ]
+  },
+  {
+    "args": "(getitem_9, unsqueeze_2)",
+    "index": 110,
+    "kwargs": "{}",
+    "meta": {
+      "tensor_meta": [
+        [
+          1685,
+          4,
+          32
+        ],
+        "torch.bfloat16",
+        false,
+        [
+          128,
+          32,
+          1
+        ],
+        "torch.contiguous_format",
+        false,
+        {}
+      ],
+      "val": {
+        "device": "cuda:0",
+        "dtype": "torch.bfloat16",
+        "requires_grad": false,
+        "shape": [
+          1685,
+          4,
+          32
+        ]
+      }
+    },
+    "name": "mul_10",
+    "op": "call_function",
+    "target": "aten.mul.Tensor",
+    "users": [
+      "sub_1"
+    ]
+  },
+  {
+    "args": "(getitem_10, unsqueeze_3)",
+    "index": 111,
+    "kwargs": "{}",
+    "meta": {
+      "tensor_meta": [
+        [
+          1685,
+          4,
+          32
+        ],
+        "torch.bfloat16",
+        false,
+        [
+          128,
+          32,
+          1
+        ],
+        "torch.contiguous_format",
+        false,
+        {}
+      ],
+      "val": {
+        "device": "cuda:0",
+        "dtype": "torch.bfloat16",
+        "requires_grad": false,
+        "shape": [
+          1685,
+          4,
+          32
+        ]
+      }
+    },
+    "name": "mul_11",
+    "op": "call_function",
+    "target": "aten.mul.Tensor",
+    "users": [
+      "sub_1"
+    ]
+  },
+  {
+    "args": "(mul_10, mul_11)",
+    "index": 112,
+    "kwargs": "{}",
+    "meta": {
+      "tensor_meta": [
+        [
+          1685,
+          4,
+          32
+        ],
+        "torch.bfloat16",
+        false,
+        [
+          128,
+          32,
+          1
+        ],
+        "torch.contiguous_format",
+        false,
+        {}
+      ],
+      "val": {
+        "device": "cuda:0",
+        "dtype": "torch.bfloat16",
+        "requires_grad": false,
+        "shape": [
+          1685,
+          4,
+          32
+        ]
+      }
+    },
+    "name": "sub_1",
+    "op": "call_function",
+    "target": "aten.sub.Tensor",
+    "users": [
+      "cat_2"
+    ]
+  },
+  {
+    "args": "(getitem_10, unsqueeze_2)",
+    "index": 113,
+    "kwargs": "{}",
+    "meta": {
+      "tensor_meta": [
+        [
+          1685,
+          4,
+          32
+        ],
+        "torch.bfloat16",
+        false,
+        [
+          128,
+          32,
+          1
+        ],
+        "torch.contiguous_format",
+        false,
+        {}
+      ],
+      "val": {
+        "device": "cuda:0",
+        "dtype": "torch.bfloat16",
+        "requires_grad": false,
+        "shape": [
+          1685,
+          4,
+          32
+        ]
+      }
+    },
+    "name": "mul_12",
+    "op": "call_function",
+    "target": "aten.mul.Tensor",
+    "users": [
+      "add_8"
+    ]
+  },
+  {
+    "args": "(getitem_9, unsqueeze_3)",
+    "index": 114,
+    "kwargs": "{}",
+    "meta": {
+      "tensor_meta": [
+        [
+          1685,
+          4,
+          32
+        ],
+        "torch.bfloat16",
+        false,
+        [
+          128,
+          32,
+          1
+        ],
+        "torch.contiguous_format",
+        false,
+        {}
+      ],
+      "val": {
+        "device": "cuda:0",
+        "dtype": "torch.bfloat16",
+        "requires_grad": false,
+        "shape": [
+          1685,
+          4,
+          32
+        ]
+      }
+    },
+    "name": "mul_13",
+    "op": "call_function",
+    "target": "aten.mul.Tensor",
+    "users": [
+      "add_8"
+    ]
+  },
+  {
+    "args": "(mul_12, mul_13)",
+    "index": 115,
+    "kwargs": "{}",
+    "meta": {
+      "tensor_meta": [
+        [
+          1685,
+          4,
+          32
+        ],
+        "torch.bfloat16",
+        false,
+        [
+          128,
+          32,
+          1
+        ],
+        "torch.contiguous_format",
+        false,
+        {}
+      ],
+      "val": {
+        "device": "cuda:0",
+        "dtype": "torch.bfloat16",
+        "requires_grad": false,
+        "shape": [
+          1685,
+          4,
+          32
+        ]
+      }
+    },
+    "name": "add_8",
+    "op": "call_function",
+    "target": "aten.add.Tensor",
+    "users": [
+      "cat_2"
+    ]
+  },
+  {
+    "args": "([sub_1, add_8], -1)",
+    "index": 116,
+    "kwargs": "{}",
+    "meta": {
+      "tensor_meta": [
+        [
+          1685,
+          4,
+          64
+        ],
+        "torch.bfloat16",
+        false,
+        [
+          256,
+          64,
+          1
+        ],
+        "torch.contiguous_format",
+        false,
+        {}
+      ],
+      "val": {
+        "device": "cuda:0",
+        "dtype": "torch.bfloat16",
+        "requires_grad": false,
+        "shape": [
+          1685,
+          4,
+          64
+        ]
+      }
+    },
+    "name": "cat_2",
+    "op": "call_function",
+    "target": "aten.cat.default",
+    "users": [
+      "cat_3"
+    ]
+  },
+  {
+    "args": "([cat_2, slice_12], -1)",
+    "index": 117,
+    "kwargs": "{}",
+    "meta": {
+      "tensor_meta": [
+        [
+          1685,
+          4,
+          256
+        ],
+        "torch.bfloat16",
+        false,
+        [
+          1024,
+          256,
+          1
+        ],
+        "torch.contiguous_format",
+        false,
+        {}
+      ],
+      "val": {
+        "device": "cuda:0",
+        "dtype": "torch.bfloat16",
+        "requires_grad": false,
+        "shape": [
+          1685,
+          4,
+          256
+        ]
+      }
+    },
+    "name": "cat_3",
+    "op": "call_function",
+    "target": "aten.cat.default",
+    "users": [
+      "view_8"
+    ]
+  },
+  {
+    "args": "(cat_3, [1685, 1024])",
+    "index": 118,
+    "kwargs": "{}",
+    "meta": {
+      "tensor_meta": [
+        [
+          1685,
+          1024
+        ],
+        "torch.bfloat16",
+        false,
+        [
+          1024,
+          1
+        ],
+        "torch.contiguous_format",
+        false,
+        {}
+      ],
+      "val": {
+        "device": "cuda:0",
+        "dtype": "torch.bfloat16",
+        "requires_grad": false,
+        "shape": [
+          1685,
+          1024
+        ]
+      }
+    },
+    "name": "view_8",
+    "op": "call_function",
+    "target": "aten.view.default",
+    "users": [
+      "view_11"
+    ]
+  },
+  {
+    "args": "([1685, 6144],)",
+    "index": 119,
+    "kwargs": "{'dtype': torch.bfloat16, 'device': device(type='cuda', index=0), 'pin_memory': False}",
+    "meta": {
+      "tensor_meta": [
+        [
+          1685,
+          6144
+        ],
+        "torch.bfloat16",
+        false,
+        [
+          6144,
+          1
+        ],
+        "torch.contiguous_format",
+        false,
+        {}
+      ],
+      "val": {
+        "device": "cuda:0",
+        "dtype": "torch.bfloat16",
+        "requires_grad": false,
+        "shape": [
+          1685,
+          6144
+        ]
+      }
+    },
+    "name": "empty",
+    "op": "call_function",
+    "target": "aten.empty.memory_format",
+    "users": [
+      "view_10"
+    ]
+  },
+  {
+    "args": "(view_6, [-1, 24, 256])",
+    "index": 120,
+    "kwargs": "{}",
+    "meta": {
+      "tensor_meta": [
+        [
+          1685,
+          24,
+          256
+        ],
+        "torch.bfloat16",
+        false,
+        [
+          6144,
+          256,
+          1
+        ],
+        "torch.contiguous_format",
+        false,
+        {}
+      ],
+      "val": {
+        "device": "cuda:0",
+        "dtype": "torch.bfloat16",
+        "requires_grad": false,
+        "shape": [
+          1685,
+          24,
+          256
+        ]
+      }
+    },
+    "name": "view_9",
+    "op": "call_function",
+    "target": "aten.view.default",
+    "users": [
+      "unified_attention_with_output"
+    ]
+  },
+  {
+    "args": "(empty, [-1, 24, 256])",
+    "index": 121,
+    "kwargs": "{}",
+    "meta": {
+      "tensor_meta": [
+        [
+          1685,
+          24,
+          256
+        ],
+        "torch.bfloat16",
+        false,
+        [
+          6144,
+          256,
+          1
+        ],
+        "torch.contiguous_format",
+        false,
+        {}
+      ],
+      "val": {
+        "device": "cuda:0",
+        "dtype": "torch.bfloat16",
+        "requires_grad": false,
+        "shape": [
+          1685,
+          24,
+          256
+        ]
+      }
+    },
+    "name": "view_10",
+    "op": "call_function",
+    "target": "aten.view.default",
+    "users": [
+      "unified_attention_with_output",
+      "view_13"
+    ]
+  },
+  {
+    "args": "(view_8, [-1, 4, 256])",
+    "index": 122,
+    "kwargs": "{}",
+    "meta": {
+      "tensor_meta": [
+        [
+          1685,
+          4,
+          256
+        ],
+        "torch.bfloat16",
+        false,
+        [
+          1024,
+          256,
+          1
+        ],
+        "torch.contiguous_format",
+        false,
+        {}
+      ],
+      "val": {
+        "device": "cuda:0",
+        "dtype": "torch.bfloat16",
+        "requires_grad": false,
+        "shape": [
+          1685,
+          4,
+          256
+        ]
+      }
+    },
+    "name": "view_11",
+    "op": "call_function",
+    "target": "aten.view.default",
+    "users": [
+      "unified_attention_with_output",
+      "unified_kv_cache_update"
+    ]
+  },
+  {
+    "args": "(getitem_2, [-1, 4, 256])",
+    "index": 123,
+    "kwargs": "{}",
+    "meta": {
+      "tensor_meta": [
+        [
+          1685,
+          4,
+          256
+        ],
+        "torch.bfloat16",
+        false,
+        [
+          14336,
+          256,
+          1
+        ],
+        null,
+        false,
+        {}
+      ],
+      "val": {
+        "device": "cuda:0",
+        "dtype": "torch.bfloat16",
+        "requires_grad": false,
+        "shape": [
+          1685,
+          4,
+          256
+        ]
+      }
+    },
+    "name": "view_12",
+    "op": "call_function",
+    "target": "aten.view.default",
+    "users": [
+      "unified_attention_with_output",
+      "unified_kv_cache_update"
+    ]
+  },
+  {
+    "args": "(view_11, view_12, 'language_model.model.layers.31.self_attn.attn')",
+    "index": 124,
+    "kwargs": "{}",
+    "meta": {
+      "tensor_meta": [
+        [
+          0
+        ],
+        "torch.bfloat16",
+        false,
+        [
+          1
+        ],
+        "torch.contiguous_format",
+        false,
+        {}
+      ],
+      "val": {
+        "device": "cuda:0",
+        "dtype": "torch.bfloat16",
+        "requires_grad": false,
+        "shape": [
+          0
+        ]
+      }
+    },
+    "name": "unified_kv_cache_update",
+    "op": "call_function",
+    "target": "vllm.unified_kv_cache_update.default",
+    "users": [
+      "unified_attention_with_output"
+    ]
+  },
+  {
+    "args": "(view_9, view_11, view_12, view_10, 'language_model.model.layers.31.self_attn.attn', None, None, unified_kv_cache_update)",
+    "index": 125,
+    "kwargs": "{}",
+    "meta": {},
+    "name": "unified_attention_with_output",
+    "op": "call_function",
+    "target": "vllm.unified_attention_with_output.default",
+    "users": []
+  },
+  {
+    "args": "(view_10, [-1, 6144])",
+    "index": 126,
+    "kwargs": "{}",
+    "meta": {
+      "tensor_meta": [
+        [
+          1685,
+          6144
+        ],
+        "torch.bfloat16",
+        false,
+        [
+          6144,
+          1
+        ],
+        "torch.contiguous_format",
+        false,
+        {}
+      ],
+      "val": {
+        "device": "cuda:0",
+        "dtype": "torch.bfloat16",
+        "requires_grad": false,
+        "shape": [
+          1685,
+          6144
+        ]
+      }
+    },
+    "name": "view_13",
+    "op": "call_function",
+    "target": "aten.view.default",
+    "users": [
+      "mul_14"
+    ]
+  },
+  {
+    "args": "(_unsafe_view_1,)",
+    "index": 127,
+    "kwargs": "{}",
+    "meta": {
+      "tensor_meta": [
+        [
+          1685,
+          6144
+        ],
+        "torch.bfloat16",
+        false,
+        [
+          6144,
+          1
+        ],
+        "torch.contiguous_format",
+        false,
+        {}
+      ],
+      "val": {
+        "device": "cuda:0",
+        "dtype": "torch.bfloat16",
+        "requires_grad": false,
+        "shape": [
+          1685,
+          6144
+        ]
+      }
+    },
+    "name": "sigmoid",
+    "op": "call_function",
+    "target": "aten.sigmoid.default",
+    "users": [
+      "mul_14"
+    ]
+  },
+  {
+    "args": "(view_13, sigmoid)",
+    "index": 128,
+    "kwargs": "{}",
+    "meta": {
+      "tensor_meta": [
+        [
+          1685,
+          6144
+        ],
+        "torch.bfloat16",
+        false,
+        [
+          6144,
+          1
+        ],
+        "torch.contiguous_format",
+        false,
+        {}
+      ],
+      "val": {
+        "device": "cuda:0",
+        "dtype": "torch.bfloat16",
+        "requires_grad": false,
+        "shape": [
+          1685,
+          6144
+        ]
+      }
+    },
+    "name": "mul_14",
+    "op": "call_function",
+    "target": "aten.mul.Tensor",
+    "users": [
+      "mm_1"
+    ]
+  },
+  {
+    "args": "()",
+    "index": 129,
+    "kwargs": "{}",
+    "meta": {
+      "val": {
+        "device": "cuda:0",
+        "dtype": "torch.bfloat16",
+        "requires_grad": false,
+        "shape": [
+          5120,
+          6144
+        ]
+      }
+    },
+    "name": "_param_constant4",
+    "op": "get_attr",
+    "target": "_param_constant4",
+    "users": [
+      "t_1"
+    ]
+  },
+  {
+    "args": "(_param_constant4,)",
+    "index": 130,
+    "kwargs": "{}",
+    "meta": {
+      "tensor_meta": [
+        [
+          6144,
+          5120
+        ],
+        "torch.bfloat16",
+        false,
+        [
+          1,
+          6144
+        ],
+        null,
+        false,
+        {}
+      ],
+      "val": {
+        "device": "cuda:0",
+        "dtype": "torch.bfloat16",
+        "requires_grad": false,
+        "shape": [
+          6144,
+          5120
+        ]
+      }
+    },
+    "name": "t_1",
+    "op": "call_function",
+    "target": "aten.t.default",
+    "users": [
+      "mm_1"
+    ]
+  },
+  {
+    "args": "(mul_14, t_1)",
+    "index": 131,
+    "kwargs": "{}",
+    "meta": {
+      "tensor_meta": [
+        [
+          1685,
+          5120
+        ],
+        "torch.bfloat16",
+        false,
+        [
+          5120,
+          1
+        ],
+        "torch.contiguous_format",
+        false,
+        {}
+      ],
+      "val": {
+        "device": "cuda:0",
+        "dtype": "torch.bfloat16",
+        "requires_grad": false,
+        "shape": [
+          1685,
+          5120
+        ]
+      }
+    },
+    "name": "mm_1",
+    "op": "call_function",
+    "target": "aten.mm.default",
+    "users": [
+      "copy__4"
+    ]
+  },
+  {
+    "args": "(empty_like, mm_1)",
+    "index": 132,
+    "kwargs": "{}",
+    "meta": {
+      "tensor_meta": [
+        [
+          1685,
+          5120
+        ],
+        "torch.bfloat16",
+        false,
+        [
+          5120,
+          1
+        ],
+        "torch.contiguous_format",
+        false,
+        {}
+      ],
+      "val": {
+        "device": "cuda:0",
+        "dtype": "torch.bfloat16",
+        "requires_grad": false,
+        "shape": [
+          1685,
+          5120
+        ]
+      }
+    },
+    "name": "copy__4",
+    "op": "call_function",
+    "target": "aten.copy_.default",
+    "users": [
+      "add_9"
+    ]
+  },
+  {
+    "args": "()",
+    "index": 133,
+    "kwargs": "{}",
+    "meta": {
+      "val": {
+        "device": "cuda:0",
+        "dtype": "torch.bfloat16",
+        "requires_grad": false,
+        "shape": [
+          5120
+        ]
+      }
+    },
+    "name": "_param_constant5",
+    "op": "get_attr",
+    "target": "_param_constant5",
+    "users": [
+      "detach_3"
+    ]
+  },
+  {
+    "args": "(_param_constant5,)",
+    "index": 134,
+    "kwargs": "{}",
+    "meta": {
+      "tensor_meta": [
+        [
+          5120
+        ],
+        "torch.bfloat16",
+        false,
+        [
+          1
+        ],
+        "torch.contiguous_format",
+        false,
+        {}
+      ],
+      "val": {
+        "device": "cuda:0",
+        "dtype": "torch.bfloat16",
+        "requires_grad": false,
+        "shape": [
+          5120
+        ]
+      }
+    },
+    "name": "detach_3",
+    "op": "call_function",
+    "target": "aten.detach.default",
+    "users": [
+      "_to_copy_10"
+    ]
+  },
+  {
+    "args": "(copy__4, add)",
+    "index": 135,
+    "kwargs": "{}",
+    "meta": {
+      "tensor_meta": [
+        [
+          1685,
+          5120
+        ],
+        "torch.bfloat16",
+        false,
+        [
+          5120,
+          1
+        ],
+        "torch.contiguous_format",
+        false,
+        {}
+      ],
+      "val": {
+        "device": "cuda:0",
+        "dtype": "torch.bfloat16",
+        "requires_grad": false,
+        "shape": [
+          1685,
+          5120
+        ]
+      }
+    },
+    "name": "add_9",
+    "op": "call_function",
+    "target": "aten.add.Tensor",
+    "users": [
+      "_to_copy_9",
+      "output"
+    ]
+  },
+  {
+    "args": "(add_9,)",
+    "index": 136,
+    "kwargs": "{'dtype': torch.float32}",
+    "meta": {
+      "tensor_meta": [
+        [
+          1685,
+          5120
+        ],
+        "torch.float32",
+        false,
+        [
+          5120,
+          1
+        ],
+        "torch.contiguous_format",
+        false,
+        {}
+      ],
+      "val": {
+        "device": "cuda:0",
+        "dtype": "torch.float32",
+        "requires_grad": false,
+        "shape": [
+          1685,
+          5120
+        ]
+      }
+    },
+    "name": "_to_copy_9",
+    "op": "call_function",
+    "target": "aten._to_copy.default",
+    "users": [
+      "mul_15",
+      "pow_4"
+    ]
+  },
+  {
+    "args": "(_to_copy_9, 2)",
+    "index": 137,
+    "kwargs": "{}",
+    "meta": {
+      "tensor_meta": [
+        [
+          1685,
+          5120
+        ],
+        "torch.float32",
+        false,
+        [
+          5120,
+          1
+        ],
+        "torch.contiguous_format",
+        false,
+        {}
+      ],
+      "val": {
+        "device": "cuda:0",
+        "dtype": "torch.float32",
+        "requires_grad": false,
+        "shape": [
+          1685,
+          5120
+        ]
+      }
+    },
+    "name": "pow_4",
+    "op": "call_function",
+    "target": "aten.pow.Tensor_Scalar",
+    "users": [
+      "mean_3"
+    ]
+  },
+  {
+    "args": "(pow_4, [-1], True)",
+    "index": 138,
+    "kwargs": "{}",
+    "meta": {
+      "tensor_meta": [
+        [
+          1685,
+          1
+        ],
+        "torch.float32",
+        false,
+        [
+          1,
+          1
+        ],
+        "torch.contiguous_format",
+        false,
+        {}
+      ],
+      "val": {
+        "device": "cuda:0",
+        "dtype": "torch.float32",
+        "requires_grad": false,
+        "shape": [
+          1685,
+          1
+        ]
+      }
+    },
+    "name": "mean_3",
+    "op": "call_function",
+    "target": "aten.mean.dim",
+    "users": [
+      "add_10"
+    ]
+  },
+  {
+    "args": "(mean_3, 1e-06)",
+    "index": 139,
+    "kwargs": "{}",
+    "meta": {
+      "tensor_meta": [
+        [
+          1685,
+          1
+        ],
+        "torch.float32",
+        false,
+        [
+          1,
+          1
+        ],
+        "torch.contiguous_format",
+        false,
+        {}
+      ],
+      "val": {
+        "device": "cuda:0",
+        "dtype": "torch.float32",
+        "requires_grad": false,
+        "shape": [
+          1685,
+          1
+        ]
+      }
+    },
+    "name": "add_10",
+    "op": "call_function",
+    "target": "aten.add.Tensor",
+    "users": [
+      "rsqrt_3"
+    ]
+  },
+  {
+    "args": "(add_10,)",
+    "index": 140,
+    "kwargs": "{}",
+    "meta": {
+      "tensor_meta": [
+        [
+          1685,
+          1
+        ],
+        "torch.float32",
+        false,
+        [
+          1,
+          1
+        ],
+        "torch.contiguous_format",
+        false,
+        {}
+      ],
+      "val": {
+        "device": "cuda:0",
+        "dtype": "torch.float32",
+        "requires_grad": false,
+        "shape": [
+          1685,
+          1
+        ]
+      }
+    },
+    "name": "rsqrt_3",
+    "op": "call_function",
+    "target": "aten.rsqrt.default",
+    "users": [
+      "mul_15"
+    ]
+  },
+  {
+    "args": "(_to_copy_9, rsqrt_3)",
+    "index": 141,
+    "kwargs": "{}",
+    "meta": {
+      "tensor_meta": [
+        [
+          1685,
+          5120
+        ],
+        "torch.float32",
+        false,
+        [
+          5120,
+          1
+        ],
+        "torch.contiguous_format",
+        false,
+        {}
+      ],
+      "val": {
+        "device": "cuda:0",
+        "dtype": "torch.float32",
+        "requires_grad": false,
+        "shape": [
+          1685,
+          5120
+        ]
+      }
+    },
+    "name": "mul_15",
+    "op": "call_function",
+    "target": "aten.mul.Tensor",
+    "users": [
+      "mul_16"
+    ]
+  },
+  {
+    "args": "(detach_3,)",
+    "index": 142,
+    "kwargs": "{'dtype': torch.float32}",
+    "meta": {
+      "tensor_meta": [
+        [
+          5120
+        ],
+        "torch.float32",
+        false,
+        [
+          1
+        ],
+        "torch.contiguous_format",
+        false,
+        {}
+      ],
+      "val": {
+        "device": "cuda:0",
+        "dtype": "torch.float32",
+        "requires_grad": false,
+        "shape": [
+          5120
+        ]
+      }
+    },
+    "name": "_to_copy_10",
+    "op": "call_function",
+    "target": "aten._to_copy.default",
+    "users": [
+      "add_11"
+    ]
+  },
+  {
+    "args": "(_to_copy_10, 1.0)",
+    "index": 143,
+    "kwargs": "{}",
+    "meta": {
+      "tensor_meta": [
+        [
+          5120
+        ],
+        "torch.float32",
+        false,
+        [
+          1
+        ],
+        "torch.contiguous_format",
+        false,
+        {}
+      ],
+      "val": {
+        "device": "cuda:0",
+        "dtype": "torch.float32",
+        "requires_grad": false,
+        "shape": [
+          5120
+        ]
+      }
+    },
+    "name": "add_11",
+    "op": "call_function",
+    "target": "aten.add.Tensor",
+    "users": [
+      "mul_16"
+    ]
+  },
+  {
+    "args": "(mul_15, add_11)",
+    "index": 144,
+    "kwargs": "{}",
+    "meta": {
+      "tensor_meta": [
+        [
+          1685,
+          5120
+        ],
+        "torch.float32",
+        false,
+        [
+          5120,
+          1
+        ],
+        "torch.contiguous_format",
+        false,
+        {}
+      ],
+      "val": {
+        "device": "cuda:0",
+        "dtype": "torch.float32",
+        "requires_grad": false,
+        "shape": [
+          1685,
+          5120
+        ]
+      }
+    },
+    "name": "mul_16",
+    "op": "call_function",
+    "target": "aten.mul.Tensor",
+    "users": [
+      "_to_copy_11"
+    ]
+  },
+  {
+    "args": "(mul_16,)",
+    "index": 145,
+    "kwargs": "{'dtype': torch.bfloat16}",
+    "meta": {
+      "tensor_meta": [
+        [
+          1685,
+          5120
+        ],
+        "torch.bfloat16",
+        false,
+        [
+          5120,
+          1
+        ],
+        "torch.contiguous_format",
+        false,
+        {}
+      ],
+      "val": {
+        "device": "cuda:0",
+        "dtype": "torch.bfloat16",
+        "requires_grad": false,
+        "shape": [
+          1685,
+          5120
+        ]
+      }
+    },
+    "name": "_to_copy_11",
+    "op": "call_function",
+    "target": "aten._to_copy.default",
+    "users": [
+      "mm_2"
+    ]
+  },
+  {
+    "args": "()",
+    "index": 146,
+    "kwargs": "{}",
+    "meta": {
+      "val": {
+        "device": "cuda:0",
+        "dtype": "torch.bfloat16",
+        "requires_grad": false,
+        "shape": [
+          34816,
+          5120
+        ]
+      }
+    },
+    "name": "_param_constant6",
+    "op": "get_attr",
+    "target": "_param_constant6",
+    "users": [
+      "t_2"
+    ]
+  },
+  {
+    "args": "(_param_constant6,)",
+    "index": 147,
+    "kwargs": "{}",
+    "meta": {
+      "tensor_meta": [
+        [
+          5120,
+          34816
+        ],
+        "torch.bfloat16",
+        false,
+        [
+          1,
+          5120
+        ],
+        null,
+        false,
+        {}
+      ],
+      "val": {
+        "device": "cuda:0",
+        "dtype": "torch.bfloat16",
+        "requires_grad": false,
+        "shape": [
+          5120,
+          34816
+        ]
+      }
+    },
+    "name": "t_2",
+    "op": "call_function",
+    "target": "aten.t.default",
+    "users": [
+      "mm_2"
+    ]
+  },
+  {
+    "args": "(_to_copy_11, t_2)",
+    "index": 148,
+    "kwargs": "{}",
+    "meta": {
+      "tensor_meta": [
+        [
+          1685,
+          34816
+        ],
+        "torch.bfloat16",
+        false,
+        [
+          34816,
+          1
+        ],
+        "torch.contiguous_format",
+        false,
+        {}
+      ],
+      "val": {
+        "device": "cuda:0",
+        "dtype": "torch.bfloat16",
+        "requires_grad": false,
+        "shape": [
+          1685,
+          34816
+        ]
+      }
+    },
+    "name": "mm_2",
+    "op": "call_function",
+    "target": "aten.mm.default",
+    "users": [
+      "silu_and_mul"
+    ]
+  },
+  {
+    "args": "([1685, 17408],)",
+    "index": 149,
+    "kwargs": "{'dtype': torch.bfloat16, 'device': device(type='cuda', index=0), 'pin_memory': False}",
+    "meta": {
+      "tensor_meta": [
+        [
+          1685,
+          17408
+        ],
+        "torch.bfloat16",
+        false,
+        [
+          17408,
+          1
+        ],
+        "torch.contiguous_format",
+        false,
+        {}
+      ],
+      "val": {
+        "device": "cuda:0",
+        "dtype": "torch.bfloat16",
+        "requires_grad": false,
+        "shape": [
+          1685,
+          17408
+        ]
+      }
+    },
+    "name": "empty_1",
+    "op": "call_function",
+    "target": "aten.empty.memory_format",
+    "users": [
+      "mm_3",
+      "silu_and_mul"
+    ]
+  },
+  {
+    "args": "(empty_1, mm_2)",
+    "index": 150,
+    "kwargs": "{}",
+    "meta": {},
+    "name": "silu_and_mul",
+    "op": "call_function",
+    "target": "_C.silu_and_mul.default",
+    "users": []
+  },
+  {
+    "args": "()",
+    "index": 151,
+    "kwargs": "{}",
+    "meta": {
+      "val": {
+        "device": "cuda:0",
+        "dtype": "torch.bfloat16",
+        "requires_grad": false,
+        "shape": [
+          5120,
+          17408
+        ]
+      }
+    },
+    "name": "_param_constant7",
+    "op": "get_attr",
+    "target": "_param_constant7",
+    "users": [
+      "t_3"
+    ]
+  },
+  {
+    "args": "(_param_constant7,)",
+    "index": 152,
+    "kwargs": "{}",
+    "meta": {
+      "tensor_meta": [
+        [
+          17408,
+          5120
+        ],
+        "torch.bfloat16",
+        false,
+        [
+          1,
+          17408
+        ],
+        null,
+        false,
+        {}
+      ],
+      "val": {
+        "device": "cuda:0",
+        "dtype": "torch.bfloat16",
+        "requires_grad": false,
+        "shape": [
+          17408,
+          5120
+        ]
+      }
+    },
+    "name": "t_3",
+    "op": "call_function",
+    "target": "aten.t.default",
+    "users": [
+      "mm_3"
+    ]
+  },
+  {
+    "args": "(empty_1, t_3)",
+    "index": 153,
+    "kwargs": "{}",
+    "meta": {
+      "tensor_meta": [
+        [
+          1685,
+          5120
+        ],
+        "torch.bfloat16",
+        false,
+        [
+          5120,
+          1
+        ],
+        "torch.contiguous_format",
+        false,
+        {}
+      ],
+      "val": {
+        "device": "cuda:0",
+        "dtype": "torch.bfloat16",
+        "requires_grad": false,
+        "shape": [
+          1685,
+          5120
+        ]
+      }
+    },
+    "name": "mm_3",
+    "op": "call_function",
+    "target": "aten.mm.default",
+    "users": [
+      "output"
+    ]
+  },
+  {
+    "args": "((mm_3, add_9),)",
+    "index": 154,
+    "kwargs": "{}",
+    "meta": {},
+    "name": "output",
+    "op": "output",
+    "target": "output",
+    "users": []
+  }
+]

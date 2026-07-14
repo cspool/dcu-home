@@ -1,0 +1,1 @@
+{"argv0":"-c","context":"16-32K","errors":[],"event_index":1,"event_type":"patch_loaded","patches":["engine","scheduler","model_runner","v1_model_runner","attention","kv_cache","sampler","qwen35"],"pid":34910,"ppid":34834,"ts_ns":2410852404076989}

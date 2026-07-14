@@ -1,0 +1,2 @@
+cd /public/home/tangyu408/vllm_cscc
+ninja -C build/temp.linux-x86_64-cpython-310 -j1 CMakeFiles/_rocm_C.dir/csrc/rocm/skinny_gemms.hip.o
