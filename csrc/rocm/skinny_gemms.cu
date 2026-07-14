@@ -355,17 +355,18 @@ __global__ __launch_bounds__(NUM_THREADS) void LLGemm1_strided_kernel(
   }
 }
 
-// CSCC H10.8: gfx936 BF16 K=5120 specialization for the three large
-// single-token projections.  A 640-thread workgroup lets each lane consume
-// exactly one 8-element K chunk and issue the four row loads before starting
-// arithmetic.  Threads 320..639 publish their partials to the corresponding
+// CSCC H10.8/R29: gfx936 BF16 K=5120 specialization for the tiny gate,
+// three large single-token projections, and the 248320-row LM head.  A
+// 640-thread workgroup lets each lane consume exactly one 8-element K chunk
+// and issue every row load before starting arithmetic.  Threads 320..639
+// publish their partials to the corresponding
 // lanes in threads 0..319.  Pairing the two halves before the existing
 // five-wave reduction preserves the H10.7 accumulation order: chunk t is
 // added to chunk t+320, then the same wave shuffle and cross-wave sums run.
+template <int NUM_A_ROWS_PER_BLOCK>
 __global__ __launch_bounds__(640) void LLGemm1_k5120_pairreduce640_kernel(
     const c10::BFloat16* __restrict__ in_a,
     const c10::BFloat16* __restrict__ in_b, c10::BFloat16* __restrict__ out_c) {
-  constexpr int NUM_A_ROWS_PER_BLOCK = 4;
   constexpr int NUM_THREADS = 640;
   constexpr int NUM_PAIR_THREADS = NUM_THREADS / 2;
   constexpr int WAVE_SIZE = 64;
@@ -377,7 +378,7 @@ __global__ __launch_bounds__(640) void LLGemm1_k5120_pairreduce640_kernel(
   auto bf2 = reinterpret_cast<const scalar2_t*>(in_b);
   auto output = reinterpret_cast<__hip_bfloat16*>(out_c);
 
-  // 4 * 320 * sizeof(float) + 4 * 5 * sizeof(float) = 5200 bytes LDS.
+  // ROWS * (320 + 5) * sizeof(float) bytes of LDS.
   __shared__ float pair_smem[NUM_A_ROWS_PER_BLOCK][NUM_PAIR_THREADS];
   __shared__ float red_smem[NUM_A_ROWS_PER_BLOCK][NUM_REDUCTION_WARPS];
 
@@ -396,8 +397,8 @@ __global__ __launch_bounds__(640) void LLGemm1_k5120_pairreduce640_kernel(
   const float2 bx2f = __s22float2(bx2);
   const float2 bx3f = __s22float2(bx3);
 
-  // Keep all four independent row loads ahead of the FP32 FMA chains.  The
-  // exact M%4 ABI guard makes every row in the workgroup valid.
+  // Keep all independent row loads ahead of the FP32 FMA chains.  The exact
+  // divisibility guard makes every row in the workgroup valid.
   float4 weight4[NUM_A_ROWS_PER_BLOCK];
 #pragma unroll
   for (int row_offset = 0; row_offset < NUM_A_ROWS_PER_BLOCK; ++row_offset) {
@@ -562,21 +563,29 @@ torch::Tensor LLMM1Strided(at::Tensor& in_a, at::Tensor& in_b,
                       0,
               "Weight and activation pointers must be 16-byte aligned.");
 
-  const bool use_k5120_pairreduce640 =
-      rows_per_block == 4 && num_threads == 640;
+  const bool use_k5120_pairreduce640 = num_threads == 640;
   TORCH_CHECK(
-      (rows_per_block == 4 && num_threads == 320) || use_k5120_pairreduce640,
+      (rows_per_block == 4 && num_threads == 320) ||
+          (use_k5120_pairreduce640 &&
+           (rows_per_block == 2 || rows_per_block == 4)),
       "The supported (rows_per_block, num_threads) configurations "
-      "are (4, 320) and (4, 640).");
+      "are (4, 320), (2, 640), and (4, 640).");
   if (use_k5120_pairreduce640) {
     TORCH_CHECK(in_b.dtype() == torch::kBFloat16,
-                "The (4, 640) configuration requires BF16 tensors.");
-    TORCH_CHECK(K64 == 5120, "The (4, 640) configuration requires K=5120.");
-    TORCH_CHECK(M64 % 4 == 0,
-                "The (4, 640) configuration requires M divisible by 4.");
-    TORCH_CHECK(M64 == 14336 || M64 == 16384 || M64 == 34816,
-                "The (4, 640) configuration only supports M in "
-                "{14336, 16384, 34816}.");
+                "The 640-thread configuration requires BF16 tensors.");
+    TORCH_CHECK(K64 == 5120, "The 640-thread configuration requires K=5120.");
+    TORCH_CHECK(M64 % rows_per_block == 0,
+                "The 640-thread configuration requires M divisible by "
+                "rows_per_block.");
+    TORCH_CHECK(
+        (rows_per_block == 2 &&
+         (M64 == 14336 || M64 == 16384 || M64 == 34816 ||
+          M64 == 248320)) ||
+            (rows_per_block == 4 &&
+             (M64 == 96 || M64 == 14336 || M64 == 16384 ||
+              M64 == 34816)),
+        "The 640-thread configuration only supports the tuned M/rows pairs "
+        "for M in {96, 14336, 16384, 34816, 248320}.");
   }
 
   const int M = static_cast<int>(M64);
@@ -596,8 +605,13 @@ torch::Tensor LLMM1Strided(at::Tensor& in_a, at::Tensor& in_b,
     auto a_ptr = in_a.data_ptr<c10::BFloat16>();
     auto b_ptr = in_b.data_ptr<c10::BFloat16>();
     auto c_ptr = out_c.data_ptr<c10::BFloat16>();
-    LLGemm1_k5120_pairreduce640_kernel<<<num_blocks, 640, 0, stream>>>(
-        a_ptr, b_ptr, c_ptr);
+    if (rows_per_block == 2) {
+      LLGemm1_k5120_pairreduce640_kernel<2><<<num_blocks, 640, 0, stream>>>(
+          a_ptr, b_ptr, c_ptr);
+    } else {
+      LLGemm1_k5120_pairreduce640_kernel<4><<<num_blocks, 640, 0, stream>>>(
+          a_ptr, b_ptr, c_ptr);
+    }
   } else {
     AT_DISPATCH_REDUCED_FLOATING_TYPES(
         in_b.scalar_type(), "LLGemm1Strided", [&] {

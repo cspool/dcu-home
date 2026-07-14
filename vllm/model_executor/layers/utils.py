@@ -128,17 +128,17 @@ def rocm_unquantized_gemm_impl(
     m = weight.shape[0]
     k = weight.shape[1]
 
-    # CSCC H10.4-H10.8: use fixed K=5120 single-token GEMV layouts selected by
-    # same-device microbenchmarks.  H10.8's large-projection kernel pairs two
-    # 320-thread halves after prefetching four rows, preserving H10.7's FP32
-    # accumulation order while exposing more memory-level parallelism.  Keep
-    # the gate deliberately exact: nearby output sizes, k=6144, and the LM
-    # head were neutral or slower.
+    # CSCC H10.4-H10.8/R29: use fixed K=5120 single-token GEMV layouts selected
+    # by same-device microbenchmarks.  The pair-reduction kernel joins two
+    # 320-thread halves while preserving the per-row FP32 accumulation order.
+    # Keep the gate deliberately exact: nearby output sizes and k=6144 were
+    # neutral or slower.  Two-row blocks are fastest for every large target;
+    # the tiny m=96 gate retains four rows and the repaired FP32 reduction.
     use_cscc_llmm1 = (
         on_gfx936()
         and n == 1
         and k == 5120
-        and m in (96, 14336, 16384, 34816)
+        and m in (96, 14336, 16384, 34816, 248320)
         and x.dtype == torch.bfloat16
         and weight.dtype == torch.bfloat16
         and bias is None
@@ -148,10 +148,12 @@ def rocm_unquantized_gemm_impl(
     if use_cscc_llmm1:
         x_view = x.reshape(-1, x.size(-1))
         if m == 96:
-            # Four rows removes launch/reduction overhead for the tiny gate.
-            out = ops.LLMM1(weight, x_view, 4)
-        else:
+            # Preserve the repaired FP32 pair reduction for the tiny gate.
             out = ops.LLMM1Strided(weight, x_view, 4, 640)
+        else:
+            # Two rows reduce VGPR/LDS pressure for the three projections and
+            # LM head while retaining the same per-output reduction order.
+            out = ops.LLMM1Strided(weight, x_view, 2, 640)
         return out.reshape(*x.shape[:-1], weight.shape[0])
 
     cu_count = num_compute_units()

@@ -1814,11 +1814,13 @@ class GPUModelRunner(
         )
 
         if self.uses_mrope:
-            # Only relevant for models using M-RoPE (e.g, Qwen2-VL)
-            self.mrope_positions.gpu[:, :total_num_scheduled_tokens].copy_(
-                self.mrope_positions.cpu[:, :total_num_scheduled_tokens],
-                non_blocking=True,
-            )
+            # Only relevant for models using M-RoPE (e.g, Qwen2-VL). Copy the
+            # complete persistent buffer so the transfer is contiguous. The
+            # active ``[:, :total_num_scheduled_tokens]`` view is strided; on
+            # ROCm, repeatedly copying that tiny view during decode can turn
+            # the nominally asynchronous H2D copy into a host-side stall.
+            # The model still consumes exactly the same active slice below.
+            self.mrope_positions.copy_to_gpu()
         elif self.uses_xdrope_dim > 0:
             # Only relevant for models using XD-RoPE (e.g, HunYuan-VL)
             self.xdrope_positions.gpu[:, :total_num_scheduled_tokens].copy_(

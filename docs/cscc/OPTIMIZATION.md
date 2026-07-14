@@ -12,6 +12,8 @@
 R25 = R24 累计优化栈 + H11.5 wide-causal GQA6 prefill
                        + H10.8 gfx936 strided LLMM1
 提交版 = R25 + H10-only M=4096 rocBLAS TunableOp profile
+             + page784 later-prefill split/merge
+             + low-live GQA6 + row2 K=5120 GEMV + contiguous M-RoPE
 ```
 
 直接代码基线是 OpenDAS `vllm_cscc` fork
@@ -88,6 +90,24 @@ warmup 后、graph capture 前再次验证 API state。profile 只含四个经�
 online tuning/record 均关闭。安装态 canary 精确观察到四个 result hit、一个
 shared Default，五个零输入输出 shape/finite/zero 全部通过。
 
+## 2026-07-15 合并增量
+
+page784 的物理 cache block 不能直接交给要求 64-token 对齐的官方 paged FA。
+新 wrapper 将每页分为 768-token 主体和 16-token 尾部：主体继续使用官方 paged
+attention，所有尾部按逻辑顺序打包为 64-token residual pages，当前 query chunk
+使用官方 contiguous FA，最后用 FP32 log-sum-exp 合并三组 attention state。
+workspace 按 device/layout 有界复用，不把完整 KV 解包回 HBM。
+
+原 GQA6 Triton 路径将逻辑 K/V tile 提高到 64，但数值上拆为两个 32-token
+子块，保持 FP32 online-softmax 次序并降低 live range。decode 侧 K=5120 投影按
+目标 M 使用 row2/row4 pair reduction；M-RoPE 输入则改为一次连续 buffer copy，
+消除分平面复制带来的额外调度。所有路径均 fail-closed，未命中的 shape 回退
+原 AITER/vLLM 实现。
+
+三条冻结最差样本各一次的吞吐相对当前最佳为
+`+4.697% / +9.522% / +13.611%`，fixed accuracy `K=1.0`。完整 `all`
+按用户要求在提交后执行，因此这些小样本结果不能提前替代 full 计分。
+
 ## 累计语义安全快路径
 
 最高分版本还包含 R24 及更早已闭环的累计改动，主要涉及：
@@ -100,7 +120,7 @@ shared Default，五个零输入输出 shape/finite/zero 全部通过。
 | Attention wrapper | `rocm_aiter_unified_attn.py` | 非目标路径回退 |
 | 构建绑定 | `setup.py`、ROCm bindings | 从源码编入最终 wheel |
 
-当前提交的 13 个累计核心源码文件及哈希见
+当前提交的 15 个累计核心源码文件及哈希见
 `evidence/manifests/repo_source.sha256`；H10-only 增量见
 `evidence/manifests/h10_only_submission.sha256`。
 

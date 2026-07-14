@@ -12,7 +12,7 @@
 
 ## 最终候选源码
 
-以下 13 个文件构成当前提交相对上游基线的累计核心源码锚点；其中
+以下 15 个文件构成当前提交相对上游基线的累计核心源码锚点；其中
 `setup.py` 已包含 H10-only profile package-data：
 
 1. `csrc/rocm/ops.h`
@@ -27,15 +27,18 @@
 10. `vllm/v1/attention/backends/gdn_attn.py`
 11. `vllm/v1/attention/backends/rocm_aiter_unified_attn.py`
 12. `vllm/v1/attention/ops/rocm_aiter_unified_attention_gqa6.py`
-13. `vllm/version.py`
+13. `vllm/v1/attention/ops/rocm_page784_split_attention.py`
+14. `vllm/v1/worker/gpu_model_runner.py`
+15. `vllm/version.py`
 
-第 12 项是新增核心文件，已正式纳入本提交。运行：
+第 13 项是 page784 split/merge wrapper，第 14 项包含连续 M-RoPE 传输修复，
+均已正式纳入本提交。运行：
 
 ```bash
 sha256sum -c evidence/manifests/repo_source.sha256
 ```
 
-应得到 13 项 `OK`。
+应得到 15 项 `OK`。
 
 H10-only 新增/修改 `.gitignore`、`setup.py`、
 `vllm/v1/worker/gpu_worker.py`，并新增：
@@ -76,6 +79,8 @@ sha256sum -c evidence/manifests/h10_only_submission.sha256
 - 本次改动未新增模型权重持久化量化、重排或跨样本结果缓存；
 - 最终评测未启用 prefix cache；
 - 本次改动未新增 prompt/数据集特判；
+- page784 路径仅按设备、dtype、GQA/head、cache block 和张量 shape gate，
+  不读取请求内容或数据集标识；
 - 上游 scheduler 源码随完整项目提交，但本次优化未修改 scheduler/batch
   文件或评测边界；
 - H10-only 环境变量全部公开记录在 `ENVIRONMENT.md` 和
@@ -102,7 +107,7 @@ Python 语义、编译或运行。除这两处外，冻结源码差分没有其�
 
 ## 提交前验证
 
-1. baseline 13 项源码和 H10-only 增量哈希全部通过；
+1. baseline 15 项源码和 H10-only 增量哈希全部通过；
 2. 新增 GQA6 文件已被 Git 跟踪；
 3. 构建脚本 `bash -n` 通过；
 4. 无模型、wheel、native binary、测试数据或凭据；

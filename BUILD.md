@@ -60,7 +60,7 @@ python3 -m pip install --force-reinstall --no-deps \
 
 使用 `--no-deps` 是为了保留评测容器预装的定制依赖。
 
-## 已验证产物
+## 历史已验证产物
 
 ```text
 vllm-0.18.1+das.dtk2604-cp310-cp310-linux_x86_64.whl
@@ -68,7 +68,9 @@ H10-only submission build SHA256
 fe8ceeec1634db072b179ba88f364e489640ea246eef5aab8a0487253511307a
 ```
 
-最终 wheel 不提交到 GitLab；评测机应从本仓库源码重新编译。对应源码哈希见
+该 SHA 是 H10-only 阶段的历史闭环产物，不是本次合并源码的产物标识。本次
+合并源码已于 2026-07-15 使用本页一键脚本完成干净构建；最终 wheel 不提交到
+GitLab，评测机应从本仓库源码重新编译。对应源码哈希见
 `evidence/manifests/repo_source.sha256` 和
 `evidence/manifests/h10_only_submission.sha256`。
 

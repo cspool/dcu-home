@@ -117,11 +117,10 @@ def kernel_unified_attention_2d_gqa6(
     BLOCK_M: tl.constexpr,
     HEADS_PER_CTA: tl.constexpr,
     GQA_SPLITS: tl.constexpr,
+    NUMERIC_WIDTH: tl.constexpr,
+    NUMERIC_SUBTILES: tl.constexpr,
+    NUMERIC_SUBTILE: tl.constexpr = 0,
 ):
-    tl.static_assert(
-        CACHE_BLOCK_SIZE % TOKENS_PER_BLOCK == 0,
-        "CACHE_BLOCK_SIZE must be divisible by TOKENS_PER_BLOCK",
-    )
     tl.static_assert(
         TOKENS_PER_BLOCK <= BLOCK_SIZE,
         "TOKENS_PER_BLOCK must fit in the padded BLOCK_SIZE",
@@ -210,111 +209,183 @@ def kernel_unified_attention_2d_gqa6(
         (q_block_local_idx + 1) * BLOCK_Q, cur_batch_query_len
     )
     num_blocks = _cdiv(context_len + causal_query_stop, TOKENS_PER_BLOCK)
+    tl.static_assert(
+        BLOCK_SIZE % NUMERIC_WIDTH == 0,
+        "numeric width must divide the logical I/O tile",
+    )
+    tl.static_assert(
+        NUMERIC_SUBTILES == BLOCK_SIZE // NUMERIC_WIDTH,
+        "numeric subtile count must cover the logical I/O tile",
+    )
+    if NUMERIC_SUBTILE != 0:
+        tl.static_assert(
+            TOKENS_PER_BLOCK == BLOCK_SIZE,
+            "numeric subtiles require a full logical I/O tile",
+        )
+        tl.static_assert(
+            NUMERIC_SUBTILE == NUMERIC_WIDTH,
+            "legacy numeric-subtile width must match NUMERIC_WIDTH",
+        )
+    else:
+        tl.static_assert(
+            NUMERIC_WIDTH == BLOCK_SIZE and NUMERIC_SUBTILES == 1,
+            "the unsplit path must contain exactly one numerical tile",
+        )
+
     for block_idx in range(0, num_blocks):
-        offs_n = tl.arange(0, BLOCK_SIZE)
-        token_mask = offs_n < TOKENS_PER_BLOCK
-        if TOKENS_PER_BLOCK == CACHE_BLOCK_SIZE:
-            physical_block_idx = tl.load(
-                block_tables_ptr + block_table_offset + block_idx
-            )
-            value_offset = (
-                physical_block_idx * stride_v_cache_0
-                + kv_head_idx * stride_v_cache_2
-                + offs_d[None, :] * stride_v_cache_3
-                + offs_n[:, None] * stride_v_cache_1
-            )
-            key_offset = (
-                physical_block_idx * stride_k_cache_0
-                + kv_head_idx * stride_k_cache_2
-                + offs_d[:, None] * stride_k_cache_3
-                + offs_n[None, :] * stride_k_cache_1
-            )
-        else:
-            start_n = block_idx * TOKENS_PER_BLOCK
-            physical_block_idx = tl.load(
-                block_tables_ptr
-                + block_table_offset
-                + start_n // CACHE_BLOCK_SIZE
-            )
-            value_offset = (
-                physical_block_idx * stride_v_cache_0
-                + kv_head_idx * stride_v_cache_2
-                + offs_d[None, :] * stride_v_cache_3
-                + ((start_n + offs_n[:, None]) % CACHE_BLOCK_SIZE)
-                * stride_v_cache_1
-            )
-            key_offset = (
-                physical_block_idx * stride_k_cache_0
-                + kv_head_idx * stride_k_cache_2
-                + offs_d[:, None] * stride_k_cache_3
-                + ((start_n + offs_n[None, :]) % CACHE_BLOCK_SIZE)
-                * stride_k_cache_1
-            )
+        # The outer loop still advances one logical I/O tile at a time.  A
+        # nonzero NUMERIC_SUBTILE statically unrolls smaller online-softmax
+        # updates inside it, so only one K/V/scores subtile is live at once.
+        # For tile64/2x32, every logical token is loaded exactly once while the
+        # numerical reduction order matches a 32-token kernel.
+        for subtile_idx in tl.static_range(0, NUMERIC_SUBTILES):
+            offs_n = tl.arange(0, NUMERIC_WIDTH)
+            subtile_start = subtile_idx * NUMERIC_WIDTH
+            token_mask = subtile_start + offs_n < TOKENS_PER_BLOCK
+            start_n = block_idx * TOKENS_PER_BLOCK + subtile_start
 
-        key_load = tl.load(
-            key_cache_ptr + key_offset,
-            mask=dim_mask[:, None] & token_mask[None, :],
-            other=0.0,
-        )
-        if key_load.dtype.is_fp8():
-            if query.dtype.is_fp8():
+            if TOKENS_PER_BLOCK == CACHE_BLOCK_SIZE:
+                physical_block_idx = tl.load(
+                    block_tables_ptr
+                    + block_table_offset
+                    + start_n // CACHE_BLOCK_SIZE
+                )
+                offset_in_page = start_n % CACHE_BLOCK_SIZE + offs_n
+                value_offset = (
+                    physical_block_idx * stride_v_cache_0
+                    + kv_head_idx * stride_v_cache_2
+                    + offs_d[None, :] * stride_v_cache_3
+                    + offset_in_page[:, None] * stride_v_cache_1
+                )
+                key_offset = (
+                    physical_block_idx * stride_k_cache_0
+                    + kv_head_idx * stride_k_cache_2
+                    + offs_d[:, None] * stride_k_cache_3
+                    + offset_in_page[None, :] * stride_k_cache_1
+                )
+            elif CACHE_BLOCK_SIZE % TOKENS_PER_BLOCK == 0:
+                physical_block_idx = tl.load(
+                    block_tables_ptr
+                    + block_table_offset
+                    + start_n // CACHE_BLOCK_SIZE
+                )
+                offset_in_page = (start_n + offs_n) % CACHE_BLOCK_SIZE
+                value_offset = (
+                    physical_block_idx * stride_v_cache_0
+                    + kv_head_idx * stride_v_cache_2
+                    + offs_d[None, :] * stride_v_cache_3
+                    + offset_in_page[:, None] * stride_v_cache_1
+                )
+                key_offset = (
+                    physical_block_idx * stride_k_cache_0
+                    + kv_head_idx * stride_k_cache_2
+                    + offs_d[:, None] * stride_k_cache_3
+                    + offset_in_page[None, :] * stride_k_cache_1
+                )
+            else:
+                # A logical tile/subtile may cross one physical page.  The
+                # page784/tile64 cases are 16+48, 32+32, or 48+16; a 32-wide
+                # numerical subtile crosses at most one boundary as well.
+                logical_page_idx = start_n // CACHE_BLOCK_SIZE
+                offset_in_first_page = start_n % CACHE_BLOCK_SIZE
+                tokens_in_first_page = CACHE_BLOCK_SIZE - offset_in_first_page
+                first_physical_block_idx = tl.load(
+                    block_tables_ptr + block_table_offset + logical_page_idx
+                )
+                crosses_page = tokens_in_first_page < NUMERIC_WIDTH
+                second_physical_block_idx = tl.load(
+                    block_tables_ptr + block_table_offset + logical_page_idx + 1,
+                    mask=crosses_page,
+                    other=first_physical_block_idx,
+                )
+                use_second_page = offs_n >= tokens_in_first_page
+                physical_block_idx = tl.where(
+                    use_second_page,
+                    second_physical_block_idx,
+                    first_physical_block_idx,
+                )
+                offset_in_page = tl.where(
+                    use_second_page,
+                    offs_n - tokens_in_first_page,
+                    offset_in_first_page + offs_n,
+                )
+                value_offset = (
+                    physical_block_idx[:, None] * stride_v_cache_0
+                    + kv_head_idx * stride_v_cache_2
+                    + offs_d[None, :] * stride_v_cache_3
+                    + offset_in_page[:, None] * stride_v_cache_1
+                )
+                key_offset = (
+                    physical_block_idx[None, :] * stride_k_cache_0
+                    + kv_head_idx * stride_k_cache_2
+                    + offs_d[:, None] * stride_k_cache_3
+                    + offset_in_page[None, :] * stride_k_cache_1
+                )
+
+            key_load = tl.load(
+                key_cache_ptr + key_offset,
+                mask=dim_mask[:, None] & token_mask[None, :],
+                other=0.0,
+            )
+            if key_load.dtype.is_fp8():
+                if query.dtype.is_fp8():
+                    key = key_load
+                else:
+                    key = (key_load.to(tl.float32) * tl.load(k_scale)).to(
+                        query.dtype
+                    )
+            else:
                 key = key_load
-            else:
-                key = (key_load.to(tl.float32) * tl.load(k_scale)).to(
-                    query.dtype
-                )
-        else:
-            key = key_load
 
-        value_load = tl.load(
-            value_cache_ptr + value_offset,
-            mask=token_mask[:, None] & dim_mask[None, :],
-            other=0.0,
-        )
-        if value_load.dtype.is_fp8():
-            if query.dtype.is_fp8():
+            value_load = tl.load(
+                value_cache_ptr + value_offset,
+                mask=token_mask[:, None] & dim_mask[None, :],
+                other=0.0,
+            )
+            if value_load.dtype.is_fp8():
+                if query.dtype.is_fp8():
+                    value = value_load
+                else:
+                    value = (value_load.to(tl.float32) * tl.load(v_scale)).to(
+                        query.dtype
+                    )
+            else:
                 value = value_load
-            else:
-                value = (value_load.to(tl.float32) * tl.load(v_scale)).to(
-                    query.dtype
-                )
-        else:
-            value = value_load
 
-        seq_offset = block_idx * TOKENS_PER_BLOCK + offs_n
-        seq_mask = token_mask[None, :] & (
-            seq_offset[None, :] < context_len + query_pos[:, None] + 1
-        )
+            seq_offset = start_n + offs_n
+            seq_mask = token_mask[None, :] & (
+                seq_offset[None, :] < context_len + query_pos[:, None] + 1
+            )
 
-        scores = tl.zeros((BLOCK_M, BLOCK_SIZE), dtype=tl.float32)
-        scores += scale * tl.dot(query, key)
-        if USE_SOFTCAP:
-            scores = _apply_softcap(scores, softcap)
-        scores = tl.where(
-            query_mask_1[:, None] & query_mask_0[:, None] & seq_mask,
-            scores,
-            float("-inf"),
-        )
-        if SLIDING_WINDOW > 0:
+            scores = tl.zeros((BLOCK_M, NUMERIC_WIDTH), dtype=tl.float32)
+            scores += scale * tl.dot(query, key)
+            if USE_SOFTCAP:
+                scores = _apply_softcap(scores, softcap)
             scores = tl.where(
-                (context_len + query_pos[:, None] - seq_offset)
-                < SLIDING_WINDOW,
+                query_mask_1[:, None] & query_mask_0[:, None] & seq_mask,
                 scores,
                 float("-inf"),
             )
-        if USE_ALIBI_SLOPES:
-            scores += alibi_slope[:, None] * (seq_offset - context_len)
+            if SLIDING_WINDOW > 0:
+                scores = tl.where(
+                    (context_len + query_pos[:, None] - seq_offset)
+                    < SLIDING_WINDOW,
+                    scores,
+                    float("-inf"),
+                )
+            if USE_ALIBI_SLOPES:
+                scores += alibi_slope[:, None] * (seq_offset - context_len)
 
-        block_max = tl.maximum(running_max, tl.max(scores, axis=1))
-        block_max = tl.where(block_max > float("-inf"), block_max, 0.0)
-        probabilities = tl.exp(scores - block_max[:, None])
-        block_sum = tl.sum(probabilities, axis=1)
-        correction = tl.exp(running_max - block_max)
+            block_max = tl.maximum(running_max, tl.max(scores, axis=1))
+            block_max = tl.where(block_max > float("-inf"), block_max, 0.0)
+            probabilities = tl.exp(scores - block_max[:, None])
+            block_sum = tl.sum(probabilities, axis=1)
+            correction = tl.exp(running_max - block_max)
 
-        acc *= correction[:, None]
-        running_sum = running_sum * correction + block_sum
-        running_max = block_max
-        acc += tl.dot(probabilities.to(value.dtype), value)
+            acc *= correction[:, None]
+            running_sum = running_sum * correction + block_sum
+            running_max = block_max
+            acc += tl.dot(probabilities.to(value.dtype), value)
 
     acc /= running_sum[:, None]
     output_offset = (
@@ -408,20 +479,26 @@ def unified_attention_gqa6_prefill(
     # too few CTAs to fill the device with two warps, so retain H11.3's original
     # compiler layout below 128 query tokens.
     # H11.5 additionally widens the query tile for the exact single-request
-    # CSCC cache layout.  BLOCK_M=64 keeps the same two-head grouping and
-    # per-row math while amortizing each K/V load over four times as many query
-    # positions.  A 56-token logical K/V tile divides CACHE_BLOCK_SIZE=784
-    # exactly and uses a padded 64-column MFMA tile.  Multi-sequence batches
-    # retain H11.4 because a batch dominated by tiny sequences can underfill
-    # the wide-query grid.
+    # CSCC cache layout.  H11.6 advances a logical 64-token tile, but performs
+    # two sequential 32-token online-softmax/P@V updates.  This restores the
+    # official-like numerical order while keeping only one K/V/scores subtile
+    # live at a time.  Page784 crossings gather at most two adjacent pages;
+    # logical token order is unchanged.  Multi-sequence batches retain H11.4
+    # because a batch dominated by tiny sequences can underfill the wide grid.
+    numeric_width = block_size
+    numeric_subtiles = 1
+    numeric_subtile = 0
     use_h11_5_wide_causal = (
         cache_block_size == 784 and num_seqs == 1 and max_seqlen_q >= 128
     )
     if use_h11_5_wide_causal:
         block_m = 64
         block_q = block_m // heads_per_cta
-        tokens_per_block = 56
+        tokens_per_block = 64
         block_size = 64
+        numeric_width = 32
+        numeric_subtiles = 2
+        numeric_subtile = 32
         compiler_config = _H11_5_WIDE_CAUSAL_PREFILL_COMPILER_CONFIG
     elif max_seqlen_q >= 128:
         block_m = 16
@@ -478,5 +555,8 @@ def unified_attention_gqa6_prefill(
         BLOCK_M=block_m,
         HEADS_PER_CTA=heads_per_cta,
         GQA_SPLITS=gqa_splits,
+        NUMERIC_WIDTH=numeric_width,
+        NUMERIC_SUBTILES=numeric_subtiles,
+        NUMERIC_SUBTILE=numeric_subtile,
         **compiler_config,
     )

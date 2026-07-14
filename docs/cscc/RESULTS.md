@@ -105,3 +105,20 @@ SLA、accuracy 与产物哈希；仓库内可直接验证的源码/运行时锚�
 `evidence/manifests/`。固定脚本哈希另存于
 `evidence/manifests/fixed_scripts_reference.txt`；它是评测平台外部脚本
 的引用记录，不能在本仓库内执行 `sha256sum -c`。
+
+## 2026-07-15 最新合并候选的提交前门禁
+
+最新合并候选在 card1 上使用与当前最佳完全相同的三条冻结最差样本，每档只
+运行一次；吞吐及相对变化为：
+
+| Band | Candidate tok/s | 相对当前最佳同样本 |
+| --- | ---: | ---: |
+| 4-8K | 6.2983857915 | +4.697% |
+| 8-16K | 2.4466381984 | +9.522% |
+| 16-32K | 3.2489879088 | +13.611% |
+
+随后 fixed accuracy 110/110 请求成功：HotpotQA `77.9597069597`、GovReport
+`32.8748824497`、Retrieval `100`、Aggregation `100`，最终 `K=1.00`。
+数值对照和有界 workspace 检查同时通过。按照本次交付顺序，完整
+`run_throughput.sh all` 在 GitLab 提交后执行；在该结果产生前，权威 full
+综合分仍是上文 `88.5484555040153`。

@@ -18,9 +18,10 @@
 # PRA2026-BH408：Qwen3.5-27B 单卡推理优化
 
 这是面向 2026 智能计算创新设计赛的完整源码提交。已完成 full×3、accuracy
-和 SLA 闭环的计分锚点为 **H11.5 + H10.8**；当前提交在其上加入输出 exact、
-两次 10 分钟窗口均稳定为正的 **H10-only ROCm TunableOp profile**。仓库交付
-完整源码，不是仅包含差分或预编译 wheel。
+和 SLA 闭环的计分锚点为 **H11.5 + H10.8**；当前提交在其上加入 H10-only
+ROCm TunableOp profile，以及 2026-07-15 合并验证通过的 page784 later-prefill、
+低 live-range GQA6、row2 K=5120 GEMV 和连续 M-RoPE 传输修复。仓库交付完整
+源码，不是仅包含差分或预编译 wheel。
 
 ## 本次实测最终结果
 
@@ -36,6 +37,11 @@
 - H10-only fixed accuracy：`77.96 / 32.95 / 100 / 100`，`K=1.00`
 - H10-only 独立重建 wheel SHA256：
   `fe8ceeec1634db072b179ba88f364e489640ea246eef5aab8a0487253511307a`
+- 最新合并候选使用三条冻结最差样本各测试一次，相对当前最佳分别为
+  `+4.697% / +9.522% / +13.611%`
+- 最新合并候选 fixed accuracy 为
+  `77.9597 / 32.8749 / 100 / 100`，`K=1.00`；本次提交后的完整
+  `run_throughput.sh all` 尚待执行，不能提前计入权威综合分
 
 详细测试口径见 [docs/cscc/RESULTS.md](docs/cscc/RESULTS.md)。
 
@@ -45,6 +51,10 @@
 - H11.5 wide-causal GQA6 prefill 源码
 - H10.8 gfx936 strided LLMM1 源码
 - H10-only fail-closed TunableOp loader、四行 profile 和 worker 集成
+- page784 `768 + 16` 分解、官方 paged/contiguous attention producer 与
+  FP32 LSE merge wrapper
+- GQA6 逻辑 64-token tile 的 `2×32` 数值子块、row2 K=5120 GEMV 和
+  连续 M-RoPE buffer copy
 - [BUILD.md](BUILD.md)：统一评测容器内的源码编译与安装方法
 - [ENVIRONMENT.md](ENVIRONMENT.md)：工具链和环境变量说明
 - [scripts/cscc_gfx936_env.sh](scripts/cscc_gfx936_env.sh)：H10-only 启动环境
@@ -84,7 +94,7 @@ bash /path/to/testdata/start_vllm.sh
 
 ## 源码完整性检查
 
-以下命令分别校验当前提交的 13 个累计核心源码文件和 H10-only 增量文件：
+以下命令分别校验当前提交的 15 个累计核心源码文件和 H10-only 增量文件：
 
 ```bash
 sha256sum -c evidence/manifests/repo_source.sha256
