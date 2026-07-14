@@ -1,39 +1,84 @@
-# 算法分析：原始 FX Process 可视化
+# 算法分析数据说明
 
-## 主入口
+本目录整理的是 2026-07-07 参考 VisiPrune 思路采集的 patch trace 与 selected-layer FX trace。除本说明外，共保留 94 个原始数据或原始报告文件；所有文件均直接放在本目录，不再保留多层子目录。
 
-直接阅读原始报告：
+归档过程只调整了文件名以消除原目录层级和重名，文件内容没有改写。脚本、源码、服务日志、PID、序列化模型（`.pt`）和性能计时数据不在本目录中。
 
-[`original/profile_runs/selected_layer_fx_20260707_codex/selected_layer_fx_process_visualization.md`](original/profile_runs/selected_layer_fx_20260707_codex/selected_layer_fx_process_visualization.md)
+## 建议阅读顺序
 
-该报告使用内联 Markdown/ASCII 图展示 Qwen3.5 decoder layer 内的 runtime inputs、residual/RMSNorm、融合 Q/Gate/K/V projection、Q/K head norm、MROPE、Q/K RoPE、KV cache update、attention custom op、attention gate/output projection、MLP/GDN 边界等过程，不依赖外部 PNG、SVG、HTML 或在线资源。
+1. [`algorithm_visualization_report.md`](algorithm_visualization_report.md)：原始算法可视化报告，按 12 个逻辑过程展示 FX 节点流，是本目录的主入口。
+2. [`selected_layer_fx_process_summary.md`](selected_layer_fx_process_summary.md)：9 个采样事件的过程重建总表；对应机器可读版本为 `selected_layer_fx_process_summary.json`。
+3. [`selected_layer_fx_trace_summary.md`](selected_layer_fx_trace_summary.md)：FX trace 的采集范围和完整性摘要；对应机器可读版本为 `selected_layer_fx_trace_summary.json`。
+4. [`patch_trace_summary.md`](patch_trace_summary.md)：较早期 patch trace 的采集摘要；对应机器可读版本为 `patch_trace_summary.json`。
 
-## 证据范围
+## 采样覆盖
 
-- 上下文：`4-8K`、`8-16K`、`16-32K`。
-- selected-layer event：共 9 个；每个 event 有 155 个 FX nodes 和 12 个重建 process。
-- 除 `8-16K/input4_layer31` 的 `S=1685` 外，其余 event 的 sampled prefill chunk 均为 `S=4096`。
-- 9 套 `fx_process_reconstruction.{md,json}`、`fx_process_nodes.csv`、`fx_nodes.json`、`fx_trace_metadata.json`、FX graph/module 及 manifest 均随整目录保留，因此原报告中的相对链接可以直接审计。
-- 配套 `patch_trace_20260707_codex/` 记录三个上下文的执行调度和 join key：分别为 554、1158、1294 个事件，patch error 均为 0。
+每个事件前缀代表一个上下文档位、一次输入/forward 和一个模型层。9 个前缀如下：
 
-## 正确解释方式
+| 上下文 | 事件前缀 | layer | forward | q_len |
+| --- | --- | ---: | ---: | ---: |
+| 4-8K | `4-8K_input1_layer3` | 3 | 1 | 4096 |
+| 4-8K | `4-8K_input1_layer31` | 31 | 1 | 4096 |
+| 4-8K | `4-8K_input1_layer59` | 59 | 1 | 4096 |
+| 8-16K | `8-16K_input1_layer3` | 3 | 1 | 4096 |
+| 8-16K | `8-16K_input3_layer59` | 59 | 3 | 4096 |
+| 8-16K | `8-16K_input4_layer31` | 31 | 4 | 1685 |
+| 16-32K | `16-32K_input1_layer3` | 3 | 1 | 4096 |
+| 16-32K | `16-32K_input2_layer31` | 31 | 2 | 4096 |
+| 16-32K | `16-32K_input4_layer59` | 59 | 4 | 4096 |
 
-这条链借鉴 VisiPrune 的 workload-analysis 思路，但数据来自本项目的 Qwen3.5/vLLM 运行：先在真实请求中采样目标 layer 输入，再对固定输入执行 `make_fx`，最后按规则把低层 ATen DAG 分组为可读 process。
+每个事件均包含 155 个 FX 节点，重建为 12 个逻辑过程；总表记录的节点分配完整、无重复。
 
-因此：
+## 文件及用途
 
-- process 名称是重建规则标签，不是 PyTorch FX 官方语义，也不是运行时模块归属证明。
-- FX DAG 是固定 sampled input 的低层图，不等于完整动态请求图。
-- `unified_attention_with_output` 是 custom-op 边界；QK、mask、softmax、weighted-V 等 kernel 内部步骤没有在该 FX 图中展开。
-- 这些 trace 用于理解算法结构和数据流，不应拿来替代 hipprof/torch profiler 的性能结论。
+### 总报告与汇总（7 个）
 
-`original/profile_runs/VISIPRUNE_METHOD_REFERENCE.md` 是当时保留的 VisiPrune 方法说明原文，其中 `/workspace/VisiPrune/...` 路径和 VisiPrune event 数属于参考工作流，不是本归档 Qwen3.5 产物的实际路径。它作为方法 provenance 保留，不是本目录的入口说明。
+| 文件 | 用途 |
+| --- | --- |
+| `algorithm_visualization_report.md` | 原始可视化报告；查看 12 个过程的顺序、节点组成、张量形状和跨过程数据流。 |
+| `selected_layer_fx_process_summary.md` | 人工阅读的 9 个事件过程重建汇总。 |
+| `selected_layer_fx_process_summary.json` | 上述过程汇总的机器可读数据。 |
+| `selected_layer_fx_trace_summary.md` | 人工阅读的 selected-layer FX trace 总结。 |
+| `selected_layer_fx_trace_summary.json` | 上述 trace 总结的机器可读数据。 |
+| `patch_trace_summary.md` | 人工阅读的早期 patch trace 总结。 |
+| `patch_trace_summary.json` | 上述 patch trace 总结的机器可读数据。 |
 
-## 原始内容
+### 上下文级索引与原始事件（每个上下文 11 个，共 33 个）
 
-- `original/profile_runs/selected_layer_fx_20260707_codex/`：原始可视化报告、9 套 FX/reconstruction、summary、manifest、bench 和日志。
-- `original/profile_runs/patch_trace_20260707_codex/`：执行调度 trace 和 summary。
-- `original/source/{trace_patch,fx_trace_patch}/`：注入和采集源码。
-- `original/scripts/`：patch trace、selected-layer FX 的采集、汇总和重建脚本。
+下表中的 `<context>` 分别为 `4-8K`、`8-16K`、`16-32K`。
 
-原始目录中物理混放的 `process_latency/` 以及相应 patch/脚本属于历史性能 instrumentation，不是可视化报告的依赖；按“性能分析只保留当前最佳版本”的边界，本归档没有复制它们。
+| 文件模式 | 每个上下文数量 | 用途 |
+| --- | ---: | --- |
+| `<context>_fx_layer_events.csv` | 1 | 从原始事件中筛出的 layer/forward 事件索引。 |
+| `<context>_fx_layer_trace_manifest.csv` | 1 | 采样事件与各 FX 产物之间的映射及完整性清单。 |
+| `<context>_fx_run_metadata.json` | 1 | 本上下文的运行参数、目标层和 trace 元数据。 |
+| `<context>_fx_events.<pid>.jsonl` | 4 | selected-layer FX 采集产生的逐进程原始事件流。 |
+| `<context>_patch_events.<pid>.jsonl` | 4 | 较早期 patch trace 产生的逐进程原始事件流，用于与 FX 重建交叉核对。 |
+
+原始 JSONL 的进程编号如下：
+
+| 上下文 | FX JSONL PID | patch JSONL PID |
+| --- | --- | --- |
+| 4-8K | `48423`, `48499`, `48500`, `48657` | `31698`, `31774`, `31775`, `31932` |
+| 8-16K | `50121`, `50197`, `50198`, `50358` | `33266`, `33342`, `33343`, `33500` |
+| 16-32K | `51661`, `51737`, `51738`, `51895` | `34834`, `34910`, `34911`, `35068` |
+
+### 事件级 FX 数据与报告（每个事件 6 个，共 54 个）
+
+对“采样覆盖”表中的每个事件前缀 `<event>`，均有以下文件：
+
+| 文件模式 | 用途 |
+| --- | --- |
+| `<event>_fx_graph.txt` | `make_fx` 导出的可读 FX 图文本，用于查看算子顺序和张量流。 |
+| `<event>_fx_nodes.json` | 完整 FX 节点、参数和 shape 等机器可读信息。 |
+| `<event>_fx_process_nodes.csv` | 每个 FX 节点到 12 个逻辑过程的归属表，便于筛选、统计和二次可视化。 |
+| `<event>_fx_process_reconstruction.json` | 过程重建的机器可读结果。 |
+| `<event>_fx_process_reconstruction.md` | 单事件的过程重建报告，适合逐层人工核对。 |
+| `<event>_fx_trace_metadata.json` | 该事件的层号、forward 次序、输入 shape 和 trace 来源信息。 |
+
+## 证据边界
+
+- 这是固定采样输入上的 FX/patch 执行结构证据，用于解释“算法做了什么”和节点如何组成过程，不是全模型覆盖率证明。
+- 12 个过程名称来自对 FX 节点的重建与归类；原始节点和归属表均保留，可用于复核。
+- 自定义 attention 等边界内的实现不会被 `make_fx` 无限展开，因此报告描述的是此次实际捕获到的图边界。
+- 本目录不包含耗时归因。当前最佳版本的性能结果和 profiler 数据位于相邻的 `performance_analysis/`。

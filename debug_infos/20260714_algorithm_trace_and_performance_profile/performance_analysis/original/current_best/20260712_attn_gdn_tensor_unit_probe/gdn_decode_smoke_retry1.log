@@ -1,4 +1,0 @@
-WARNING 07-13 00:23:16 [rocm.py:42] Failed to import from vllm._C with ModuleNotFoundError("No module named 'vllm._C'")
-torch 2.10.0
-arch gfx936:sramecc+:xnack-
-mode=gdn_decode finite True

@@ -1,3 +1,0 @@
-# 260713_000211 'rocprof_data/rpl_data_260713_000211_454286/input0.xml' generated with '/opt/dtk-26.04-DCC2602-0317/rocprofiler/libexec/rocprofiler/txt2xml.sh 1'
-<metric range="" kernel="Cijk_Alik_Bljk_BBH_MT256x256x16" gpu_index=""></metric>
-<metric name=SQ_INSTS_MMOP,SQ_ACTIVE_INST_MMOP,SQ_INSTS_VALU,SQ_ACTIVE_INST_VALU,SQ_WAVES ></metric>

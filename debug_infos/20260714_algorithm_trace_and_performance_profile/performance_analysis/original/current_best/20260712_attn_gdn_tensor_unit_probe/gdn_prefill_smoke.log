@@ -1,9 +1,0 @@
-WARNING 07-13 00:22:27 [rocm.py:42] Failed to import from vllm._C with ModuleNotFoundError("No module named 'vllm._C'")
-torch 2.10.0
-arch gfx936:sramecc+:xnack-
-chunk_scaled_dot_kkt {'name': 'chunk_scaled_dot_kkt_fwd_kernel', 'num_warps': 4, 'num_stages': 2, 'waves_per_eu': 1, 'matrix_instr_nonkdim': 0, 'kpack': 1, 'shared': 16384, 'profile_scratch_size': 0, 'n_regs': 77, 'n_spills': 0}
-solve_tril64 {'name': 'merge_16x16_to_64x64_inverse_kernel', 'num_warps': 2, 'num_stages': 4, 'waves_per_eu': 1, 'matrix_instr_nonkdim': 0, 'kpack': 1, 'shared': 3072, 'profile_scratch_size': 0, 'n_regs': 93, 'n_spills': 0}
-recompute_w_u {'name': 'recompute_w_u_fwd_kernel', 'num_warps': 2, 'num_stages': 2, 'waves_per_eu': 1, 'matrix_instr_nonkdim': 0, 'kpack': 1, 'shared': 16384, 'profile_scratch_size': 0, 'n_regs': 145, 'n_spills': 0}
-chunk_delta_h_stateful {'name': 'chunk_gated_delta_rule_fwd_kernel_h_blockdim64', 'num_warps': 4, 'num_stages': 2, 'waves_per_eu': 1, 'matrix_instr_nonkdim': 0, 'kpack': 1, 'shared': 36864, 'profile_scratch_size': 0, 'n_regs': 194, 'n_spills': 0}
-chunk_delta_h_no_state {'name': 'chunk_gated_delta_rule_fwd_kernel_h_blockdim64', 'num_warps': 4, 'num_stages': 2, 'waves_per_eu': 1, 'matrix_instr_nonkdim': 0, 'kpack': 1, 'shared': 36864, 'profile_scratch_size': 0, 'n_regs': 194, 'n_spills': 0}
-chunk_fwd_o {'name': 'chunk_fwd_kernel_o', 'num_warps': 4, 'num_stages': 2, 'waves_per_eu': 1, 'matrix_instr_nonkdim': 0, 'kpack': 1, 'shared': 12288, 'profile_scratch_size': 0, 'n_regs': 90, 'n_spills': 0}

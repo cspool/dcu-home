@@ -1,8 +1,0 @@
-correctness M=14336
-benchmark M=14336: 120.243 -> 110.854 us (8.469%)
-correctness M=16384
-benchmark M=16384: 137.498 -> 127.030 us (8.240%)
-correctness M=34816
-benchmark M=34816: 292.534 -> 271.533 us (7.734%)
-all_passed result=/public/home/tangyu408/testdata/goal_runs/20260712_h10_8_runtime_validation/validation_results.json
-elapsed_seconds=4.518

@@ -1,139 +1,122 @@
-# 当前最佳 H11.5 + H10.8 性能分析
+# 当前最佳版本性能分析数据说明
 
-## 范围
+本目录只整理当前最佳性能版本 **H11.5 + H10.8（R25）** 的原始性能数据和原始分析报告。除本说明外，共 68 个文件，全部直接放在本目录；没有混入其他候选版本的全量结果，也不包含脚本、源码、服务日志、PID、wheel、HSACO、CO 或 fatbin。
 
-本文只整理当前最高综合分版本 **H11.5 + H10.8**。R4/R11/R23 的 torch/hipprof 历史数据、H10-only 增量以及 LA-RD/LA-RP 等后续候选结果均不作为本目录性能结论。
+归档过程只通过文件名前缀消除了原目录层级与重名，文件内容没有改写。建议先阅读 [`current_best_final_summary.md`](current_best_final_summary.md)，再按需要查看三轮原始结果和各组件 profiler 数据。
 
-当前最佳有完整端到端 full×3/accuracy 证据和多组针对现有 H11.5/H10.8 路径的定向硬件采集，但没有一套绑定最终 wheel SHA 的全模型 torch profiler/hipprof。因此本文不会借用 R23 的 kernel 占比，也不会给最终版本虚构热点百分比。
+## 当前最佳结果
 
-## 1. 权威端到端结果
+- 三轮固定 full 测试综合分：`88.490349137758`、`88.578483694186`、`88.576533680101`。
+- 三轮均值：`88.5484555040153`；accuracy 系数 `K=1.00`。
+- 相对 R24 的 20/50/30 加权吞吐提升：`+10.2361569769%`。
+- 三轮合计 `450/450` 请求成功，`failed=0`，固定 SLA 全部通过。
+- 这份证据确认 H11.5 + H10.8 是当前已完整验证的最佳版本，但原报告明确记录：它没有达到 90 分或相对 R24 `+20%`。
 
-原始摘要：[`final_identity/FINAL_SUMMARY.md`](original/current_best/final_identity/FINAL_SUMMARY.md)
+## 文件及用途
 
-| Run | 4-8K tok/s | 8-16K tok/s | 16-32K tok/s | Score, K=1 |
-| --- | ---: | ---: | ---: | ---: |
-| 1 | 19.589185273966 | 17.025544511643 | 13.003919636950 | 88.490349137758 |
-| 2 | 19.587005633034 | 17.127750783436 | 13.003706763767 | 88.578483694186 |
-| 3 | 19.584774728543 | 17.126009556001 | 13.004622851957 | 88.576533680101 |
+### 最终结论与版本身份（8 个）
 
-- 三轮均分：`88.5484555040153`。
-- 相对 R24 三轮均值的 20/50/30 加权吞吐提升：`+10.2361569769%`。
-- 三轮共 `450/450` 请求成功，`failed=0`，三档 SLA 全部通过。
-- Accuracy `K=1.0`，三轮逐请求输出长度和全文一致。
-- wheel SHA256：`03568ba87ff64fd0a8aade299026d7ee78cbf40d9c1ed5884fb584250b2031f2`。
+| 文件 | 用途 |
+| --- | --- |
+| `current_best_final_summary.md` | 当前最佳版本的权威总报告：三轮吞吐、综合分、SLA、重复性、accuracy、服务闭环及结论。 |
+| `current_best_worst_request_fixtures.md` | 固定测试中最差请求样本及 SLA 复核说明。 |
+| `current_best_final_identity.txt` | 最终源码、wheel 和运行时身份一致性检查结果。 |
+| `current_best_finalization_utc.txt` | 最终证据冻结时间。 |
+| `current_best_final_wheel.sha256` | 最终 wheel 的 SHA256；用于唯一标识被测构建，不包含 wheel 本体。 |
+| `current_best_final_wheel_stat.txt` | 最终 wheel 的文件大小、时间等 stat 信息。 |
+| `current_best_git_head.txt` | 当前最佳构建对应的源码 Git HEAD。 |
+| `current_best_rocm_native_extension_attestation.txt` | 已安装 ROCm native extension 与最终 wheel、目标 ABI marker 的一致性证明。 |
 
-完整 benchmark 原件已在相邻 current-best 归档中保存，这里只保留最终身份与摘要，避免重复同一批大文件。
+### Accuracy 数据（6 个）
 
-## 2. H10.8 strided LLMM1
+| 文件 | 用途 |
+| --- | --- |
+| `current_best_accuracy_summary.csv` | OpenCompass 原生 accuracy 汇总表，适合程序读取。 |
+| `current_best_accuracy_summary.md` | OpenCompass 原生 accuracy 汇总表的 Markdown 版本。 |
+| `current_best_accuracy_summary.txt` | OpenCompass 原生 accuracy 文本输出。 |
+| `current_best_accuracy_status.txt` | 固定 accuracy 测试退出状态；`0` 表示正常完成。 |
+| `current_best_accuracy_window_start_epoch.txt` | accuracy 测试开始 epoch。 |
+| `current_best_accuracy_window_end_epoch.txt` | accuracy 测试结束 epoch。 |
 
-### Runtime 验证
+注意：OpenCompass 原生中间 summary 将 aggregation 记为 `0.0`；固定评分脚本按预测列表与 gold 多重集合等价重算为 `100.00`。最终计分应以 `current_best_final_summary.md` 中的四数据集结果和 `K=1.00` 为准。
 
-入口：[`validation_results.json`](original/current_best/20260712_h10_8_runtime_validation/validation_results.json)
+### 三轮固定 full 原始吞吐数据（18 个）
 
-H10.8 的 `(4,640)` pair-reduce 配置在 gfx936/BF16、`N=1`、`K=5120`、16-byte alignment 和限定输出宽度下通过全部正/负门禁。相对旧 `(4,320)` 配置的 standalone median：
+`<run>` 为 `1`、`2`、`3`，`<band>` 为 `4-8K`、`8-16K`、`16-32K`。
 
-| M | old t320 | H10.8 t640 | improvement |
-| ---: | ---: | ---: | ---: |
-| 14,336 | 120.243 us | 110.854 us | 8.469% |
-| 16,384 | 137.498 us | 127.030 us | 8.240% |
-| 34,816 | 292.534 us | 271.533 us | 7.734% |
+| 文件模式 | 数量 | 用途 |
+| --- | ---: | --- |
+| `full_run<run>_<band>_result.json` | 9 | 每轮每档的原始 benchmark JSON；包含逐请求 latency、TTFT、ITL/TPOT、输出长度、生成文本、成功/失败数及汇总吞吐。 |
+| `full_run<run>_status.txt` | 3 | 每轮固定 `run_throughput.sh all` 的退出状态。 |
+| `full_run<run>_window_start_epoch.txt` | 3 | 每轮测试窗口开始 epoch。 |
+| `full_run<run>_window_end_epoch.txt` | 3 | 每轮测试窗口结束 epoch。 |
 
-所有记录 seed 都与 t320 bitwise equal，重复运行 bitwise exact；8 个非目标条件均被明确拒绝。该数据是 kernel standalone 验证，不是端到端提升的直接分解。
+这些 JSON 是重算三轮吞吐分、P99 SLA、请求成功率和输出重复性的主要原始数据。
 
-### 编译资源
+### H10.8 gfx936 strided LLMM1 验证（14 个）
 
-入口：[`h10_8_gfx936_kernel_metadata.txt`](original/current_best/20260712_h10_8_single_tu_compile/h10_8_gfx936_kernel_metadata.txt)
+| 文件 | 用途 |
+| --- | --- |
+| `h10_8_runtime_validation.json` | H10.8 的正确性、重复性、负例拒绝及 31 组 timing 原始结果；`all_passed=true`。 |
+| `h10_8_runtime_validation_status.txt` | runtime validation 退出状态。 |
+| `h10_8_runtime_validation_start_epoch.txt` | runtime validation 开始 epoch。 |
+| `h10_8_runtime_validation_end_epoch.txt` | runtime validation 结束 epoch。 |
+| `h10_8_runtime_validation_script.sha256` | 产生 runtime validation 数据的脚本哈希，仅用于确认测试口径。 |
+| `h10_8_compile_artifact_hashes.txt` | 单编译单元产物哈希清单。 |
+| `h10_8_compile_gfx936_notes.txt` | 编译产物中的 AMDGPU note/metadata 原始文本。 |
+| `h10_8_kernel_metadata.txt` | H10.8 目标 kernel 的 gfx936 资源和 ABI metadata。 |
+| `h10_8_compile_status.txt` | 单编译单元构建状态；`0` 表示成功。 |
+| `h10_8_compile_object_hash.txt` | 目标 object/code object 的哈希。 |
+| `h10_8_compile_source_hashes_before.txt` | 编译前相关源码哈希。 |
+| `h10_8_compile_source_hashes_after.txt` | 编译后相关源码哈希，用于检查采集期间是否漂移。 |
+| `h10_8_compile_start_epoch.txt` | 单编译单元验证开始 epoch。 |
+| `h10_8_compile_end_epoch.txt` | 单编译单元验证结束 epoch。 |
 
-- max workgroup：640。
-- LDS/group segment：5,200 B。
-- VGPR：29；SGPR：11。
-- private segment/spill：0。
-- wavefront：64。
+### H11.5、Attention 与 GDN profiler 数据（7 个）
 
-原始 gfx936 code object、fatbin、源码 diff、build log 和 SHA256 均保留在同目录。
+| 文件 | 用途 |
+| --- | --- |
+| `h11_5_attention_lds.csv` | 当前 H11.5 attention kernel 的 rocprof LDS counter 原始数据。 |
+| `attention_gdn_tensor_unit_report.md` | Attention/GDN 是否使用 gfx936 MMAC/MMOP 矩阵单元的完整分析报告。 |
+| `attention_prefill_mmop.csv` | H11.5 full-attention prefill core 的动态 MMOP/VALU/wave counter。 |
+| `attention_decode_mmop.csv` | attention decode stage 与 reduction 的动态 counter，可区分矩阵阶段和非矩阵 reduction。 |
+| `gdn_prefill_mmop.csv` | GDN prefill 主矩阵链各 kernel 的动态 MMOP counter。 |
+| `gdn_prefill_aux_mmop.csv` | GDN prefill 辅助采集的原始 CSV；此次为 `0 contexts`，不能作为“不使用矩阵单元”的动态证据。 |
+| `gdn_decode_mmop.csv` | GDN packed decode core 的有效动态负证据：WAVES/VALU 非零、MMOP 为零。 |
 
-## 3. H11.5 GQA6 attention
+这些 counter 用于回答是否发出矩阵指令，不能直接解释成整模型的矩阵单元利用率百分比。GDN prefill 数据包含 profiler 新进程触发的 Triton autotune 行，报告已单独说明其边界。
 
-### 当前 kernel 的 L4096 reference trace
+### Prefill GEMM profiler 数据（7 个）
 
-入口：[`trace_h11_v2`](original/current_best/20260714_h11_5_l4096_reference_profile/trace_h11_v2/)
+| 文件 | 用途 |
+| --- | --- |
+| `prefill_tensor_unit_report.md` | BF16 prefill projection 经 hipBLAS/rocBLAS 并使用 gfx936 MMAC 的分析报告。 |
+| `prefill_gemm_mmop.csv` | 代表性 `512x5120x34816` BF16 GEMM 的动态 MMOP/VALU/wave counter。 |
+| `prefill_gemm_hipprof_trace.db` | 该代表性 GEMM 的 hipprof 原始 trace 数据库；这是数据文件，不是可执行文件。 |
+| `prefill_gemm_hipprof_trace.json` | hipprof trace 的 JSON 导出。 |
+| `prefill_gemm_hipkernel.csv` | hipprof kernel 汇总，含 kernel 名称、调用次数和耗时。 |
+| `prefill_gemm_hiptrace.csv` | HIP API/dispatch trace 表。 |
+| `prefill_linear_existing_evidence.json` | 当前生产 prefill linear/GEMM 路径的既有 trace 证据索引与摘要。 |
 
-该采集只运行 H11.5 synthetic attention consumer，没有加载模型或使用正式 fixture。形状为 `seq=4096`、Q24/KV4、head size 256、BF16、page 784，V 使用生产 stride `[14336,256,1]`。5 次 warmup + 20 次 timed invocation；rocprof 中目标 kernel 共 25 次：
+该微基准证明代表性大投影会使用矩阵单元，但不证明所有小型或 ragged prefill GEMM 都使用同一路径，也不提供整段 prefill 的利用率。
 
-| metric | H11.5 `kernel_unified_attention_2d_gqa6` |
-| --- | ---: |
-| profiler kernel median | 4.472958 ms |
-| mean | 4.475377 ms |
-| min / p95 / max | 4.414078 / 4.520798 / 4.659678 ms |
-| GRD / WGR | 396,288 / 256 |
-| workgroups | 1,548 |
-| dynamic LDS | 32,768 B |
-| Arch_VGPR / SGPR | 216 / 96 |
-| scratch | 0 |
+### H11.5 L4096 参考 profile（8 个）
 
-Code-object metadata 给出 raw VGPR 216、raw SGPR 87、0 spill、0 private segment。这里没有 achieved/static occupancy 字段，不能从 VGPR/LDS 自行推导 occupancy。
+| 文件 | 用途 |
+| --- | --- |
+| `h11_5_l4096_profile_result.json` | H11.5 在 `seq_len=4096`、24 Q heads、4 KV heads、head size 256 下的 20 次 event timing 原始结果；median 为约 `4.694 ms`。 |
+| `h11_5_l4096_kernel_trace.csv` | 上述 micro-profile 的 rocprof kernel trace。 |
+| `h11_5_l4096_device_before.txt` | profile 前设备状态。 |
+| `h11_5_l4096_device_after.txt` | profile 后设备状态。 |
+| `h11_5_kernel_code_object_elf_header.txt` | 对应 H11.5 code object 的 ELF header 文本。 |
+| `h11_5_kernel_code_object_notes.txt` | code object 的 AMDGPU notes/metadata 文本。 |
+| `h11_5_kernel_code_object.sha256` | 被分析 code object 的哈希，不包含 HSACO 本体。 |
+| `h11_5_kernel_metadata.txt` | 精确 target/kernel metadata。 |
 
-### LDS/MMOP counter
+该 L4096 结果是独立 micro-profile（`model_loaded=false`、未使用官方请求），用于解释 H11.5 kernel 本身，不替代三轮 fixed full 端到端数据。
 
-原始数据：[`h11_5_lds.csv`](original/current_best/20260712_h11_5_attention_lds/h11_5_lds.csv)
+## 证据边界
 
-在 `q=512`、`seq=12000`、Q24/KV4/D256、BF16、page 784 的当前 H11.5 路径中：
-
-| counter | value |
-| --- | ---: |
-| `SQ_INSTS_LDS` | 54,989,376 |
-| `SQ_ACTIVE_INST_LDS` | 69,203,706 |
-| `SQ_WAIT_INST_LDS` | 122,376,261 |
-| `SQ_LDS_BANK_CONFLICT` | 93,189,120 |
-| `SQ_LDS_ADDR_CONFLICT` | 323,232 |
-| `SQ_INSTS_MMOP` | 20,686,848 |
-| `SQ_ACTIVE_INST_MMOP` | 41,373,696 |
-
-这证明当前 H11.5 同时使用矩阵单元且仍存在显著 LDS wait/conflict；counter 没有兼容的 elapsed-cycle denominator，不能把这些原始数值直接换算为利用率百分比。
-
-## 4. Attention / GDN 矩阵单元归因
-
-入口：[`20260712_attn_gdn_tensor_unit_probe/README.md`](original/current_best/20260712_attn_gdn_tensor_unit_probe/README.md)
-
-当前路径的动态 MMOP 与 code-object 交叉验证结论：
-
-| 路径 | 主要 kernel | gfx936 MMAC/MMOP |
-| --- | --- | --- |
-| Full Attention Prefill | H11.5 `kernel_unified_attention_2d_gqa6` | 使用 |
-| Full Attention Decode stage | `kernel_unified_attention_3d` | 使用 |
-| Decode reduction | `reduce_segments` | 不使用 |
-| GDN Prefill 主矩阵链 | KKT / solve / recompute / delta-h / output | 使用 |
-| GDN Prefill 辅助算子 | cumsum / L2 norm / gating / causal-conv | 不使用 |
-| GDN Decode core | packed recurrent delta-rule kernel | 不使用 |
-
-H11.5 prefill 的动态记录为 `SQ_INSTS_MMOP=20,686,848`；GDN prefill 的五类主 kernel 所有被捕获行均为 MMOP-positive。原始 CSV、probe 和 smoke logs 均在该目录。该分析回答“是否使用矩阵单元”，不回答 occupancy。
-
-## 5. 当前 Prefill GEMM 路径
-
-### 代表性 runtime 证据
-
-入口：[`20260712_prefill_tensor_unit_probe/README.md`](original/current_best/20260712_prefill_tensor_unit_probe/README.md)
-
-代表性 `x[512,5120] @ weight[34816,5120].T` BF16 projection 通过 hipBLAS/rocBLAS 到达带 `MAC_MMAC` 的 gfx936 Tensile kernel，反汇编含 `v_mmac_f32_16x16x16_bf16`，动态 `SQ_INSTS_MMOP` 非零。一次 sanity timing 约 `0.715359 ms / 255.17 TFLOP/s`；它只证明矩阵单元被使用，不代表全模型 achieved utilization。
-
-### 生产 trace 归因
-
-原始紧凑证据：[`20260712_r27_prefill_linear_gemm_current_path`](original/current_best/20260712_r27_prefill_linear_gemm_current_path/)
-
-phase-labelled 当前路径证据把 `aten::mm` 连接到 `ISA936/MAC_MMAC` Tensile launch：
-
-- 26 个 `M=4096` prefill chunks 覆盖 all3 输入 token 的 86.75%，是 dense-linear FLOP 主体。
-- 六类主 projection 的 per-token FLOP 权重约为 MLP 70.3%、GDN 22.8%、full attention 6.9%。
-- 主 prefill linears 已经在用 DCU BF16 矩阵单元，剩余方向是 per-shape rocBLAS/TunableOp solution selection，而不是“开启 MMAC”。
-
-后续 solution audit 的独立确认没有达到预注册晋级门，因此当前最佳仍保留既有自动选择；本归档只收 current-path trace/脚本和 MMOP 证据，没有收候选 solution 的大规模 discovery/confirmation 数据。
-
-## 6. 当前可以下的性能结论
-
-- 端到端：H11.5 + H10.8 是已完整验证的最高综合分版本，三档提升随上下文增加，16-32K 相对 R24 的平均提升最大（`+13.724%`）。
-- Decode linear：H10.8 standalone kernel 对三个生产输出宽度比旧配置快约 `7.7%–8.5%`，资源占用低且无 spill。
-- Full attention：H11.5 GQA6 确实使用 MMOP；L4096 kernel 约 4.47 ms，当前资源为 216 VGPR/32 KiB dynamic LDS，并存在明确的 LDS wait/conflict 优化空间。
-- GDN/Prefill GEMM：主 prefill 链广泛使用矩阵单元；不能再把“未启用 tensor unit”作为首要假设。
-- 证据缺口：没有绑定最终 wheel 的全模型 hipprof/torch trace，因而不能给出 H11.5、H10.8、GDN、GEMM 在完整请求中的百分比拆分。
-
-若要补齐最后一项，应在当前 wheel SHA 下重新采集三档 DCU-SMI，以及至少 16-32K n=4 的全模型 hipprof，并记录 wheel、git、输入和采集参数 SHA。现有历史 R23 profile 不应替代这一步。
+- 当前版本的端到端结论以 `current_best_final_summary.md` 和 9 个 `full_run*_result.json` 为准；组件级 micro-profile 只解释具体 kernel/path。
+- 本目录没有一份覆盖最终 wheel、全模型 prefill/decode 全阶段且带 phase 标签的统一 counter profile，因此不能据此给出各模块占总时延的精确百分比。
+- 原始报告中的路径保留采集时的位置。归档已把本 README 所列的相关原始数据扁平复制到当前目录，但没有复制脚本、日志或二进制产物。
