@@ -1,0 +1,41 @@
+{
+  "schema": "p9-c100-fixed-all3-closure-manifest-v1",
+  "status": "reject_and_baseline_restored",
+  "candidate": {
+    "state": "C100",
+    "wheel_sha256": "f877d08fdf2380a87298006c915d14077ca947225e50e5bcf56e028fc9075d80",
+    "features": {"h10_confirmed": 1, "s32": 0, "hg3": 0}
+  },
+  "window": {
+    "body_command": "./run_throughput.sh all 3",
+    "rounds": 3,
+    "natural_active_seconds": 664.215310295,
+    "idle_padding_seconds": 0
+  },
+  "gates": {
+    "completed_failed": "27/0",
+    "paired_output_exact": true,
+    "sla_pass": true,
+    "all_bands_nonnegative": true,
+    "weighted_relative_baseline_pct": 0.9585380408622245,
+    "required_pct": 1.0,
+    "advance_to_full": false
+  },
+  "final_runtime": {
+    "installed_wheel": "baseline",
+    "installed_wheel_sha256": "03568ba87ff64fd0a8aade299026d7ee78cbf40d9c1ed5884fb584250b2031f2",
+    "source_clean": true,
+    "runtime_port_clean": true,
+    "hcu_use_percent": 0.0
+  },
+  "primary_evidence": [
+    "all3_natural_600/window.json",
+    "all3_natural_600/window.audit.json",
+    "all3_natural_600/audit.json",
+    "service/route_audit.json",
+    "99_baseline_restore/installed_identity.final.json",
+    "99_baseline_restore/source_guard.final.json",
+    "99_baseline_restore/runtime_guard.final.json",
+    "99_baseline_restore/gpu_clean.after.txt"
+  ]
+}

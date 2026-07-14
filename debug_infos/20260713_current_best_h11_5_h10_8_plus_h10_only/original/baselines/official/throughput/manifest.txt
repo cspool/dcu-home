@@ -1,0 +1,16 @@
+date=2026-07-10 03:47:34 UTC
+root=/public/home/tangyu408/testdata/goal_runs/20260710_040000_official_baseline_full_all
+baseline_wheel=/public/home/tangyu408/testdata/goal_runs/20260709_195957_candidate_flashattn_build/baseline_wheel_before_build.whl
+bfd72a1a83ba48632bc8b325a0adc5d5fe88889f0f6bfec4af11aedf565fc616  /public/home/tangyu408/testdata/goal_runs/20260709_195957_candidate_flashattn_build/baseline_wheel_before_build.whl
+Name: vllm
+Version: 0.18.1+das.dtk2604
+Summary: A high-throughput and memory-efficient inference and serving engine for LLMs
+Home-page: https://github.com/vllm-project/vllm
+Author: vLLM Team
+Author-email: 
+License-Expression: Apache-2.0
+Location: /usr/local/lib/python3.10/dist-packages
+Requires: aiohttp, amd-quark, anthropic, blake3, cachetools, cbor2, cloudpickle, compressed-tensors, datasets, depyf, diskcache, einops, fastapi, filelock, flash_attn, gguf, grpcio, grpcio-reflection, ijson, lark, llguidance, lm-format-enforcer, mcp, mistral_common, model-hosting-container-standards, msgspec, ninja, numba, numpy, openai, openai-harmony, opencv-python-headless, opentelemetry-api, opentelemetry-exporter-otlp, opentelemetry-sdk, opentelemetry-semantic-conventions-ai, outlines_core, packaging, partial-json-parser, peft, pillow, prometheus-fastapi-instrumentator, prometheus_client, protobuf, psutil, py-cpuinfo, pybase64, pydantic, pytest-asyncio, python-json-logger, pyyaml, pyzmq, regex, requests, runai-model-streamer, sentencepiece, setproctitle, setuptools, setuptools-scm, tensorizer, tiktoken, timm, tokenizers, torch, torchvision, tqdm, transformers, typing_extensions, watchfiles, xgrammar
+Required-by: 
+installed_rocm_count 3
+installed_ua_output_scale True

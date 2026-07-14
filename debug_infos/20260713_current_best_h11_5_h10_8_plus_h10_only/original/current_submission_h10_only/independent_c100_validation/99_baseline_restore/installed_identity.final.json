@@ -1,0 +1,65 @@
+{
+  "gpu_work_performed": false,
+  "installed": {
+    "files": {
+      "vllm/model_executor/layers/fla/ops/chunk_o.py": {
+        "path": "/usr/local/lib/python3.10/dist-packages/vllm/model_executor/layers/fla/ops/chunk_o.py",
+        "present": true,
+        "sha256": "dd381813c3df6a0459a281a30fbbc22369b9b95f9a84e9627c35a74b54ecf881"
+      },
+      "vllm/platforms/rocm_tunableop.py": {
+        "path": "/usr/local/lib/python3.10/dist-packages/vllm/platforms/rocm_tunableop.py",
+        "present": false
+      },
+      "vllm/platforms/tunable_profiles/gfx936_qwen3_5_27b_bf16_tn_m4096.csv": {
+        "path": "/usr/local/lib/python3.10/dist-packages/vllm/platforms/tunable_profiles/gfx936_qwen3_5_27b_bf16_tn_m4096.csv",
+        "present": false
+      },
+      "vllm/v1/attention/backends/rocm_aiter_unified_attn.py": {
+        "path": "/usr/local/lib/python3.10/dist-packages/vllm/v1/attention/backends/rocm_aiter_unified_attn.py",
+        "present": true,
+        "sha256": "2d038efffe89cec4e3101bd95505f520e1a49c753c77044adb35ec14b92e2c92"
+      },
+      "vllm/v1/attention/ops/rocm_aiter_unified_attention_gqa6_decode.py": {
+        "path": "/usr/local/lib/python3.10/dist-packages/vllm/v1/attention/ops/rocm_aiter_unified_attention_gqa6_decode.py",
+        "present": false
+      },
+      "vllm/v1/worker/gpu_worker.py": {
+        "path": "/usr/local/lib/python3.10/dist-packages/vllm/v1/worker/gpu_worker.py",
+        "present": true,
+        "sha256": "b5fe238d4fa5f170a0ab4e5ebfb0e9b7a6851edb0442ecd667f9d553da42ea64"
+      }
+    },
+    "package_root": "/usr/local/lib/python3.10/dist-packages/vllm",
+    "resolves_outside_repository": true
+  },
+  "kind": "baseline",
+  "production_module_imported": false,
+  "result": "pass",
+  "schema": "p9-wheel-site-identity-v1",
+  "wheel": "/public/home/tangyu408/testdata/goal_runs/20260712_h11_5_h10_8_final_evidence/wheel/vllm-0.18.1+das.dtk2604-cp310-cp310-linux_x86_64.whl",
+  "wheel_members": {
+    "vllm/model_executor/layers/fla/ops/chunk_o.py": {
+      "present": true,
+      "sha256": "dd381813c3df6a0459a281a30fbbc22369b9b95f9a84e9627c35a74b54ecf881"
+    },
+    "vllm/platforms/rocm_tunableop.py": {
+      "present": false
+    },
+    "vllm/platforms/tunable_profiles/gfx936_qwen3_5_27b_bf16_tn_m4096.csv": {
+      "present": false
+    },
+    "vllm/v1/attention/backends/rocm_aiter_unified_attn.py": {
+      "present": true,
+      "sha256": "2d038efffe89cec4e3101bd95505f520e1a49c753c77044adb35ec14b92e2c92"
+    },
+    "vllm/v1/attention/ops/rocm_aiter_unified_attention_gqa6_decode.py": {
+      "present": false
+    },
+    "vllm/v1/worker/gpu_worker.py": {
+      "present": true,
+      "sha256": "b5fe238d4fa5f170a0ab4e5ebfb0e9b7a6851edb0442ecd667f9d553da42ea64"
+    }
+  },
+  "wheel_sha256": "03568ba87ff64fd0a8aade299026d7ee78cbf40d9c1ed5884fb584250b2031f2"
+}

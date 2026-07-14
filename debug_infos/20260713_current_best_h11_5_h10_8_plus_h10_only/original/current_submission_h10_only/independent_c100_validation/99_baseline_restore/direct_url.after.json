@@ -1,0 +1,13 @@
+{
+  "direct_url": {
+    "archive_info": {
+      "hash": "sha256=03568ba87ff64fd0a8aade299026d7ee78cbf40d9c1ed5884fb584250b2031f2",
+      "hashes": {
+        "sha256": "03568ba87ff64fd0a8aade299026d7ee78cbf40d9c1ed5884fb584250b2031f2"
+      }
+    },
+    "url": "file:///public/home/tangyu408/testdata/goal_runs/20260712_h11_5_h10_8_final_evidence/wheel/vllm-0.18.1%2Bdas.dtk2604-cp310-cp310-linux_x86_64.whl"
+  },
+  "direct_url_path": "/usr/local/lib/python3.10/dist-packages/vllm-0.18.1+das.dtk2604.dist-info/direct_url.json",
+  "distribution_path": "/usr/local/lib/python3.10/dist-packages/vllm-0.18.1+das.dtk2604.dist-info"
+}

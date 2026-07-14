@@ -1,0 +1,9 @@
+9f663f276724dd7c58997b07a3a6c368e83d13037da18638737eb767799f7476  /usr/local/lib/python3.10/dist-packages/vllm/_custom_ops.py
+08f7d4652c8e503d134085d85cc7371e8c436f29597fad4a3b1378262f4f94cc  /usr/local/lib/python3.10/dist-packages/vllm/model_executor/layers/fla/ops/fused_recurrent.py
+ddb9ee5dafa9ba3b3cd524b8a3fe63706812fdff3d7baae65517e8b069f1f661  /usr/local/lib/python3.10/dist-packages/vllm/model_executor/layers/utils.py
+85bd95cb5d44ce4576ba2f13715de1704c5abce56bb812a10b1c377e9c59a5ae  /usr/local/lib/python3.10/dist-packages/vllm/model_executor/models/qwen3_next.py
+e6d9402217c60af75b18f540c0c2cb9134406eeed72329928d41adb6f2e460d8  /usr/local/lib/python3.10/dist-packages/vllm/platforms/rocm.py
+962672218d74b30f52d41a30778898809e1606ee798adcdf4138825cbc82733d  /usr/local/lib/python3.10/dist-packages/vllm/v1/attention/backends/gdn_attn.py
+2d038efffe89cec4e3101bd95505f520e1a49c753c77044adb35ec14b92e2c92  /usr/local/lib/python3.10/dist-packages/vllm/v1/attention/backends/rocm_aiter_unified_attn.py
+82a52c2b263de9e557ec933b39debc121b4b73f9abddc58cfb6d78153b128cfd  /usr/local/lib/python3.10/dist-packages/vllm/v1/attention/ops/rocm_aiter_unified_attention_gqa6.py
+161d034e48c4f914fa975b70673a6a8cae8ea71ae91c7d90ccbd837704ba9de0  /usr/local/lib/python3.10/dist-packages/vllm/version.py

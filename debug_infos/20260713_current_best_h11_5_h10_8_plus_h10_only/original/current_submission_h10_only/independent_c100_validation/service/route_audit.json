@@ -1,0 +1,28 @@
+{
+  "checks": {
+    "candidate_wheel": true,
+    "features_h10_only": true,
+    "graph_finished": true,
+    "h10_init_controls": true,
+    "h10_init_ready": true,
+    "h10_pre_capture_ready": true,
+    "h10_profile_sha": true,
+    "hg3_fallback": true,
+    "hg3_no_hit": true,
+    "no_traceback": true,
+    "no_tuning_search": true,
+    "no_verbose_result_entry": true,
+    "record_off_recorded": true,
+    "s32_ablation": true,
+    "s32_fallback": true,
+    "s32_no_hit": true,
+    "state_c100": true,
+    "tuning_off_recorded": true,
+    "verbose_unset_recorded": true
+  },
+  "failures": [],
+  "finding_fastest_log_count": 0,
+  "result_entry_log_count": 0,
+  "schema": "p9-c100-performance-route-audit-v1",
+  "status": "pass"
+}

@@ -1,0 +1,19 @@
+{
+  "candidate_only_sources_absent": [
+    "vllm/v1/attention/ops/rocm_aiter_unified_attention_gqa6_decode.py",
+    "vllm/platforms/rocm_tunableop.py",
+    "vllm/platforms/tunable_profiles/gfx936_qwen3_5_27b_bf16_tn_m4096.csv"
+  ],
+  "files": {
+    ".gitignore": "835c3d3b7bf7a48cc2cb8d5af5181856b3f69709843aeda8414bb71e25233332",
+    "setup.py": "081229c12f382f70c7bb6b2a339975179cafc9a1bea4c12c57dfd4a7ebe1e0dc",
+    "vllm/model_executor/layers/fla/ops/chunk_o.py": "dd381813c3df6a0459a281a30fbbc22369b9b95f9a84e9627c35a74b54ecf881",
+    "vllm/v1/attention/backends/rocm_aiter_unified_attn.py": "2d038efffe89cec4e3101bd95505f520e1a49c753c77044adb35ec14b92e2c92",
+    "vllm/v1/worker/gpu_worker.py": "b5fe238d4fa5f170a0ab4e5ebfb0e9b7a6851edb0442ecd667f9d553da42ea64"
+  },
+  "git_diff_check": "pass",
+  "git_status_short": [],
+  "mutation_performed": false,
+  "result": "pass",
+  "schema": "p9-repository-source-guard-v1"
+}

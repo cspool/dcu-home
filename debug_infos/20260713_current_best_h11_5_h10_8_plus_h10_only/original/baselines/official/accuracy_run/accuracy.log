@@ -1,0 +1,14 @@
+dataset=hotpotqa rows=20
+dataset=gov_report rows=29
+dataset=retrieval_multi_point rows=30
+dataset=aggregation_keyword_aggregation rows=30
+
+===== Final Accuracy Results =====
+| dataset | version | metric | mode | Qwen3.5-27B-vLLM |
+|----- | ----- | ----- | ----- | -----|
+| hotpotqa | fece4a | score | gen | 77.96 |
+| gov_report | 52bd7a | score | gen | 32.96 |
+| retrieval_multi_point | 303e90 | accuracy | gen | 100.00 |
+| aggregation_keyword_aggregation | a6fabd | accuracy | gen | 100.00 |
+
+output_dir: output/local_accuracy_qwen35/20260710_141706

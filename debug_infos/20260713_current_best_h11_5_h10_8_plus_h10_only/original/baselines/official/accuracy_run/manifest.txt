@@ -1,0 +1,16 @@
+run=official_baseline_full_accuracy_all
+Fri Jul 10 06:16:41 UTC 2026
+root=/public/home/tangyu408/testdata/goal_runs/20260710_061800_official_baseline_full_accuracy_all_dtk_env
+cmd=source /opt/dtk-26.04-DCC2602-0317/env.sh; env -u http_proxy -u https_proxy -u HTTP_PROXY -u HTTPS_PROXY -u MODEL_DIR NO_PROXY=127.0.0.1,localhost no_proxy=127.0.0.1,localhost ./run_accuracy.sh all
+Name: vllm
+Version: 0.18.1+das.dtk2604
+Summary: A high-throughput and memory-efficient inference and serving engine for LLMs
+Home-page: https://github.com/vllm-project/vllm
+Author: vLLM Team
+Author-email: 
+License-Expression: Apache-2.0
+Location: /usr/local/lib/python3.10/dist-packages
+Requires: aiohttp, amd-quark, anthropic, blake3, cachetools, cbor2, cloudpickle, compressed-tensors, datasets, depyf, diskcache, einops, fastapi, filelock, flash_attn, gguf, grpcio, grpcio-reflection, ijson, lark, llguidance, lm-format-enforcer, mcp, mistral_common, model-hosting-container-standards, msgspec, ninja, numba, numpy, openai, openai-harmony, opencv-python-headless, opentelemetry-api, opentelemetry-exporter-otlp, opentelemetry-sdk, opentelemetry-semantic-conventions-ai, outlines_core, packaging, partial-json-parser, peft, pillow, prometheus-fastapi-instrumentator, prometheus_client, protobuf, psutil, py-cpuinfo, pybase64, pydantic, pytest-asyncio, python-json-logger, pyyaml, pyzmq, regex, requests, runai-model-streamer, sentencepiece, setproctitle, setuptools, setuptools-scm, tensorizer, tiktoken, timm, tokenizers, torch, torchvision, tqdm, transformers, typing_extensions, watchfiles, xgrammar
+Required-by: 
+marker /usr/local/lib/python3.10/dist-packages/vllm/platforms/rocm.py rocm_aiter_count 3 output_scale_arg False supports_sink_false False
+marker /usr/local/lib/python3.10/dist-packages/vllm/v1/attention/backends/rocm_aiter_unified_attn.py rocm_aiter_count 1 output_scale_arg True supports_sink_false True

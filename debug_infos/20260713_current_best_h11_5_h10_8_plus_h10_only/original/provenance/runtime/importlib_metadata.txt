@@ -1,0 +1,3 @@
+name vllm
+version 0.18.1+das.dtk2604
+location .

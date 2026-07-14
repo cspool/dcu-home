@@ -1,0 +1,4 @@
+a0d88f0675137c7ed26c4c6501a6ea12da29fce49f3e20546edcf96f89d72345  opencompass_output/results/Qwen3.5-27B-vLLM/aggregation_keyword_aggregation.json
+5fbf6a7628b6a646024a47b73dd62da1138c420caba6f58892323f916736de10  opencompass_output/results/Qwen3.5-27B-vLLM/gov_report.json
+5f208f009f7d86e61c966ecd56b172d9a975c1446a0c5ab86e800563bbc5de7a  opencompass_output/results/Qwen3.5-27B-vLLM/hotpotqa.json
+077db48aa457d5d822fd20bac4f50e9bdcf097c10c90a3adfe172d369cb80c53  opencompass_output/results/Qwen3.5-27B-vLLM/retrieval_multi_point.json

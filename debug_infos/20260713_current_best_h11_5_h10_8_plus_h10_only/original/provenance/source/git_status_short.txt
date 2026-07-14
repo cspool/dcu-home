@@ -1,0 +1,13 @@
+ M csrc/rocm/ops.h
+ M csrc/rocm/skinny_gemms.cu
+ M csrc/rocm/torch_bindings.cpp
+ M setup.py
+ M vllm/_custom_ops.py
+ M vllm/model_executor/layers/fla/ops/fused_recurrent.py
+ M vllm/model_executor/layers/utils.py
+ M vllm/model_executor/models/qwen3_next.py
+ M vllm/platforms/rocm.py
+ M vllm/v1/attention/backends/gdn_attn.py
+ M vllm/v1/attention/backends/rocm_aiter_unified_attn.py
+ M vllm/version.py
+?? vllm/v1/attention/ops/rocm_aiter_unified_attention_gqa6.py
