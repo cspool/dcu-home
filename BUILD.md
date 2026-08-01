@@ -1,92 +1,76 @@
-# 源码编译与安装
+# 干净构建与安装
 
-## 已验证环境
-
-本版本在组委会统一容器中完成构建、安装和评测；当前提交已通过平台评测并
-进入决赛。该结论表示源码在平台路径可构建、可启动并通过本阶段评测，不把
-下文任何本地 wheel 哈希表述为平台成绩。已验证工具链如下：
+## 已验证工具链
 
 | 组件 | 版本 |
 | --- | --- |
 | Python | 3.10.12 |
-| DTK / HIP | 6.2.0-0 |
-| Clang | 18.0.0 |
+| DTK / HIP | 6.2.0-0，运行时 validator 为 HIP 603 |
 | PyTorch | 2.10.0+das.opt1.dtk2604.20260325.g6b060a |
 | Triton | 3.4.0+git1ef59765 |
 | AITER | 0.1.dev1+g9daa788.d20260401 |
-| CMake | 3.29.0 |
-| Ninja | 1.11.1.git.kitware.jobserver-1 |
-| transformers | 5.5.0 |
-| 目标设备 | gfx936，BF16，单卡 |
+| CMake / Ninja | 3.29.0 / 1.11.1 |
+| 目标 | gfx936，BF16，单卡 |
 
-评测容器已经提供上述定制依赖。**不要**执行公开 PyPI/ROCm requirements
-的全量重装，否则可能覆盖平台定制的 PyTorch、Triton 或 AITER。
+评测容器已提供定制依赖。不要用公开 PyPI requirements 覆盖 PyTorch、
+Triton、AITER 或 DTK。
 
-## 一键构建
+## 构建
 
-在仓库根目录执行：
+先确保 `TMPDIR` 所在文件系统有空间。HIP 编译器会在其中创建较大的临时
+目标；仓库和输出目录有空间并不能弥补 `/tmp` 已满。该变量也会被服务进程
+用于 ZMQ IPC，因此路径应尽量短，连同随机文件名必须小于 107 字符。
 
 ```bash
+export TMPDIR=/path/on/a-filesystem-with-free-space
+DIST_DIR="$PWD/dist-repro" bash scripts/build_cscc_wheel.sh
+```
+
+脚本固定 `VLLM_TARGET_DEVICE=rocm`、默认 `MAX_JOBS=16`，并在一个新的空
+`BUILD_BASE` 中构建。因此旧 `build/` 内的 `.pyc`、已删除模块或旧 native
+binary 不会混入 wheel。默认临时 build tree 在退出时删除。
+
+如需保留 build tree 做运行时检查，传入一个尚不存在的路径：
+
+```bash
+MAX_JOBS=16 \
+BUILD_BASE=/path/to/new-build-tree \
+DIST_DIR=/path/to/dist \
 bash scripts/build_cscc_wheel.sh
 ```
 
-脚本只使用预装环境，默认：
+为防止污染，显式 `BUILD_BASE` 已存在时脚本会失败，不会复用。
 
-- `MAX_JOBS=16`
-- `VLLM_TARGET_DEVICE=rocm`
-- 输出目录为仓库内 `dist/`
-
-需要调整构建并行度或输出目录时可以显式覆盖：
+## 强制校验
 
 ```bash
-MAX_JOBS=8 DIST_DIR=/tmp/vllm-dist bash scripts/build_cscc_wheel.sh
+WHEEL="$(find "$PWD/dist-repro" -maxdepth 1 -name 'vllm-*.whl' -print -quit)"
+bash scripts/verify_cscc_repro.sh "$WHEEL"
 ```
 
-## 最终 evidence 记录的原始构建命令
+校验内容包括：
+
+- OpenDAS 基线对象或提交快照关系；
+- 必需优化文件、profile SHA-256、5 个 validators 和 5 个结果；
+- Python/shell 语法和补丁格式；
+- 已否决 GEMV/SwiGLU 实验不存在；
+- wheel 包含 `_rocm_C` 和冻结 profile；
+- wheel 不含 `.pyc`、`__pycache__` 或已删除实验模块。
+
+## 安装与导入
 
 ```bash
-python3 setup.py build_py --force
-MAX_JOBS=16 python3 setup.py bdist_wheel --dist-dir <dist>
+python3 -m pip install --force-reinstall --no-deps "$WHEEL"
+python3 - <<'PY'
+import torch
+import vllm
+import vllm._rocm_C
+
+assert vllm.__version__ == "0.18.1"
+assert hasattr(torch.ops._rocm_C, "qwen35_bf16_gemv")
+assert not hasattr(torch.ops._rocm_C, "LLMM1Strided")
+print("vLLM and qwen35_bf16_gemv: OK")
+PY
 ```
 
-原始成功构建由 setup 自动识别 ROCm。提交的一键复现脚本另行显式设置
-`VLLM_TARGET_DEVICE=rocm`，用于在统一评测容器中消除目标设备歧义；这不是
-对历史 evidence 命令的改写。
-
-## 安装
-
-```bash
-python3 -m pip install --force-reinstall --no-deps \
-  dist/vllm-0.18.1+das.dtk2604-cp310-cp310-linux_x86_64.whl
-```
-
-使用 `--no-deps` 是为了保留评测容器预装的定制依赖。
-
-## 构建验证与历史产物
-
-```text
-vllm-0.18.1+das.dtk2604-cp310-cp310-linux_x86_64.whl
-H10-only submission build SHA256
-fe8ceeec1634db072b179ba88f364e489640ea246eef5aab8a0487253511307a
-```
-
-该 SHA 是 H10-only 阶段的历史闭环产物，不是本次合并源码的产物标识。本次
-合并源码已于 2026-07-15 使用本页一键脚本完成干净构建，随后通过组委会平台
-评测；最终 wheel 不提交到 GitLab，评测机应从本仓库源码重新编译。对应源码
-哈希见
-`evidence/manifests/repo_source.sha256` 和
-`evidence/manifests/h10_only_submission.sha256`。
-
-## 构建后检查
-
-```bash
-python3 -m pip show vllm
-sha256sum dist/vllm-*.whl
-```
-
-预期版本为 `0.18.1+das.dtk2604`。安装完成后使用组委会提供且未修改的
-`start_vllm.sh`、`run_throughput.sh` 和 `run_accuracy.sh` 进行评测。启动前
-先执行 `source scripts/cscc_gfx936_env.sh`；变量作用见 `ENVIRONMENT.md`。
-
-本仓库记录的是初赛单卡 gfx936 配置。决赛若发布多卡、拓扑或启动参数的新
-要求，应以组委会决赛文档为准重新验证，不能从“已晋级”推断多卡配置已覆盖。
+`--no-deps` 是必要的：它保留评测镜像内经过配套验证的定制依赖。

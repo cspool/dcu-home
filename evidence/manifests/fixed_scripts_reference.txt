@@ -1,8 +1,7 @@
-External evaluation script hash references.
-These scripts are supplied by the evaluation platform and are intentionally
-not included in this source repository. This file is provenance only; do not
-run sha256sum -c against it inside this repository.
+External evaluation script hash references used for the final repro-minimal gate.
+The scripts are supplied outside this source repository; this file is
+provenance only and is not a sha256sum -c manifest for the checkout.
 
-adf0cf91266745b37df916926c7d495ec79f00a11be653c219d1d5df4d93c681  run_throughput.sh
+91b72cfca61994c38f302d3735b3ab7f85481939364876bc1ce2b6496820749e  run_throughput.sh
 2e641672a45ac96318c2118df8df4dae2babf87c16afd49cbe4b037ff9beed4e  run_accuracy.sh
-7c3e8c5ecdf02109e02af8c3b5ba05050b26339c7f50869b5288eea359364fad  start_vllm.sh
+6f794f30e5c031a4d62ff8cc2ecaaa35162e79c23de897a023180ae70cc17f97  start_vllm.sh

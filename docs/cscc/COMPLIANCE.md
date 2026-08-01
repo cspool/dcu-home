@@ -1,128 +1,65 @@
-# 提交完整性与合规说明
+# 提交边界与禁止项审计
 
-## 官方提交要求映射
+## 未改变的评测资产
 
-| 要求 | 本仓库材料 |
-| --- | --- |
-| 第12条：完整源码与平台编译 | `vllm/`、`csrc/`、`cmake/`、`setup.py`、`pyproject.toml`、`scripts/build_cscc_wheel.sh`、`BUILD.md` |
-| 第13条：逐项环境变量、取值、用途 | `ENVIRONMENT.md`、`scripts/cscc_gfx936_env.sh` |
-| 第14条：路线、贡献、汇总与性能对比 | `docs/cscc/OPTIMIZATION.md`、`docs/cscc/RESULTS.md` |
-| 第15条：平台运行与第三方披露 | README 顶部、`THIRD_PARTY_NOTICES.md`、`LICENSE` |
+本仓库不包含、也不修改：
 
-截至 2026-07-15，当前提交已通过组委会平台评测并进入决赛，证明本阶段平台
-构建/运行/评测链路已接受。本文不伪造或推断平台未公布的详细分数；本地性能
-证据单独标注在 `RESULTS.md`。
+- Qwen3.5-27B 权重、tokenizer、chat template；
+- throughput/accuracy 数据集；
+- 组委会的 `start_vllm.sh`、`run_throughput.sh`、`run_accuracy.sh`；
+- 单请求调度边界、temperature 或输出长度；
+- 评分公式和 accuracy 后处理。
 
-## 最终候选源码
+外部脚本哈希只作 provenance 记录，不把脚本复制进提交源码。
 
-以下 15 个文件构成当前提交相对上游基线的累计核心源码锚点；其中
-`setup.py` 已包含 H10-only profile package-data：
+## 当前优化未使用
 
-1. `csrc/rocm/ops.h`
-2. `csrc/rocm/skinny_gemms.cu`
-3. `csrc/rocm/torch_bindings.cpp`
-4. `setup.py`
-5. `vllm/_custom_ops.py`
-6. `vllm/model_executor/layers/fla/ops/fused_recurrent.py`
-7. `vllm/model_executor/layers/utils.py`
-8. `vllm/model_executor/models/qwen3_next.py`
-9. `vllm/platforms/rocm.py`
-10. `vllm/v1/attention/backends/gdn_attn.py`
-11. `vllm/v1/attention/backends/rocm_aiter_unified_attn.py`
-12. `vllm/v1/attention/ops/rocm_aiter_unified_attention_gqa6.py`
-13. `vllm/v1/attention/ops/rocm_page784_split_attention.py`
-14. `vllm/v1/worker/gpu_model_runner.py`
-15. `vllm/version.py`
+- speculative decoding、draft/MTP/辅助模型；
+- prefix cache 或跨请求结果复用；
+- 量化、权重重排持久化、模型权重修改；
+- 剪枝、layer/head/channel/token 跳过、early exit；
+- prompt 内容、数据集名称或样本答案特判；
+- scheduler/batch 逻辑修改；
+- 在线 autotune 或未记录的 hipBLASLt solution；
+- 多卡、TP=2 或 DP=2 配置。
 
-第 13 项是 page784 split/merge wrapper，第 14 项包含连续 M-RoPE 传输修复，
-均已正式纳入本提交。运行：
+完整 vLLM 上游源码仍包含通用 `spec_decode` 模块；模块存在不表示正式服务
+启用。运行时日志必须明确 `speculative_config=None`。
 
-```bash
-sha256sum -c evidence/manifests/repo_source.sha256
-```
+## 数值语义
 
-应得到 15 项 `OK`。
+page784/GQA6、GDN 和 GEMV 会改变浮点归约排布，但仍计算完整 causal
+attention、完整 token/head/layer 和相同权重。没有近似注意力、token 丢弃或
+提前停止。精度以固定 110 条评测和生成文本回归门禁验证，不以 kernel 单测
+替代端到端证据。
 
-H10-only 新增/修改 `.gitignore`、`setup.py`、
-`vllm/v1/worker/gpu_worker.py`，并新增：
+## Fail-closed 范围
 
-- `vllm/platforms/rocm_tunableop.py`
-- `vllm/platforms/tunable_profiles/gfx936_qwen3_5_27b_bf16_tn_m4096.csv`
-- `scripts/cscc_gfx936_env.sh`
+- Attention：gfx936、BF16、head256、GQA6、page784、causal prefill。
+- GDN T4096：gfx936、BF16、Q/K/V/head layout、int32 metadata、单序列。
+- GEMV：BF16、单 token、连续/对齐、6 个固定 `(M,K)` shape。
+- TunableOp：Qwen3.5、BF16、4096 chunk、TP/PP/PCP/DP=1、冻结工具链。
+- 静态编译：同上，且 `speculative_config is None`。
 
-增量哈希由下列命令校验：
+非目标 attention/GDN/GEMM 使用上游路径；TunableOp 配置不一致则拒绝启动，
+防止带着未知 profile 进入正式评测。
 
-```bash
-sha256sum -c evidence/manifests/h10_only_submission.sha256
-```
+## 仓库卫生
 
-## 未修改的评测资产
+提交不应包含：
 
-本仓库不包含且没有修改：
+- `build/`、`dist/`、wheel、native binary；
+- `.pyc`、`__pycache__`、旧实验模块；
+- 模型权重、测试数据、prediction/result JSON、服务日志；
+- `.env`、token、credential、私钥。
 
-- 官方 Qwen3.5-27B BF16 权重；
-- 官方 tokenizer 和 chat template；
-- 固定 `start_vllm.sh`；
-- 固定 `run_throughput.sh`；
-- 固定 `run_accuracy.sh`；
-- 官方 throughput/accuracy 数据集；
-- 固定服务参数和单请求调度边界。
+`scripts/build_cscc_wheel.sh` 在新空 build tree 中构建；
+`scripts/verify_cscc_repro.sh <wheel>` 强制检查 wheel 没有从旧 build tree
+继承残留。
 
-对应固定脚本哈希记录在
-`evidence/manifests/fixed_scripts_reference.txt`。它是评测平台外部脚本
-的引用记录，不是可在本仓库执行 `sha256sum -c` 的清单。
+## 第三方边界
 
-## 禁止项审计
-
-完整 vLLM 源码保留上游的通用能力；以下结论专指本次相对 OpenDAS 基线的
-优化改动和最终评测配置：
-
-- 最终候选改动不含 H10.10 K6144 pair-reduce gate 或 ABI marker；
-- 最终候选改动不含 H10.9 强制 hipBLAS backend 切换；
-- 本次改动未新增模型权重持久化量化、重排或跨样本结果缓存；
-- 本次改动不含结构化/非结构化剪枝、层/通道/head/token 跳过或 early exit；
-- 正式配置不启用 speculative decoding、draft/MTP/辅助模型；完整 vLLM 中的
-  上游通用模块不等于本提交启用了这些禁用能力；
-- 最终评测未启用 prefix cache；
-- 本次改动未新增 prompt/数据集特判；
-- page784 路径仅按设备、dtype、GQA/head、cache block 和张量 shape gate，
-  不读取请求内容或数据集标识；
-- 上游 scheduler 源码随完整项目提交，但本次优化未修改 scheduler/batch
-  文件或评测边界；
-- H10-only 环境变量全部公开记录在 `ENVIRONMENT.md` 和
-  `scripts/cscc_gfx936_env.sh`；没有隐藏性能开关。
-- page784/GQA6 的归约排布变化不修改权重、模型结构、causal mask、采样参数
-  或输出接口；完整 token/head/layer 计算均保留。
-
-## 仓库排除项
-
-提交中不应出现：
-
-- `build/`、`dist/`、`.deps/`、`*.egg-info/`
-- `*.whl`、`*.so`
-- `*.safetensors`、`*.pt`、`*.pth`、`*.onnx`、`*.gguf`
-- 模型权重、原始 benchmark/accuracy 输出或 goal_runs
-- `debug_info/`、`debug_infos/`、服务日志、prediction/result JSON 和字节码
-- `.env`、`config.env`、credential、token、私钥
-
-预编译产物不能替代完整源码。审计曾发现历史开发证据目录包含 460 个日志、
-预测/结果文件和 trace；这些文件不参与构建或运行，已从当前提交树删除并加入
-`.gitignore`。为避免破坏已通过评测提交的可追溯性，没有改写 Git 历史；当前
-HEAD 的评测 checkout 不再包含这些产物。
-
-## 已知格式项
-
-`vllm/version.py` 第 15、16 行包含最高分冻结源码已有的两处尾随空格。
-为保持与完整 full/accuracy 测试源码逐字节一致，本提交原样保留；它不影响
-Python 语义、编译或运行。除这两处外，冻结源码差分没有其他
-`git diff --check` 问题。
-
-## 提交前验证
-
-1. baseline 15 项源码和 H10-only 增量哈希全部通过；
-2. GQA6、page784 wrapper、MRoPE runner、TunableOp loader/profile 均被 Git 跟踪；
-3. 构建脚本 `bash -n`、Python 语法检查和官方容器源码构建通过；
-4. 当前 checkout 无模型、wheel、native binary、测试数据、调试输出或凭据；
-5. README 与优化说明顶部均包含第三方声明，FlashAttention API 也已披露；
-6. Git remote URL 不含用户名或密码；
-7. 推送后复核远端 `pra` 与本地远程容器 commit SHA 一致。
+项目沿用 Apache License 2.0。GQA6 路径参考 AMD AITER，page784 wrapper
+调用平台 FlashAttention API，GDN 代码包含 flash-linear-attention 来源。
+精确版本、许可证和改动边界见根目录
+`THIRD_PARTY_NOTICES.md`；不把第三方 kernel 表述为自研成果。

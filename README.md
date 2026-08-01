@@ -1,126 +1,73 @@
-> [!IMPORTANT]
-> ## 第三方开源声明
->
-> 本作品基于第三方开源项目 **vLLM 0.18.1** 二次开发；本次优化的直接
-> 代码基线是 OpenDAS `vllm_cscc` fork 的
-> `fa718036bdb9dfd80a872b86c8ac16c9d02bfd31` commit
->（<http://developer.sourcefind.cn/codes/OpenDAS/vllm_cscc.git>）。
-> GitHub vLLM（<https://github.com/vllm-project/vllm>）是原始第三方项目，
-> 许可证为 Apache License 2.0；本仓库保留 `LICENSE`、源码版权头和
-> 原始 README。
->
-> gfx936/GQA6 attention 特化参考 AMD AITER
-> `aiter/ops/triton/unified_attention.py`，验证版本为
-> `0.1.dev1+g9daa788.d20260401`；page784 wrapper 调用平台预装的
-> FlashAttention `2.8.3+das.opt1.dtk2604.torch2100.20260330.g3f0061`
-> paged/contiguous API；GDN recurrent 源码包含 flash-linear-attention 的
-> MIT 许可代码。来源、版本、许可证、调用/改动边界见
-> [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。
+# PRA2026-BH408：Qwen3.5-27B 单卡 ROCm 推理优化
 
-# PRA2026-BH408：Qwen3.5-27B 单卡推理优化
+本仓库是 vLLM 0.18.1 的完整源码提交。直接代码基线为 OpenDAS
+`vllm_cscc` 的
+`fa718036bdb9dfd80a872b86c8ac16c9d02bfd31`；第三方来源、版本和许可证见
+[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。
 
-这是面向 2026 智能计算创新设计赛的完整源码提交。**截至 2026-07-15，当前
-提交已通过组委会平台评测并进入决赛。** 平台结论是晋级状态的权威依据；下文
-吞吐和 accuracy 数字均标明为历史或本地复核数据，不冒充平台公布成绩。
+当前 `repro-minimal` 分支在不改变最高性能版本
+`pra2026-bh408` 的前提下，删除了不可达和已否决实验，收紧了专用算子接口，
+并重建了可从干净 checkout 复现的构建与校验链路。
 
-已完成 full×3、accuracy 和 SLA 闭环的历史计分锚点为
-**H11.5 + H10.8**；当前提交在其上加入 H10-only ROCm TunableOp profile，
-以及 page784 later-prefill、低 live-range GQA6、row2 K=5120 GEMV 和连续
-M-RoPE 传输优化。仓库交付完整源码，不是仅包含差分或预编译 wheel。
+## 当前结论
 
-## 结果与证据层级
+- 目标：gfx936、Qwen3.5-27B、BF16、单卡、TP/PP/DP=1。
+- 固定服务参数：`max_num_batched_tokens=4096`、`max_num_seqs=128`。
+- 不量化，不裁剪，不使用 prefix cache，不使用投机解码。
+- 重构前权威全量结果：性能分 `91.66283719585402`，精度系数 `1.00`，
+  110/110 精度请求完成。
+- 重构后的三档最差样本门禁：22/22 成功，输入长度、输出长度和生成文本
+  SHA-256 逐条一致；相对重构前加权请求速率 `-0.072%`、TPOT
+  `-0.146%`，属于运行波动。
+- 重构后 clean wheel 的全量复测：性能分 `91.67227258084725`，精度
+  110/110、`K=1.00`；相对重构前仅 `+0.0103%`，按性能等价而非新增收益
+  解释。
 
-- 官方平台：当前提交已通过评测并进入决赛；本文不记录未获提供的官方分数。
-- 提交后本地固定 `run_throughput.sh all`：`150/150` 请求成功，三档吞吐为
-  `21.1640098344 / 18.5924670551 / 15.5822543127 tok/s`；按 `K=1`
-  本地重建综合分为 `91.1674076938`，仅作为复核数据。
-- 相对下列历史 full×3 均值，三档分别为
-  `+8.051372% / +8.771758% / +19.825859%`；TTFT/TPOT SLA 通过。
-- 合并候选提交前 fixed accuracy 为
-  `77.9597 / 32.8749 / 100 / 100`，`K=1.00`；平台最终评测已通过。
+最终全量复测结果记录在 [docs/cscc/RESULTS.md](docs/cscc/RESULTS.md)。
 
-历史 H11.5 + H10.8 闭环如下：
-
-- 三次 full 综合分：`88.490349137758 / 88.578483694186 / 88.576533680101`
-- 三轮均分：`88.5484555040153`
-- 相对上一最佳 R24 的 20/50/30 加权吞吐提升：`+10.2361569769%`
-- 固定 accuracy：`77.96 / 33.05 / 100.00 / 100.00`，`K=1.00`
-- 三轮共 `450/450` 请求成功，TTFT/TPOT SLA 全部通过
-- H11.5+H10.8 full 计分 wheel SHA256：
-  `03568ba87ff64fd0a8aade299026d7ee78cbf40d9c1ed5884fb584250b2031f2`
-- H10-only 本次 661 秒 all3：三档均为正，20/50/30 加权
-  `+0.939469%`，27/27、输出长度和全文 hash exact
-- H10-only fixed accuracy：`77.96 / 32.95 / 100 / 100`，`K=1.00`
-- H10-only 独立重建 wheel SHA256：
-  `fe8ceeec1634db072b179ba88f364e489640ea246eef5aab8a0487253511307a`
-- 最新合并候选使用三条冻结最差样本各测试一次，相对历史当前最佳分别为
-  `+4.697% / +9.522% / +13.611%`
-
-详细测试口径见 [docs/cscc/RESULTS.md](docs/cscc/RESULTS.md)。
-
-## 提交内容
-
-- 完整 vLLM 源码、ROCm custom ops、CMake/Python 构建体系
-- H11.5 wide-causal GQA6 prefill 源码
-- H10.8 gfx936 strided LLMM1 源码
-- H10-only fail-closed TunableOp loader、四行 profile 和 worker 集成
-- page784 `768 + 16` 分解、官方 paged/contiguous attention producer 与
-  FP32 LSE merge wrapper
-- GQA6 逻辑 64-token tile 的 `2×32` 数值子块、row2 K=5120 GEMV 和
-  连续 M-RoPE buffer copy
-- [BUILD.md](BUILD.md)：统一评测容器内的源码编译与安装方法
-- [ENVIRONMENT.md](ENVIRONMENT.md)：工具链和环境变量说明
-- [scripts/cscc_gfx936_env.sh](scripts/cscc_gfx936_env.sh)：H10-only 启动环境
-- [docs/cscc/OPTIMIZATION.md](docs/cscc/OPTIMIZATION.md)：技术路线与贡献
-- [docs/cscc/COMPLIANCE.md](docs/cscc/COMPLIANCE.md)：赛题边界与提交审计
-- [evidence/manifests](evidence/manifests)：精简源码、脚本和历史 wheel 哈希锚点
-- [README_UPSTREAM.md](README_UPSTREAM.md)：vLLM 上游 README
-
-模型权重、tokenizer、固定评测脚本、测试数据、原始 benchmark/accuracy
-输出、调试日志、build 目录和预编译 wheel 不在当前提交树中；它们由评测
-平台提供或只在评测机生成。
-
-## 快速编译
-
-评测容器必须预装指定 DTK/PyTorch/Triton/AITER 环境。不要用公开 PyPI
-requirements 覆盖平台定制包。
+## 一次复现
 
 ```bash
-bash scripts/build_cscc_wheel.sh
-python3 -m pip install --force-reinstall --no-deps dist/vllm-*.whl
+bash scripts/verify_cscc_repro.sh
+
+export TMPDIR=/path/on/a-filesystem-with-free-space
+DIST_DIR="$PWD/dist-repro" bash scripts/build_cscc_wheel.sh
+
+WHEEL="$(find "$PWD/dist-repro" -maxdepth 1 -name 'vllm-*.whl' -print -quit)"
+bash scripts/verify_cscc_repro.sh "$WHEEL"
+python3 -m pip install --force-reinstall --no-deps "$WHEEL"
 ```
 
-构建脚本复现已验证的 `build_py --force` 和 `bdist_wheel` 流程。完整说明
-和精确工具链版本见 [BUILD.md](BUILD.md)。
-
-## 服务与评测
-
-本提交不修改组委会固定的 `start_vllm.sh`、`run_throughput.sh` 或
-`run_accuracy.sh`。安装 wheel 后应直接使用评测平台提供的固定脚本启动
-服务和评测。H10-only 提交版需在启动前执行：
+启动前加载唯一的冻结 TunableOp profile：
 
 ```bash
 source scripts/cscc_gfx936_env.sh
-bash /path/to/testdata/start_vllm.sh
+HIP_VISIBLE_DEVICES=0 vllm serve /path/to/Qwen3.5-27B \
+  --served-model-name Qwen3.5-27B \
+  --port 8001 \
+  --trust-remote-code \
+  --dtype bfloat16 \
+  --tensor-parallel-size 1 \
+  --max-num-seqs 128 \
+  --max-num-batched-tokens 4096 \
+  --gpu-memory-utilization 0.95 \
+  --default-chat-template-kwargs '{"enable_thinking": false}' \
+  --reasoning-parser qwen3 \
+  --enable-auto-tool-choice \
+  --tool-call-parser qwen3_coder
 ```
 
-变量作用、fail-closed 范围及固定默认值见 [ENVIRONMENT.md](ENVIRONMENT.md)。
+不要加入 `--speculative-config`、draft/MTP 模型或 prefix-caching 参数。
 
-## 源码完整性检查
+## 权威材料
 
-以下命令分别校验当前提交的 15 个累计核心源码文件和 H10-only 增量文件：
+- [docs/cscc/CLOSED_BOOK_REPRODUCTION.md](docs/cscc/CLOSED_BOOK_REPRODUCTION.md)：
+  从零构建、启动、验收和故障定位。
+- [BUILD.md](BUILD.md)：工具链和干净 wheel 构建。
+- [ENVIRONMENT.md](ENVIRONMENT.md)：唯一必需环境变量和精确作用域。
+- [docs/cscc/OPTIMIZATION.md](docs/cscc/OPTIMIZATION.md)：保留的优化簇与文件映射。
+- [docs/cscc/RESULTS.md](docs/cscc/RESULTS.md)：性能、精度和重构门禁。
+- [docs/cscc/COMPLIANCE.md](docs/cscc/COMPLIANCE.md)：禁止项与提交边界。
 
-```bash
-sha256sum -c evidence/manifests/repo_source.sha256
-sha256sum -c evidence/manifests/h10_only_submission.sha256
-bash -n scripts/build_cscc_wheel.sh
-source scripts/cscc_gfx936_env.sh
-```
-
-两个检查均应成功。最终候选刻意保留 `vllm/version.py` 中上游累计栈已有的
-两处尾随空格，以维持已测试源码的逐字节哈希；这不影响编译或运行。
-
-## 许可证
-
-主项目沿用 Apache License 2.0，见 [LICENSE](LICENSE)。第三方来源及 MIT
-许可文本见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。
+仓库不包含模型权重、评测数据、预编译 wheel、服务日志或结果 JSON。上游
+README 保存在 [README_UPSTREAM.md](README_UPSTREAM.md)。
