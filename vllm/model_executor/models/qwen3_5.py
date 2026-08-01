@@ -26,6 +26,7 @@
 
 import typing
 from collections.abc import Callable, Iterable
+from functools import cache
 
 import torch
 from einops import rearrange
@@ -69,6 +70,7 @@ from vllm.transformers_utils.configs.qwen3_5_moe import (
     Qwen3_5MoeConfig,
     Qwen3_5MoeTextConfig,
 )
+from vllm.triton_utils import tl, triton
 
 from .interfaces import (
     HasInnerState,
@@ -110,6 +112,112 @@ from .utils import (
 logger = init_logger(__name__)
 
 
+@cache
+def _is_gfx936_device(device_index: int) -> bool:
+    try:
+        properties = torch.cuda.get_device_properties(device_index)
+    except (AssertionError, RuntimeError):
+        return False
+    return getattr(properties, "gcnArchName", "").split(":", 1)[0] == "gfx936"
+
+
+@triton.jit
+def _qwen35_gdn_strided_z_rmsnorm_kernel(
+    x,
+    z,
+    weight,
+    output,
+    num_rows,
+    x_row_stride,
+    z_token_stride,
+    z_head_stride,
+    out_row_stride,
+    eps,
+    NUM_HEADS: tl.constexpr,
+    HEAD_DIM: tl.constexpr,
+    BLOCK_N: tl.constexpr,
+    ROWS_PER_BLOCK: tl.constexpr,
+):
+    row = tl.program_id(0) * ROWS_PER_BLOCK + tl.arange(0, ROWS_PER_BLOCK)
+    token = row // NUM_HEADS
+    head = row - token * NUM_HEADS
+    cols = tl.arange(0, BLOCK_N)
+    mask = (row[:, None] < num_rows) & (cols[None, :] < HEAD_DIM)
+    x_offsets = row[:, None] * x_row_stride + cols[None, :]
+    z_offsets = (
+        token[:, None] * z_token_stride
+        + head[:, None] * z_head_stride
+        + cols[None, :]
+    )
+    values = tl.load(x + x_offsets, mask=mask, other=0.0).to(tl.float32)
+    variance = tl.sum(values * values, axis=1) / HEAD_DIM
+    rstd = tl.rsqrt(variance + eps)
+    norm_weight = tl.load(
+        weight + cols, mask=cols < HEAD_DIM, other=0.0
+    ).to(tl.float32)
+    gate = tl.load(z + z_offsets, mask=mask, other=0.0).to(tl.float32)
+    result = values * rstd[:, None] * norm_weight[None, :]
+    result *= gate * tl.sigmoid(gate)
+    out_offsets = row[:, None] * out_row_stride + cols[None, :]
+    tl.store(output + out_offsets, result, mask=mask)
+
+
+def _qwen35_gdn_strided_z_rmsnorm(
+    x: torch.Tensor,
+    z: torch.Tensor,
+    weight: torch.Tensor,
+    eps: float,
+) -> torch.Tensor:
+    output = torch.empty_like(x)
+    num_rows = x.shape[0] * x.shape[1]
+    rows_per_block = 16
+    _qwen35_gdn_strided_z_rmsnorm_kernel[
+        (triton.cdiv(num_rows, rows_per_block),)
+    ](
+        x,
+        z,
+        weight,
+        output,
+        num_rows,
+        x.stride(1),
+        z.stride(0),
+        z.stride(1),
+        output.stride(1),
+        eps,
+        NUM_HEADS=x.shape[1],
+        HEAD_DIM=x.shape[2],
+        BLOCK_N=triton.next_power_of_2(x.shape[2]),
+        ROWS_PER_BLOCK=rows_per_block,
+        num_warps=4,
+    )
+    return output
+
+
+def _can_use_qwen35_gdn_strided_z_rmsnorm(
+    x: torch.Tensor,
+    z: torch.Tensor,
+    weight: torch.Tensor,
+) -> bool:
+    return (
+        x.device.type == "cuda"
+        and x.device.index is not None
+        and _is_gfx936_device(x.device.index)
+        and x.ndim == 3
+        and z.ndim == 3
+        and x.shape[1] == 48
+        and x.shape[2] == 128
+        and z.shape[1] == 48
+        and z.shape[2] == 128
+        and weight.shape == (128,)
+        and x.dtype == torch.bfloat16
+        and z.dtype == torch.bfloat16
+        and weight.dtype == torch.bfloat16
+        and x.is_contiguous()
+        and z.stride() == (16384, 128, 1)
+        and weight.is_contiguous()
+    )
+
+
 class Qwen3_5ProcessingInfo(Qwen3VLProcessingInfo):
     def get_hf_config(self):
         return self.ctx.get_hf_config(Qwen3_5Config)
@@ -121,6 +229,9 @@ class Qwen3_5MoeProcessingInfo(Qwen3VLProcessingInfo):
 
 
 class Qwen3_5GatedDeltaNet(Qwen3NextGatedDeltaNet):
+    defer_core_attn_output_zeroing = True
+    warmup_gfx936_gdn_t4096 = True
+
     def fix_query_key_value_ordering(
         self,
         mixed_qkvz: torch.Tensor,
@@ -194,9 +305,10 @@ class Qwen3_5GatedDeltaNet(Qwen3NextGatedDeltaNet):
         # ============================================================
         # Part 2: Core Attention (Custom Op)
         # ============================================================
-        # Note: we should not use torch.empty here like other attention backends,
-        # see discussions in https://github.com/vllm-project/vllm/pull/28182
-        core_attn_out = torch.zeros(
+        # The Qwen3.5 specialization defers zeroing until _forward_core has
+        # written the real-token prefix, then clears only the untouched padded
+        # tail. Other Qwen3Next users retain their existing allocation policy.
+        core_attn_out = torch.empty(
             (num_tokens, self.num_v_heads // self.tp_size, self.head_v_dim),
             dtype=hidden_states.dtype,
             device=hidden_states.device,
@@ -213,12 +325,22 @@ class Qwen3_5GatedDeltaNet(Qwen3NextGatedDeltaNet):
         # ============================================================
         # Part 3: Output Projection
         # ============================================================
-        z_shape_og = z.shape
-        # Reshape input data into 2D tensor
-        core_attn_out = core_attn_out.reshape(-1, core_attn_out.shape[-1])
-        z = z.reshape(-1, z.shape[-1])
-        core_attn_out = self.norm(core_attn_out, z)
-        core_attn_out = core_attn_out.reshape(z_shape_og)
+        if _can_use_qwen35_gdn_strided_z_rmsnorm(
+            core_attn_out, z, self.norm.weight
+        ):
+            core_attn_out = _qwen35_gdn_strided_z_rmsnorm(
+                core_attn_out,
+                z,
+                self.norm.weight,
+                self.norm.eps,
+            )
+        else:
+            z_shape_og = z.shape
+            # Reshape input data into 2D tensor
+            core_attn_out = core_attn_out.reshape(-1, core_attn_out.shape[-1])
+            z = z.reshape(-1, z.shape[-1])
+            core_attn_out = self.norm(core_attn_out, z)
+            core_attn_out = core_attn_out.reshape(z_shape_og)
         core_attn_out = rearrange(core_attn_out, "... h d -> ... (h d)")
         output[:num_tokens], _ = self.out_proj(core_attn_out)
 

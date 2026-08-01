@@ -2,17 +2,18 @@
 
 ## 结论
 
-H11.5 + H10.8 累计优化不依赖新增的性能控制环境变量，两项优化均由源码中的
-设备、dtype 和精确 shape gate 自动命中。当前提交新增的 H10-only rocBLAS
-profile 是显式 opt-in；评测启动前必须 source `scripts/cscc_gfx936_env.sh`。
-page784 split/merge、低 live-range GQA6、row2 GEMV 和连续 M-RoPE 路径同样
-由源码 gate 自动选择，不新增隐藏环境变量。
+累计优化不依赖新增的通用性能开关；设备、dtype、模型结构和 shape gate
+均在源码中精确检查。rocBLAS TunableOp profile 仍是显式 opt-in，评测启动前
+必须 source `scripts/cscc_gfx936_env.sh`。page784 split/merge、GDN kernel、
+连续 M-RoPE 路径和固定 4096-token 编译 shape 均由源码 gate 自动选择，
+不新增隐藏环境变量。
 
 尤其是：
 
 - H10.8 不要求设置 `VLLM_ROCM_USE_SKINNY_GEMM`；
-- 不全局强制切换 BLAS backend；H10-only 只加载四个 exact TunableOp key；
-- 不使用 H10.10 K6144 或任何实验性开关；
+- 不全局强制切换 BLAS backend；只加载五个 exact 4096-token prefill
+  TunableOp key；
+- K6144 key 已经独立验证并冻结进 profile，不进行在线 tuning；
 - 不硬编码 `HIP_VISIBLE_DEVICES` 或 `CUDA_VISIBLE_DEVICES`。
 
 ## H10-only 运行变量
@@ -25,7 +26,7 @@ bash /path/to/testdata/start_vllm.sh
 | 变量 | 固定值 | 作用 |
 | --- | --- | --- |
 | `VLLM_ROCM_TUNABLEOP_PROFILE` | `gfx936_qwen3_5_27b_bf16_tn_m4096` | 选择唯一允许的 profile |
-| `VLLM_ROCM_TUNABLEOP_PROFILE_SHA256` | `41742b4c5d071fdf9085c46ad4ec1743d7e4f410431c05ff39b0e0f293548a0b` | 校验 wheel 内 CSV |
+| `VLLM_ROCM_TUNABLEOP_PROFILE_SHA256` | `169c7b11a0340d9e22405327b5e5667b2aa9e9e8d899bd59e10ca4fb7fb52030` | 校验 wheel 内 CSV |
 | `PYTORCH_TUNABLEOP_ENABLED` | `1` | 启用已加载结果 |
 | `PYTORCH_TUNABLEOP_TUNING` | `0` | 禁止在线 tuning |
 | `PYTORCH_TUNABLEOP_RECORD_UNTUNED` | `0` | 禁止记录未命中项 |
@@ -37,6 +38,18 @@ bash /path/to/testdata/start_vllm.sh
 `max_num_batched_tokens=4096`、单卡 TP/PP/PCP/DP=1 和冻结的
 PyTorch/HIP/gfx936/rocBLAS/hipBLASLt validators；scope、环境、哈希或结果表
 任一漂移都会 fail closed。未 source 脚本时 profile 默认关闭。
+
+## 固定 4096-token 编译 shape
+
+当且仅当运行在 gfx936、Qwen3.5-27B BF16、非 eager、无 speculative、
+`max_num_batched_tokens=4096` 且 TP/PP/DP 均为 1 时，ROCm 平台默认补入
+`compile_sizes=[4096]`。若调用方已显式指定 `compile_sizes`、
+`compile_ranges_endpoints`、其他 backend 或其他编译模式，源码不会覆盖。
+因此官方启动脚本无需增加 `--compilation-config` 参数；服务日志应出现：
+
+```text
+Using the validated 4096-token static compile shape for gfx936 Qwen3.5-27B BF16.
+```
 
 ## 编译变量
 

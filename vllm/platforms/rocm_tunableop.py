@@ -27,7 +27,6 @@ _PROFILE_SHA_ENV: Final = "VLLM_ROCM_TUNABLEOP_PROFILE_SHA256"
 _PROFILE_NAME: Final = "gfx936_qwen3_5_27b_bf16_tn_m4096"
 _PROFILE_FILENAME: Final = f"{_PROFILE_NAME}.csv"
 _OPERATOR: Final = "GemmTunableOp_BFloat16_TN"
-_KNOWN_MISS: Final = "tn_5120_4096_6144_ld_6144_6144_5120"
 _SOLUTION_RE: Final = re.compile(r"Gemm_Rocblas_[1-9][0-9]*\Z")
 _SHA256_RE: Final = re.compile(r"[0-9a-f]{64}\Z")
 
@@ -36,6 +35,7 @@ _EXPECTED_SOLUTIONS: Final = {
     "tn_16384_4096_5120_ld_5120_5120_16384": "Gemm_Rocblas_20981",
     "tn_34816_4096_5120_ld_5120_5120_34816": "Gemm_Rocblas_20981",
     "tn_5120_4096_17408_ld_17408_17408_5120": "Gemm_Rocblas_20979",
+    "tn_5120_4096_6144_ld_6144_6144_5120": "Gemm_Rocblas_20981",
 }
 _EXPECTED_PARAMS: Final = frozenset(_EXPECTED_SOLUTIONS)
 _EXPECTED_VALIDATORS: Final = {
@@ -126,8 +126,8 @@ def _parse_profile(payload: bytes) -> _ParsedProfile:
 
     if validators != _EXPECTED_VALIDATORS:
         raise _fail(f"validator table mismatch: {validators!r}")
-    if len(results) != 4 or {row[1] for row in results} != _EXPECTED_PARAMS:
-        raise _fail("profile must contain exactly the four confirmed explicit keys")
+    if len(results) != 5 or {row[1] for row in results} != _EXPECTED_PARAMS:
+        raise _fail("profile must contain exactly the five confirmed explicit keys")
     return _ParsedProfile(validators=validators, results=tuple(results))
 
 
@@ -254,7 +254,7 @@ def maybe_init_rocm_tunableop(
         api_validators = dict(tunable.get_validators())
         if api_validators != parsed.validators:
             raise _fail(f"runtime validator mismatch: {api_validators!r}")
-        if set(api_results) != set(parsed.results) or len(api_results) != 4:
+        if set(api_results) != set(parsed.results) or len(api_results) != 5:
             raise _fail(f"runtime result mismatch: {api_results!r}")
         if _sha256(path.read_bytes()) != file_sha256:
             raise _fail("profile changed while TunableOp loaded it")
@@ -270,8 +270,8 @@ def maybe_init_rocm_tunableop(
         _assert_api_state(state)
         logger.info(
             "VLLM_ROCM_TUNABLEOP_INIT status=ready device=%s file=%s "
-            "file_sha256=%s validators_sha256=%s rows=4 logical_families=6 "
-            "explicit_families=4 shared_default_families=2 enabled=1 tuning=0 "
+            "file_sha256=%s validators_sha256=%s rows=5 logical_families=6 "
+            "explicit_families=5 shared_explicit_families=2 enabled=1 tuning=0 "
             "record_untuned=0",
             device,
             path,
@@ -292,9 +292,8 @@ def assert_rocm_tunableop_pre_capture(state: RocmTunableOpState) -> None:
     """Fail closed immediately after kernel warmup and before graph capture."""
     _assert_api_state(state)
     logger.info(
-        "VLLM_ROCM_TUNABLEOP_PRE_CAPTURE status=ready profile=%s rows=4 "
-        "expected_hit_keys=4 known_miss_key=%s known_miss_policy=Default "
+        "VLLM_ROCM_TUNABLEOP_PRE_CAPTURE status=ready profile=%s rows=5 "
+        "expected_hit_keys=5 shared_explicit_families=2 "
         "observed_dispatch=external_verbose_canary_required",
         state.profile,
-        _KNOWN_MISS,
     )

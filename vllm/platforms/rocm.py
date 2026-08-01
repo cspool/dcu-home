@@ -628,9 +628,49 @@ class RocmPlatform(Platform):
     @classmethod
     def apply_config_platform_defaults(cls, vllm_config: "VllmConfig") -> None:
         from vllm._aiter_ops import rocm_aiter_ops
-        from vllm.config.compilation import CUDAGraphMode
+        from vllm.config.compilation import CUDAGraphMode, CompilationMode
 
         compilation_config = vllm_config.compilation_config
+        model_config = vllm_config.model_config
+        scheduler_config = vllm_config.scheduler_config
+        parallel_config = vllm_config.parallel_config
+
+        # The competition Qwen3.5-27B workload always schedules 4096-token
+        # chunks.  Preserve user-provided compilation settings, but make that
+        # hot shape static by default for the exact validated ROCm target.
+        hf_config = model_config.hf_text_config if model_config is not None else None
+        if (
+            on_gfx936()
+            and model_config is not None
+            and model_config.architecture == "Qwen3_5ForConditionalGeneration"
+            and model_config.dtype == torch.bfloat16
+            and not model_config.enforce_eager
+            and getattr(hf_config, "hidden_size", None) == 5120
+            and getattr(hf_config, "intermediate_size", None) == 17408
+            and getattr(hf_config, "num_hidden_layers", None) == 64
+            and getattr(hf_config, "num_attention_heads", None) == 24
+            and getattr(hf_config, "num_key_value_heads", None) == 4
+            and getattr(hf_config, "head_dim", None) == 256
+            and getattr(hf_config, "linear_num_key_heads", None) == 16
+            and getattr(hf_config, "linear_num_value_heads", None) == 48
+            and getattr(hf_config, "linear_key_head_dim", None) == 128
+            and getattr(hf_config, "linear_value_head_dim", None) == 128
+            and scheduler_config.max_num_batched_tokens == 4096
+            and parallel_config.tensor_parallel_size == 1
+            and parallel_config.pipeline_parallel_size == 1
+            and parallel_config.data_parallel_size == 1
+            and vllm_config.speculative_config is None
+            and compilation_config.mode in (None, CompilationMode.VLLM_COMPILE)
+            and compilation_config.backend in ("", "inductor")
+            and compilation_config.compile_sizes is None
+            and compilation_config.compile_ranges_endpoints is None
+        ):
+            compilation_config.compile_sizes = [4096]
+            logger.info_once(
+                "Using the validated 4096-token static compile shape for "
+                "gfx936 Qwen3.5-27B BF16."
+            )
+
         is_eager_execution = compilation_config.cudagraph_mode == CUDAGraphMode.NONE
         use_aiter_fused_moe = rocm_aiter_ops.is_fused_moe_enabled()
         use_aiter_rms_norm = rocm_aiter_ops.is_rmsnorm_enabled()

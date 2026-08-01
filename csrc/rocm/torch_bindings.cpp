@@ -25,6 +25,10 @@ TORCH_LIBRARY_EXPAND(TORCH_EXTENSION_NAME, rocm_ops) {
       "int num_threads) -> Tensor");
   rocm_ops.impl("LLMM1Strided", torch::kCUDA, &LLMM1Strided);
 
+  rocm_ops.def(
+      "LLMM1StridedSilu(Tensor in_a, Tensor in_b) -> Tensor");
+  rocm_ops.impl("LLMM1StridedSilu", torch::kCUDA, &LLMM1StridedSilu);
+
   // Custom gemm op for skinny matrix-matrix multiplication
   rocm_ops.def(
       "wvSplitK(Tensor in_a, Tensor in_b, Tensor? in_bias, int CuCount) -> "

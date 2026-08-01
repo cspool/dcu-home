@@ -16,7 +16,13 @@ from vllm.triton_utils import tl, triton
 
 from .index import prepare_chunk_indices
 from .op import make_tensor_descriptor
-from .utils import input_guard, is_amd, is_tma_supported
+from .utils import (
+    GFX936_GDN_T4096_COMPILER_OPTIONS,
+    input_guard,
+    is_amd,
+    is_tma_supported,
+    unwrap_triton_jit,
+)
 
 FLA_TRIL_PRECISION = os.environ.get("FLA_TRIL_PRECISION", "ieee")
 ALLOWED_TRIL_PRECISIONS = ["ieee", "tf32"] if is_amd else ["ieee", "tf32", "tf32x3"]
@@ -503,11 +509,17 @@ def merge_16x16_to_64x64_inverse_kernel(
         )
 
 
+_merge_16x16_to_64x64_inverse_jit = unwrap_triton_jit(
+    merge_16x16_to_64x64_inverse_kernel
+)
+
+
 @input_guard
 def solve_tril(
     A: torch.Tensor,
     cu_seqlens: torch.Tensor | None = None,
     output_dtype: torch.dtype = torch.float,
+    use_gfx936_t4096_config: bool = False,
 ) -> torch.Tensor:
     """
     Compute the inverse of the matrix I + A
@@ -542,7 +554,7 @@ def solve_tril(
     elif BT == 64:
         merge_fn = merge_16x16_to_64x64_inverse_kernel
 
-    merge_fn[NT, B * H](
+    launch_kwargs = dict(
         A=A,
         Ai=Ai,
         cu_seqlens=cu_seqlens,
@@ -553,4 +565,13 @@ def solve_tril(
         USE_TMA=is_tma_supported,
         DOT_PRECISION=FLA_TRIL_PRECISION,
     )
+    if use_gfx936_t4096_config and BT == 64:
+        _merge_16x16_to_64x64_inverse_jit[NT, B * H](
+            **launch_kwargs,
+            IS_VARLEN=True,
+            num_warps=2,
+            **GFX936_GDN_T4096_COMPILER_OPTIONS,
+        )
+    else:
+        merge_fn[NT, B * H](**launch_kwargs)
     return Ai

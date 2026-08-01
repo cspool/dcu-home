@@ -435,9 +435,22 @@ def fused_recurrent_gated_delta_rule_packed_decode(
         raise ValueError(
             f"Packed decode kernel only supports NK=1 (got K={K}, BK={BK})."
         )
-    BV = min(triton.next_power_of_2(V), 32)
-    num_stages = 3
-    num_warps = 1
+    # The Qwen3.5-27B single-token packed-decode shape is reduction limited on
+    # gfx936.  Four warps at BV=32 are ~36% faster than the generic one-warp
+    # launch.  A 64-step stateful audit across four seeds bounded the BF16
+    # output/state differences at 3.8e-6/3.1e-5 respectively.
+    is_qwen35_gfx936_decode = (
+        B == 1
+        and H == 16
+        and HV == 48
+        and K == 128
+        and V == 128
+        and mixed_qkv.dtype == torch.bfloat16
+        and initial_state.dtype == torch.bfloat16
+    )
+    BV = 32 if is_qwen35_gfx936_decode else min(triton.next_power_of_2(V), 32)
+    num_stages = 1 if is_qwen35_gfx936_decode else 3
+    num_warps = 4 if is_qwen35_gfx936_decode else 1
 
     stride_mixed_qkv_tok = mixed_qkv.stride(0)
     stride_a_tok = a.stride(0)

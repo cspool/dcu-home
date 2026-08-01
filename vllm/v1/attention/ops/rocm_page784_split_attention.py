@@ -71,7 +71,7 @@ def _pack_page784_residual_kernel(
 
 
 @triton.jit
-def _merge_three_attn_states_kernel(
+def _merge_three_attn_states_rows_kernel(
     output,
     output_0,
     lse_0,
@@ -79,6 +79,7 @@ def _merge_three_attn_states_kernel(
     lse_1,
     output_2,
     lse_2,
+    num_rows,
     out_token_stride,
     out_head_stride,
     out_dim_stride,
@@ -97,17 +98,33 @@ def _merge_three_attn_states_kernel(
     lse1_token_stride,
     lse2_head_stride,
     lse2_token_stride,
+    NUM_HEADS: tl.constexpr,
     HEAD_DIM: tl.constexpr,
     BLOCK_DIM: tl.constexpr,
+    BLOCK_ROWS: tl.constexpr,
 ):
-    token = tl.program_id(0)
-    head = tl.program_id(1)
+    row = tl.program_id(0) * BLOCK_ROWS + tl.arange(0, BLOCK_ROWS)
+    row_mask = row < num_rows
+    token = row // NUM_HEADS
+    head = row - token * NUM_HEADS
     dim = tl.arange(0, BLOCK_DIM)
     dim_mask = dim < HEAD_DIM
 
-    score_0 = tl.load(lse_0 + head * lse0_head_stride + token * lse0_token_stride)
-    score_1 = tl.load(lse_1 + head * lse1_head_stride + token * lse1_token_stride)
-    score_2 = tl.load(lse_2 + head * lse2_head_stride + token * lse2_token_stride)
+    score_0 = tl.load(
+        lse_0 + head * lse0_head_stride + token * lse0_token_stride,
+        mask=row_mask,
+        other=-float("inf"),
+    )
+    score_1 = tl.load(
+        lse_1 + head * lse1_head_stride + token * lse1_token_stride,
+        mask=row_mask,
+        other=-float("inf"),
+    )
+    score_2 = tl.load(
+        lse_2 + head * lse2_head_stride + token * lse2_token_stride,
+        mask=row_mask,
+        other=-float("inf"),
+    )
     maximum = tl.maximum(score_0, tl.maximum(score_1, score_2))
     exp_0 = tl.exp(score_0 - maximum)
     exp_1 = tl.exp(score_1 - maximum)
@@ -117,29 +134,39 @@ def _merge_three_attn_states_kernel(
     weight_1 = exp_1 / denominator
     weight_2 = exp_2 / denominator
 
+    token_2d = token[:, None]
+    head_2d = head[:, None]
+    dim_2d = dim[None, :]
+    mask_2d = row_mask[:, None] & dim_mask[None, :]
     offset_0 = (
-        token * state0_token_stride
-        + head * state0_head_stride
-        + dim * state0_dim_stride
+        token_2d * state0_token_stride
+        + head_2d * state0_head_stride
+        + dim_2d * state0_dim_stride
     )
     offset_1 = (
-        token * state1_token_stride
-        + head * state1_head_stride
-        + dim * state1_dim_stride
+        token_2d * state1_token_stride
+        + head_2d * state1_head_stride
+        + dim_2d * state1_dim_stride
     )
     offset_2 = (
-        token * state2_token_stride
-        + head * state2_head_stride
-        + dim * state2_dim_stride
+        token_2d * state2_token_stride
+        + head_2d * state2_head_stride
+        + dim_2d * state2_dim_stride
     )
-    value_0 = tl.load(output_0 + offset_0, mask=dim_mask).to(tl.float32)
-    value_1 = tl.load(output_1 + offset_1, mask=dim_mask).to(tl.float32)
-    value_2 = tl.load(output_2 + offset_2, mask=dim_mask).to(tl.float32)
-    merged = value_0 * weight_0 + value_1 * weight_1 + value_2 * weight_2
+    value_0 = tl.load(output_0 + offset_0, mask=mask_2d).to(tl.float32)
+    value_1 = tl.load(output_1 + offset_1, mask=mask_2d).to(tl.float32)
+    value_2 = tl.load(output_2 + offset_2, mask=mask_2d).to(tl.float32)
+    merged = (
+        value_0 * weight_0[:, None]
+        + value_1 * weight_1[:, None]
+        + value_2 * weight_2[:, None]
+    )
     output_offset = (
-        token * out_token_stride + head * out_head_stride + dim * out_dim_stride
+        token_2d * out_token_stride
+        + head_2d * out_head_stride
+        + dim_2d * out_dim_stride
     )
-    tl.store(output + output_offset, merged, mask=dim_mask)
+    tl.store(output + output_offset, merged, mask=mask_2d)
 
 
 _metadata_cache: dict[
@@ -391,7 +418,11 @@ def page784_split_prefill(
     state0_lse = _canonical_lse(state0_lse)
     state1_lse = _canonical_lse(state1_lse)
     state2_lse = _canonical_lse(state2_lse)
-    _merge_three_attn_states_kernel[(query.shape[0], query.shape[1])](
+    block_rows = 4
+    num_rows = query.shape[0] * query.shape[1]
+    _merge_three_attn_states_rows_kernel[
+        (triton.cdiv(num_rows, block_rows),)
+    ](
         output,
         state0_output,
         state0_lse,
@@ -399,6 +430,7 @@ def page784_split_prefill(
         state1_lse,
         state2_output,
         state2_lse,
+        num_rows,
         output.stride(0),
         output.stride(1),
         output.stride(2),
@@ -417,7 +449,9 @@ def page784_split_prefill(
         state1_lse.stride(1),
         state2_lse.stride(0),
         state2_lse.stride(1),
+        NUM_HEADS=query.shape[1],
         HEAD_DIM=query.shape[2],
         BLOCK_DIM=triton.next_power_of_2(query.shape[2]),
+        BLOCK_ROWS=block_rows,
         num_warps=4,
     )
