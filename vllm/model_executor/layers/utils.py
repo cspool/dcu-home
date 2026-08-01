@@ -2,7 +2,6 @@
 # SPDX-FileCopyrightText: Copyright contributors to the vLLM project
 """Utility methods for model layers."""
 
-import os
 from collections.abc import Callable
 
 import torch
@@ -16,13 +15,6 @@ from vllm.utils.platform_utils import num_compute_units
 from vllm.utils.torch_utils import direct_register_custom_op
 
 logger = init_logger(__name__)
-
-_DISABLE_DECODE_OUTPUT_GEMV = os.environ.get(
-    "CSCC_DISABLE_DECODE_OUTPUT_GEMV", ""
-).strip().lower() in {"1", "on", "true", "yes"}
-_DISABLE_DECODE_OUTPUT_GEMV_K17408 = os.environ.get(
-    "CSCC_DISABLE_DECODE_OUTPUT_GEMV_K17408", ""
-).strip().lower() in {"1", "on", "true", "yes"}
 
 MOE_LAYER_ROUTER_GATE_SUFFIXES = {
     "gate",
@@ -141,9 +133,7 @@ def rocm_unquantized_gemm_impl(
     # path below. Keep this inside the existing opaque GEMM op so the model
     # graph and CUDA Graph boundaries do not change.
     use_cscc_output_llmm1 = (
-        not _DISABLE_DECODE_OUTPUT_GEMV
-        and not _DISABLE_DECODE_OUTPUT_GEMV_K17408
-        and on_gfx936()
+        on_gfx936()
         and n == 1
         and m == 5120
         and k == 17408
@@ -265,34 +255,6 @@ direct_register_custom_op(
     op_name="rocm_unquantized_gemm",
     op_func=rocm_unquantized_gemm_impl,
     fake_impl=rocm_unquantized_gemm_fake,
-)
-
-
-def rocm_gateup_swiglu_impl(
-    x: torch.Tensor, weight: torch.Tensor
-) -> torch.Tensor:
-    """Exact gfx936 single-token Qwen3.5 gate/up GEMV plus SwiGLU."""
-    x_view = x.reshape(-1, x.size(-1))
-    out = ops.LLMM1StridedSilu(weight, x_view)
-    return out.reshape(*x.shape[:-1], weight.shape[0] // 2)
-
-
-def rocm_gateup_swiglu_fake(
-    x: torch.Tensor, weight: torch.Tensor
-) -> torch.Tensor:
-    return x.new_empty((*x.shape[:-1], weight.shape[0] // 2))
-
-
-def rocm_gateup_swiglu(
-    x: torch.Tensor, weight: torch.Tensor
-) -> torch.Tensor:
-    return torch.ops.vllm.rocm_gateup_swiglu(x, weight)
-
-
-direct_register_custom_op(
-    op_name="rocm_gateup_swiglu",
-    op_func=rocm_gateup_swiglu_impl,
-    fake_impl=rocm_gateup_swiglu_fake,
 )
 
 

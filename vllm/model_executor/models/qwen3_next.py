@@ -2,7 +2,6 @@
 # SPDX-FileCopyrightText: Copyright contributors to the vLLM project
 """Inference-only Qwen3Next model."""
 
-import os
 from collections.abc import Iterable
 from itertools import islice
 
@@ -67,7 +66,6 @@ from vllm.model_executor.layers.mamba.ops.causal_conv1d import (
 )
 from vllm.model_executor.layers.quantization import QuantizationConfig
 from vllm.model_executor.layers.rotary_embedding import get_rope
-from vllm.model_executor.layers.utils import rocm_gateup_swiglu
 from vllm.model_executor.layers.vocab_parallel_embedding import (
     ParallelLMHead,
     VocabParallelEmbedding,
@@ -77,7 +75,7 @@ from vllm.model_executor.model_loader.weight_utils import (
     maybe_remap_kv_scale_name,
     sharded_weight_loader,
 )
-from vllm.model_executor.models.qwen2_moe import Qwen2MoeMLP
+from vllm.model_executor.models.qwen2_moe import Qwen2MoeMLP as Qwen3NextMLP
 from vllm.model_executor.models.utils import sequence_parallel_chunk
 from vllm.model_executor.utils import set_weight_attrs
 from vllm.platforms import current_platform
@@ -106,43 +104,6 @@ from .utils import (
 )
 
 logger = init_logger(__name__)
-
-_DISABLE_GATEUP_SWIGLU_FUSION = os.environ.get(
-    "VLLM_CSCC_DISABLE_GATEUP_SWIGLU_FUSION", ""
-).strip().lower() in {"1", "on", "true", "yes"}
-
-_ON_GFX936 = False
-if current_platform.is_rocm():
-    from vllm.platforms.rocm import on_gfx936
-
-    _ON_GFX936 = on_gfx936()
-
-
-class Qwen3NextMLP(Qwen2MoeMLP):
-    """Qwen3.5 dense MLP with an exact single-token gfx936 fast path."""
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        weight = self.gate_up_proj.weight
-        use_gateup_swiglu = (
-            not _DISABLE_GATEUP_SWIGLU_FUSION
-            and _ON_GFX936
-            and self.expert_gate is None
-            and x.ndim >= 2
-            and x.numel() // x.size(-1) == 1
-            and x.size(-1) == 5120
-            and weight.shape == (34816, 5120)
-            and x.dtype == torch.bfloat16
-            and weight.dtype == torch.bfloat16
-            and x.is_cuda
-            and weight.is_cuda
-            and x.stride(-1) == 1
-            and weight.is_contiguous()
-        )
-        if use_gateup_swiglu:
-            out = rocm_gateup_swiglu(x, weight)
-            out, _ = self.down_proj(out)
-            return out
-        return super().forward(x)
 
 KVCache = tuple[torch.Tensor, torch.Tensor]
 
