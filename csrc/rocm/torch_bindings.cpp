@@ -20,10 +20,8 @@ TORCH_LIBRARY_EXPAND(TORCH_EXTENSION_NAME, rocm_ops) {
       "Tensor");
   rocm_ops.impl("LLMM1", torch::kCUDA, &LLMM1);
 
-  rocm_ops.def(
-      "LLMM1Strided(Tensor in_a, Tensor in_b, int rows_per_block, "
-      "int num_threads) -> Tensor");
-  rocm_ops.impl("LLMM1Strided", torch::kCUDA, &LLMM1Strided);
+  rocm_ops.def("qwen35_bf16_gemv(Tensor weight, Tensor input) -> Tensor");
+  rocm_ops.impl("qwen35_bf16_gemv", torch::kCUDA, &qwen35_bf16_gemv);
 
   // Custom gemm op for skinny matrix-matrix multiplication
   rocm_ops.def(

@@ -2187,10 +2187,8 @@ def LLMM1(a: torch.Tensor, b: torch.Tensor, rows_per_block: int) -> torch.Tensor
     return torch.ops._rocm_C.LLMM1(a, b, rows_per_block)
 
 
-def LLMM1Strided(
-    a: torch.Tensor, b: torch.Tensor, rows_per_block: int, num_threads: int
-) -> torch.Tensor:
-    return torch.ops._rocm_C.LLMM1Strided(a, b, rows_per_block, num_threads)
+def qwen35_bf16_gemv(weight: torch.Tensor, x: torch.Tensor) -> torch.Tensor:
+    return torch.ops._rocm_C.qwen35_bf16_gemv(weight, x)
 
 
 def wvSplitK(

@@ -145,7 +145,7 @@ def rocm_unquantized_gemm_impl(
     )
     if use_cscc_output_llmm1:
         x_view = x.reshape(-1, x.size(-1))
-        out = ops.LLMM1Strided(weight, x_view, 1, 1024)
+        out = ops.qwen35_bf16_gemv(weight, x_view)
         return out.reshape(*x.shape[:-1], weight.shape[0])
 
     # CSCC H10.4-H10.8/R29: use fixed K=5120 single-token GEMV layouts selected
@@ -167,13 +167,7 @@ def rocm_unquantized_gemm_impl(
     )
     if use_cscc_llmm1:
         x_view = x.reshape(-1, x.size(-1))
-        if m == 96:
-            # Preserve the repaired FP32 pair reduction for the tiny gate.
-            out = ops.LLMM1Strided(weight, x_view, 4, 640)
-        else:
-            # Two rows reduce VGPR/LDS pressure for the three projections and
-            # LM head while retaining the same per-output reduction order.
-            out = ops.LLMM1Strided(weight, x_view, 2, 640)
+        out = ops.qwen35_bf16_gemv(weight, x_view)
         return out.reshape(*x.shape[:-1], weight.shape[0])
 
     cu_count = num_compute_units()

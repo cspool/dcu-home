@@ -5,9 +5,7 @@
 torch::Tensor LLMM1(at::Tensor& in_a, at::Tensor& in_b,
                     const int64_t rows_per_block);
 
-torch::Tensor LLMM1Strided(at::Tensor& in_a, at::Tensor& in_b,
-                           const int64_t rows_per_block,
-                           const int64_t num_threads);
+torch::Tensor qwen35_bf16_gemv(at::Tensor& weight, at::Tensor& input);
 
 torch::Tensor wvSplitK(const at::Tensor& in_a, const at::Tensor& in_b,
                        const std::optional<at::Tensor>& in_bias,
