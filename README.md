@@ -1,4 +1,4 @@
-# PRA2026-BH408：Qwen3.5-27B 单卡 ROCm 推理优化
+# PRA2026-BH408：Qwen3.5-27B ROCm 推理优化
 
 本仓库是 vLLM 0.18.1 的完整源码提交。直接代码基线为 OpenDAS
 `vllm_cscc` 的
@@ -12,6 +12,8 @@
 ## 当前结论
 
 - 目标：gfx936、Qwen3.5-27B、BF16、单卡、TP/PP/DP=1。
+- 可选多请求拓扑：同机双卡、TP/PP=1、内部 MP DP=2；每个 DP 副本沿用
+  完整单卡优化，不修改原 `pra2026-bh408` 目录。
 - 固定服务参数：`max_num_batched_tokens=4096`、`max_num_seqs=128`。
 - 不量化，不裁剪，不使用 prefix cache，不使用投机解码。
 - 重构前权威全量结果：性能分 `91.66283719585402`，精度系数 `1.00`，
@@ -59,6 +61,21 @@ HIP_VISIBLE_DEVICES=0 vllm serve /path/to/Qwen3.5-27B \
 
 不要加入 `--speculative-config`、draft/MTP 模型或 prefix-caching 参数。
 
+## 双卡多请求
+
+DP=2 使用两个完整的 TP=1 副本，适合存在多个独立请求的吞吐场景：
+
+```bash
+MODEL_DIR=/path/to/Qwen3.5-27B \
+HIP_VISIBLE_DEVICES=0,1 \
+bash scripts/serve_cscc_dp2.sh
+```
+
+首次为两个 rank 完成编译后，需要以相同参数重启服务，确认两侧 KV cache
+容量一致再计时。固定 benchmark 命令、验收条件和实测结果见
+[docs/cscc/DP2_MULTI_REQUEST.md](docs/cscc/DP2_MULTI_REQUEST.md)。该结果是多请求
+吞吐实验，不替代现有单请求官方性能分与精度结论。
+
 ## 权威材料
 
 - [docs/cscc/CLOSED_BOOK_REPRODUCTION.md](docs/cscc/CLOSED_BOOK_REPRODUCTION.md)：
@@ -67,6 +84,8 @@ HIP_VISIBLE_DEVICES=0 vllm serve /path/to/Qwen3.5-27B \
 - [ENVIRONMENT.md](ENVIRONMENT.md)：唯一必需环境变量和精确作用域。
 - [docs/cscc/OPTIMIZATION.md](docs/cscc/OPTIMIZATION.md)：保留的优化簇与文件映射。
 - [docs/cscc/RESULTS.md](docs/cscc/RESULTS.md)：性能、精度和重构门禁。
+- [docs/cscc/DP2_MULTI_REQUEST.md](docs/cscc/DP2_MULTI_REQUEST.md)：同机 DP=2
+  启动、双 rank 预热、多请求 benchmark 和 DP1 对照。
 - [docs/cscc/COMPLIANCE.md](docs/cscc/COMPLIANCE.md)：禁止项与提交边界。
 
 仓库不包含模型权重、评测数据、预编译 wheel、服务日志或结果 JSON。上游

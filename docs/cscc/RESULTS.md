@@ -116,3 +116,11 @@ fresh cache 的 `torch.compile` 用时 `495.49 s`，初始 profiling/warmup
 JSON、summary 和构建产物的哈希用于核对。源码边界由
 `evidence/manifests/repro_minimal_runtime.sha256` 固定，并可通过
 `scripts/verify_cscc_repro.sh` 验证。
+
+## 可选双卡多请求结果
+
+上述 91.67 分与精度结论仍对应官方单请求 DP1 契约。分支另提供同机
+`TP=1, DP=2, backend=mp` 服务与固定多请求 benchmark；它复用相同单卡
+kernel，不使用投机解码。双 rank 冷编译、稳态重启条件、并发 2/4/8 数据以及
+同负载 DP1 对照见 [DP2_MULTI_REQUEST.md](DP2_MULTI_REQUEST.md)。多请求
+`output_tok_s` 不参与本页官方分数计算。

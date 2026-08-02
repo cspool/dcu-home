@@ -10,8 +10,9 @@ branch: repro-minimal
 direct code baseline: OpenDAS vllm_cscc
 baseline commit: fa718036bdb9dfd80a872b86c8ac16c9d02bfd31
 model: Qwen3.5-27B BF16
-device: one gfx936
-parallelism: TP=1, PP=1, DP=1
+primary device topology: one gfx936
+primary parallelism: TP=1, PP=1, DP=1
+optional multi-request topology: two local gfx936, TP=1, PP=1, DP=2, mp
 ```
 
 仓库历史以精简提交快照 `67f44ab405d8efed30a42f04f6e74ae2e8370884`
@@ -105,9 +106,26 @@ echo ready
 首次启动需要生成 Triton/TorchInductor/AOT cache。不要在 `/health` 成功前跑
 性能脚本，也不要把冷编译时间计为请求 TTFT。
 
+### 5.1 可选双卡 DP=2 服务
+
+多请求测试可以启动两个完整的 TP=1 副本：
+
+```bash
+MODEL_DIR=/path/to/Qwen3.5-27B \
+HIP_VISIBLE_DEVICES=0,1 \
+bash scripts/serve_cscc_dp2.sh 2>&1 | tee service-dp2.log
+```
+
+首次启动会分别生成两个 DP rank 的 compile/AOT cache。健康检查成功后用完全
+相同的 wheel、cache 和参数重启；只有日志直接加载 compiled graph、AOT 分别
+命中 `rank_0_0`/`rank_0_1` cache，两个 rank 均报告
+`GPU KV cache size: 28,224 tokens`，并通过 TunableOp INIT/PRE_CAPTURE 验收后
+才开始计时。完整 benchmark 和实测见
+[DP2_MULTI_REQUEST.md](DP2_MULTI_REQUEST.md)。
+
 ## 6. 启动日志验收
 
-日志必须同时满足：
+单卡主路径日志必须同时满足：
 
 ```text
 Resolved architecture: Qwen3_5ForConditionalGeneration
@@ -120,6 +138,10 @@ VLLM_ROCM_TUNABLEOP_INIT status=ready
 VLLM_ROCM_TUNABLEOP_PRE_CAPTURE status=ready
 page784 later-Prefill wrapper enabled
 ```
+
+DP2 外层配置为 `data_parallel_size=2`；dense worker 内部会规范化为 DP1，
+TunableOp 日志仍必须保留 `parent_dp=2`、`parent_local_dp=2` 和各自 rank，避免
+把错误拓扑误认作单卡。
 
 出现 `VLLM_ROCM_TUNABLEOP_* status=error`、profile SHA mismatch、旧 GEMV
 symbol 缺失或 engine process 退出时，停止评测并修复环境；不要静默禁用 profile
@@ -159,6 +181,7 @@ MODEL_DIR=/path/to/Qwen3.5-27B bash run_accuracy.sh all \
 | 单条 TTFT 多出约 30 秒 | 检查是否有漏预热编译；保留原结果，待服务稳态后用同一完整档复测 |
 | `watch` 无输出 | 保证整个命令在同一对引号内；优先 `tail -F service.log` |
 | profile 被拒绝 | 核对 `cscc_gfx936_env.sh`、工具链 validator、单卡和 4096 配置 |
+| DP2 两侧 KV cache 容量不同 | 首次双 rank 编译造成瞬态显存不对称；待 cache 生成完毕后停止并以相同参数重启 |
 
 ## 9. 重构可追溯性
 
