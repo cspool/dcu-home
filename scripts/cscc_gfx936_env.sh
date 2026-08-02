@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 # Required environment for the frozen gfx936 Qwen3.5 BF16 M=4096 profile.
+# The loader accepts one TP1 replica or exactly two local TP1 DP replicas.
 
 export VLLM_ROCM_TUNABLEOP_PROFILE=gfx936_qwen3_5_27b_bf16_tn_m4096
 export VLLM_ROCM_TUNABLEOP_PROFILE_SHA256=169c7b11a0340d9e22405327b5e5667b2aa9e9e8d899bd59e10ca4fb7fb52030

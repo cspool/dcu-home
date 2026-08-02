@@ -1066,7 +1066,15 @@ class EngineCoreProc(EngineCore):
             else:
                 # Non-MoE DP ranks are completely independent, so treat like DP=1.
                 # Note that parallel_config.data_parallel_index will still reflect
-                # the original DP rank.
+                # the original DP rank. Preserve the parent topology so
+                # workload-scoped initialization can distinguish an internal
+                # DP replica from a genuine single-replica launch.
+                parallel_config.data_parallel_size_original = (
+                    parallel_config.data_parallel_size
+                )
+                parallel_config.data_parallel_size_local_original = (
+                    parallel_config.data_parallel_size_local
+                )
                 parallel_config.data_parallel_size = 1
                 parallel_config.data_parallel_size_local = 1
                 parallel_config.data_parallel_rank = 0
@@ -2018,6 +2026,12 @@ class EngineCoreActor(EngineCoreActorMixin, EngineCoreProc):
         dp_rank: int = 0,
         local_dp_rank: int = 0,
     ):
+        vllm_config.parallel_config.data_parallel_size_original = (
+            vllm_config.parallel_config.data_parallel_size
+        )
+        vllm_config.parallel_config.data_parallel_size_local_original = (
+            vllm_config.parallel_config.data_parallel_size_local
+        )
         vllm_config.parallel_config.data_parallel_size = 1
         vllm_config.parallel_config.data_parallel_size_local = 1
         vllm_config.parallel_config.data_parallel_rank = 0

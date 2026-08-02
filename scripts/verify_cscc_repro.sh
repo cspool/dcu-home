@@ -33,12 +33,18 @@ fi
 
 required_files=(
     "$SOURCE_MANIFEST"
+    scripts/bench_cscc_multi_request.sh
     scripts/build_cscc_wheel.sh
     scripts/cscc_gfx936_env.sh
+    scripts/serve_cscc_dp2.sh
+    tests/rocm/test_rocm_tunableop_scope.py
     "$PROFILE_REL"
+    vllm/config/parallel.py
+    vllm/platforms/rocm.py
     vllm/platforms/rocm_tunableop.py
     vllm/v1/attention/ops/rocm_aiter_unified_attention_gqa6.py
     vllm/v1/attention/ops/rocm_page784_split_attention.py
+    vllm/v1/engine/core.py
 )
 for path in "${required_files[@]}"; do
     git ls-files --error-unmatch "$path" >/dev/null 2>&1 || \
@@ -77,6 +83,8 @@ required_patterns=(
     "speculative_config is None"
     "page784_split_prefill"
     "use_gfx936_gdn_t4096_config"
+    "_is_validated_qwen35_data_parallel_topology"
+    "data_parallel_size_original"
     "VLLM_ROCM_TUNABLEOP_PRE_CAPTURE status=ready"
 )
 for pattern in "${required_patterns[@]}"; do
@@ -99,6 +107,15 @@ for pattern in "${forbidden_patterns[@]}"; do
 done
 pass "required paths present and rejected experiments absent"
 
+git grep -q -F -- "--data-parallel-size 2" scripts/serve_cscc_dp2.sh || \
+    fail "DP=2 launcher does not request internal data parallelism"
+git grep -q -F -- "--tensor-parallel-size 1" scripts/serve_cscc_dp2.sh || \
+    fail "DP=2 launcher does not retain TP=1 per replica"
+if git grep -q -E -- "speculative|prefix.cach" scripts/serve_cscc_dp2.sh; then
+    fail "DP=2 launcher enables a prohibited serving mode"
+fi
+pass "DP=2 launcher topology and prohibited-mode checks"
+
 VERIFY_TMP="$(mktemp -d "${TMPDIR:-/tmp}/vllm-cscc-verify.XXXXXX")"
 cleanup() {
     rm -rf -- "$VERIFY_TMP"
@@ -107,6 +124,7 @@ trap cleanup EXIT
 
 PYTHONPYCACHEPREFIX="$VERIFY_TMP/pycache" python3 -m py_compile \
     vllm/_custom_ops.py \
+    vllm/config/parallel.py \
     vllm/model_executor/layers/fla/ops/chunk.py \
     vllm/model_executor/layers/fla/ops/chunk_o.py \
     vllm/model_executor/layers/fla/ops/chunk_scaled_dot_kkt.py \
@@ -123,9 +141,15 @@ PYTHONPYCACHEPREFIX="$VERIFY_TMP/pycache" python3 -m py_compile \
     vllm/v1/attention/backends/rocm_aiter_unified_attn.py \
     vllm/v1/attention/ops/rocm_aiter_unified_attention_gqa6.py \
     vllm/v1/attention/ops/rocm_page784_split_attention.py \
+    vllm/v1/engine/core.py \
     vllm/v1/worker/gpu_model_runner.py \
-    vllm/v1/worker/gpu_worker.py
-bash -n scripts/build_cscc_wheel.sh scripts/cscc_gfx936_env.sh
+    vllm/v1/worker/gpu_worker.py \
+    tests/rocm/test_rocm_tunableop_scope.py
+bash -n \
+    scripts/bench_cscc_multi_request.sh \
+    scripts/build_cscc_wheel.sh \
+    scripts/cscc_gfx936_env.sh \
+    scripts/serve_cscc_dp2.sh
 if git cat-file -e "$BASELINE^{commit}" 2>/dev/null; then
     git diff --check "$BASELINE"..HEAD
 else

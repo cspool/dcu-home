@@ -4,7 +4,7 @@
 import os
 from datetime import timedelta
 from functools import cache, lru_cache, wraps
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import regex as re
 import torch
@@ -64,6 +64,27 @@ _ROCM_DEVICE_ID_NAME_MAP: dict[str, str] = {
     "0x74bd": "AMD_Instinct_MI300X_HF",
     "0x744c": "AMD_Radeon_RX7900XTX",
 }
+
+
+def _is_validated_qwen35_data_parallel_topology(parallel_config: Any) -> bool:
+    """Limit the competition static shape to validated local replicas.
+
+    Dense DP workers are independent TP=1 engines. The two-replica path is
+    safe for the same static shape only when both ranks are launched locally
+    by the internal multiprocessing backend. External, hybrid, Ray, and
+    multi-node DP layouts remain fail-closed.
+    """
+    if parallel_config.data_parallel_size == 1:
+        return True
+    return (
+        parallel_config.data_parallel_size == 2
+        and parallel_config.data_parallel_size_local == 2
+        and parallel_config.data_parallel_rank == 0
+        and parallel_config.data_parallel_rank_local is None
+        and parallel_config.data_parallel_backend == "mp"
+        and not parallel_config.data_parallel_external_lb
+        and not parallel_config.data_parallel_hybrid_lb
+    )
 
 
 def _sync_hip_cuda_env_vars():
@@ -658,7 +679,7 @@ class RocmPlatform(Platform):
             and scheduler_config.max_num_batched_tokens == 4096
             and parallel_config.tensor_parallel_size == 1
             and parallel_config.pipeline_parallel_size == 1
-            and parallel_config.data_parallel_size == 1
+            and _is_validated_qwen35_data_parallel_topology(parallel_config)
             and vllm_config.speculative_config is None
             and compilation_config.mode in (None, CompilationMode.VLLM_COMPILE)
             and compilation_config.backend in ("", "inductor")

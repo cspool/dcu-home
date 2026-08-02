@@ -67,7 +67,9 @@ def _profile_path() -> Path:
     return path
 
 
-def _validate_scope(vllm_config: VllmConfig) -> None:
+def _validate_scope(
+    vllm_config: VllmConfig,
+) -> tuple[int, int, int, int]:
     import torch
 
     model = vllm_config.model_config
@@ -85,6 +87,21 @@ def _validate_scope(vllm_config: VllmConfig) -> None:
     expected = (("Qwen3_5ForConditionalGeneration",), torch.bfloat16, 4096, 1, 1, 1, 1)
     if actual != expected:
         raise _fail(f"workload scope mismatch: actual={actual!r}")
+
+    topology = (
+        parallel.data_parallel_size_original,
+        parallel.data_parallel_size_local_original,
+        parallel.data_parallel_index,
+        parallel.data_parallel_rank_local,
+    )
+    allowed_topologies = {
+        (1, 1, 0, 0),
+        (2, 2, 0, 0),
+        (2, 2, 1, 1),
+    }
+    if topology not in allowed_topologies:
+        raise _fail(f"workload DP topology mismatch: actual={topology!r}")
+    return topology
 
 
 def _validate_environment(path: Path) -> None:
@@ -165,7 +182,7 @@ def maybe_init_rocm_tunableop(
     try:
         if profile != _PROFILE_NAME:
             raise _fail(f"unknown profile name: {profile!r}")
-        _validate_scope(vllm_config)
+        topology = _validate_scope(vllm_config)
         path = _profile_path()
         _validate_environment(path)
         actual_sha256 = _sha256(path)
@@ -188,11 +205,13 @@ def maybe_init_rocm_tunableop(
             "VLLM_ROCM_TUNABLEOP_INIT status=ready device=%s file=%s "
             "file_sha256=%s validators_sha256=%s rows=5 logical_families=6 "
             "explicit_families=5 shared_explicit_families=2 enabled=1 tuning=0 "
-            "record_untuned=0",
+            "record_untuned=0 parent_dp=%s parent_local_dp=%s dp_index=%s "
+            "local_dp_rank=%s",
             device,
             path,
             _PROFILE_SHA256,
             _VALIDATORS_SHA256,
+            *topology,
         )
         return path
     except Exception as exc:
