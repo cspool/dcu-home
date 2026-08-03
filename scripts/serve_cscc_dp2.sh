@@ -52,6 +52,7 @@ exec "$VLLM_BIN" serve "$MODEL_DIR" \
     --data-parallel-backend mp \
     --max-num-seqs 128 \
     --max-num-batched-tokens 4096 \
+    --compilation-config '{"compile_sizes":[4096]}' \
     --gpu-memory-utilization 0.95 \
     --default-chat-template-kwargs '{"enable_thinking": false}' \
     --reasoning-parser qwen3 \

@@ -332,8 +332,6 @@ class ParallelConfig:
     data_parallel_index: int = Field(init=False)
     """Equal to the data parallel rank but not used for torch process groups
     and not overridden for dense models."""
-    data_parallel_size_original: int = Field(default=1, init=False)
-    data_parallel_size_local_original: int = Field(default=1, init=False)
 
     _api_process_count: int = Field(default=1, gt=0)
     """
@@ -656,8 +654,6 @@ class ParallelConfig:
             "data_parallel_rank_local",
             "data_parallel_size_local",
             "data_parallel_index",
-            "data_parallel_size_original",
-            "data_parallel_size_local_original",
             "data_parallel_backend",
             "data_parallel_external_lb",
             "data_parallel_hybrid_lb",

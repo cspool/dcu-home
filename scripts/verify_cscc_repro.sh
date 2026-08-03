@@ -7,7 +7,7 @@ SNAPSHOT_ROOT="67f44ab405d8efed30a42f04f6e74ae2e8370884"
 PROFILE_REL="vllm/platforms/tunable_profiles/gfx936_qwen3_5_27b_bf16_tn_m4096.csv"
 PROFILE_SHA256="169c7b11a0340d9e22405327b5e5667b2aa9e9e8d899bd59e10ca4fb7fb52030"
 SOURCE_MANIFEST="evidence/manifests/repro_minimal_runtime.sha256"
-RUNTIME_CHURN_LIMIT=1000
+RUNTIME_CHURN_LIMIT=500
 WHEEL="${1:-}"
 
 fail() {
@@ -38,17 +38,14 @@ required_files=(
     scripts/build_cscc_wheel.sh
     scripts/cscc_gfx936_env.sh
     scripts/serve_cscc_dp2.sh
-    tests/rocm/test_rocm_tunableop_scope.py
     "$PROFILE_REL"
-    vllm/config/parallel.py
     vllm/model_executor/layers/fla/ops/gfx936.py
-    vllm/model_executor/layers/rocm_qwen35_gdn.py
-    vllm/model_executor/layers/rocm_qwen35_gemv.py
+    vllm/model_executor/models/qwen3_next.py
     vllm/platforms/rocm.py
-    vllm/platforms/rocm_tunableop.py
+    vllm/v1/attention/backends/rocm_aiter_unified_attn.py
     vllm/v1/attention/ops/rocm_aiter_unified_attention_gqa6.py
     vllm/v1/attention/ops/rocm_page784_split_attention.py
-    vllm/v1/engine/core.py
+    vllm/v1/worker/gpu_model_runner.py
 )
 for path in "${required_files[@]}"; do
     git ls-files --error-unmatch "$path" >/dev/null 2>&1 || \
@@ -100,14 +97,13 @@ PY
 pass "frozen TunableOp profile"
 
 required_patterns=(
-    "qwen35_bf16_gemv"
-    "qwen35_output_gemv"
+    "qwen35_gemv"
+    "_output_gemv"
     "speculative_config is None"
-    "page784_split_prefill"
-    "use_gfx936_gdn_t4096_config"
-    "_is_validated_qwen35_data_parallel_topology"
-    "data_parallel_size_original"
-    "VLLM_ROCM_TUNABLEOP_PRE_CAPTURE status=ready"
+    "page784.prefill"
+    "fixed_gdn"
+    "qwen35_packed_decode"
+    "_mrope_scratch"
 )
 for pattern in "${required_patterns[@]}"; do
     git grep -q -F "$pattern" -- csrc vllm || \
@@ -156,21 +152,17 @@ PYTHONPYCACHEPREFIX="$VERIFY_TMP/pycache" python3 -m py_compile \
     vllm/model_executor/layers/fla/ops/solve_tril.py \
     vllm/model_executor/layers/fla/ops/utils.py \
     vllm/model_executor/layers/fla/ops/wy_fast.py \
-    vllm/model_executor/layers/rocm_qwen35_gdn.py \
-    vllm/model_executor/layers/rocm_qwen35_gemv.py \
     vllm/model_executor/layers/utils.py \
     vllm/model_executor/models/qwen3_5.py \
     vllm/model_executor/models/qwen3_next.py \
     vllm/platforms/rocm.py \
-    vllm/platforms/rocm_tunableop.py \
     vllm/v1/attention/backends/gdn_attn.py \
     vllm/v1/attention/backends/rocm_aiter_unified_attn.py \
     vllm/v1/attention/ops/rocm_aiter_unified_attention_gqa6.py \
     vllm/v1/attention/ops/rocm_page784_split_attention.py \
     vllm/v1/engine/core.py \
     vllm/v1/worker/gpu_model_runner.py \
-    vllm/v1/worker/gpu_worker.py \
-    tests/rocm/test_rocm_tunableop_scope.py
+    vllm/v1/worker/gpu_worker.py
 bash -n \
     scripts/bench_cscc_multi_request.sh \
     scripts/build_cscc_wheel.sh \
@@ -191,7 +183,8 @@ if [[ -n "$WHEEL" ]]; then
         fail "wheel does not contain vllm/_rocm_C"
     grep -q "^vllm/platforms/tunable_profiles/$(basename "$PROFILE_REL")$" \
         "$wheel_files" || fail "wheel does not contain the frozen profile"
-    for module in gfx936.py rocm_qwen35_gdn.py rocm_qwen35_gemv.py; do
+    for module in gfx936.py rocm_aiter_unified_attention_gqa6.py \
+        rocm_page784_split_attention.py; do
         grep -q "/${module}$" "$wheel_files" || \
             fail "wheel does not contain ${module}"
     done

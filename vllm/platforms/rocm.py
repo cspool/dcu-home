@@ -66,10 +66,6 @@ _ROCM_DEVICE_ID_NAME_MAP: dict[str, str] = {
 }
 
 
-def _is_validated_qwen35_data_parallel_topology(p) -> bool:
-    return p.data_parallel_size == 1 or (p.data_parallel_size == p.data_parallel_size_local == 2 and p.data_parallel_rank == 0 and p.data_parallel_rank_local is None and p.data_parallel_backend == "mp" and not p.data_parallel_external_lb and not p.data_parallel_hybrid_lb)
-
-
 def _sync_hip_cuda_env_vars():
     """Ensure HIP_VISIBLE_DEVICES and CUDA_VISIBLE_DEVICES are consistent.
     Treats empty string as unset. Raises on genuine conflicts."""
@@ -151,7 +147,6 @@ _GCN_ARCH = _get_gcn_arch()
 _ON_GFX1X = any(arch in _GCN_ARCH for arch in ["gfx11", "gfx12"])
 _ON_MI3XX = any(arch in _GCN_ARCH for arch in ["gfx942", "gfx950"])
 _ON_GFX9 = any(arch in _GCN_ARCH for arch in ["gfx90a", "gfx942", "gfx950"])
-_ON_GFX936 = "gfx936" in _GCN_ARCH
 _ON_GFX942 = "gfx942" in _GCN_ARCH
 _ON_GFX950 = "gfx950" in _GCN_ARCH
 
@@ -237,10 +232,6 @@ def on_mi3xx() -> bool:
 
 def on_gfx9() -> bool:
     return _ON_GFX9
-
-
-def on_gfx936() -> bool:
-    return _ON_GFX936
 
 
 def on_gfx942() -> bool:
@@ -576,6 +567,8 @@ class RocmPlatform(Platform):
         Set the device for the current platform.
         """
         torch.cuda.set_device(device)
+        if filename := os.getenv("PYTORCH_TUNABLEOP_FILENAME"):
+            torch.cuda.tunable.set_filename(filename)
 
     @classmethod
     @lru_cache(maxsize=8)
@@ -632,16 +625,9 @@ class RocmPlatform(Platform):
     @classmethod
     def apply_config_platform_defaults(cls, vllm_config: "VllmConfig") -> None:
         from vllm._aiter_ops import rocm_aiter_ops
-        from vllm.config.compilation import CUDAGraphMode, CompilationMode
+        from vllm.config.compilation import CUDAGraphMode
 
         compilation_config = vllm_config.compilation_config
-        model_config, scheduler_config, parallel_config = vllm_config.model_config, vllm_config.scheduler_config, vllm_config.parallel_config
-        hf_config = model_config.hf_text_config if model_config is not None else None
-        dimensions = tuple(getattr(hf_config, name, None) for name in ("hidden_size", "intermediate_size", "num_hidden_layers", "num_attention_heads", "num_key_value_heads", "head_dim", "linear_num_key_heads", "linear_num_value_heads", "linear_key_head_dim", "linear_value_head_dim"))
-        if on_gfx936() and model_config is not None and model_config.architecture == "Qwen3_5ForConditionalGeneration" and model_config.dtype == torch.bfloat16 and not model_config.enforce_eager and dimensions == (5120, 17408, 64, 24, 4, 256, 16, 48, 128, 128) and scheduler_config.max_num_batched_tokens == 4096 and (parallel_config.tensor_parallel_size, parallel_config.pipeline_parallel_size) == (1, 1) and _is_validated_qwen35_data_parallel_topology(parallel_config) and vllm_config.speculative_config is None and compilation_config.mode in (None, CompilationMode.VLLM_COMPILE) and compilation_config.backend in ("", "inductor") and compilation_config.compile_sizes is compilation_config.compile_ranges_endpoints is None:
-            compilation_config.compile_sizes = [4096]
-            logger.info_once("Using the validated 4096-token static compile shape for gfx936 Qwen3.5-27B BF16.")
-
         is_eager_execution = compilation_config.cudagraph_mode == CUDAGraphMode.NONE
         use_aiter_fused_moe = rocm_aiter_ops.is_fused_moe_enabled()
         use_aiter_rms_norm = rocm_aiter_ops.is_rmsnorm_enabled()

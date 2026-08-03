@@ -122,31 +122,17 @@ def use_aiter_triton_gemm(n, m, k, dtype):
 def rocm_unquantized_gemm_impl(
     x: torch.Tensor, weight: torch.Tensor, bias: torch.Tensor | None = None
 ) -> torch.Tensor:
-    from vllm.platforms.rocm import on_gfx9, on_gfx936, on_gfx950
+    from vllm.platforms.rocm import on_gfx9, on_gfx950
 
     n = x.numel() // x.size(-1)
     m = weight.shape[0]
     k = weight.shape[1]
 
-    use_qwen35_gemv = (
-        on_gfx936()
-        and n == 1
-        and x.dtype == weight.dtype == torch.bfloat16
-        and bias is None
-        and weight.is_contiguous()
-        and x.stride(-1) == 1
-        and ((m, k) == (5120, 17408)
-             or (k == 5120 and m in (96, 14336, 16384, 34816, 248320)))
-    )
-    if use_qwen35_gemv:
-        if k == 17408:
-            from vllm.model_executor.layers.rocm_qwen35_gemv import qwen35_output_gemv
-            gemv = qwen35_output_gemv
-        else:
-            gemv = ops.qwen35_bf16_gemv
-        x_view = x.reshape(-1, x.size(-1))
-        out = gemv(weight, x_view)
-        return out.reshape(*x.shape[:-1], weight.shape[0])
+    if bias is None:
+        from vllm.model_executor.layers.fla.ops.gfx936 import qwen35_gemv
+
+        if (output := qwen35_gemv(weight, x)) is not None:
+            return output
 
     cu_count = num_compute_units()
 

@@ -14,15 +14,13 @@ import torch
 
 from vllm.triton_utils import tl, triton
 
+from .gfx936 import gdn_pruner
 from .index import prepare_chunk_indices
 from .op import exp
-from .gfx936 import GFX936_GDN_T4096_COMPILER_OPTIONS, unwrap_triton_jit
 from .utils import FLA_GDN_FIX_BT, check_shared_mem, is_nvidia_hopper
 
 BKV_LIST = [64, 128] if check_shared_mem() else [32, 64]
 NUM_WARPS = [2, 4] if is_nvidia_hopper else [2, 4, 8]
-
-_GFX936_GDN_CHUNK_O_CONFIGS = {16: {"BK": 32, "BV": 32, "num_warps": 2, "num_stages": 2}, 32: {"BK": 32, "BV": 32, "num_warps": 2, "num_stages": 3}, 64: {"BK": 32, "BV": 64, "num_warps": 4, "num_stages": 2}}
 
 
 @triton.heuristics(
@@ -39,7 +37,8 @@ _GFX936_GDN_CHUNK_O_CONFIGS = {16: {"BK": 32, "BV": 32, "num_warps": 2, "num_sta
         for num_warps in NUM_WARPS
         for num_stages in [2, 3, 4]
     ],
-    key=["H", "K", "V", "BT"],
+    key=["T", "H", "K", "V", "BT"],
+    prune_configs_by={"early_config_prune": gdn_pruner},
 )
 @triton.jit(do_not_specialize=["T"])
 def chunk_fwd_kernel_o(
@@ -141,9 +140,6 @@ def chunk_fwd_kernel_o(
     tl.store(p_o, b_o.to(p_o.dtype.element_ty), boundary_check=(0, 1))
 
 
-_chunk_fwd_kernel_o_jit = unwrap_triton_jit(chunk_fwd_kernel_o)
-
-
 def chunk_fwd_o(
     q: torch.Tensor,
     k: torch.Tensor,
@@ -153,8 +149,6 @@ def chunk_fwd_o(
     scale: float | None = None,
     cu_seqlens: torch.LongTensor | None = None,
     chunk_size: int = 64,
-    use_gfx936_config: bool = False,
-    use_gfx936_t4096_config: bool = False,
 ) -> torch.Tensor:
     B, T, Hg, K, V = *q.shape, v.shape[-1]
     H = v.shape[-2]
@@ -171,18 +165,6 @@ def chunk_fwd_o(
     def grid(meta):
         return (triton.cdiv(V, meta["BV"]), NT, B * H)
 
-    if use_gfx936_config or use_gfx936_t4096_config:
-        launch_kwargs = dict(
-            q=q, k=k, v=v, h=h, g=g, o=o, cu_seqlens=cu_seqlens,
-            chunk_indices=chunk_indices, scale=scale,
-            T=T, H=H, Hg=Hg, K=K, V=V, BT=BT,
-        )
-        config = ({"BK": 128, "BV": 128, "num_warps": 4,
-                   **GFX936_GDN_T4096_COMPILER_OPTIONS}
-                  if use_gfx936_t4096_config else _GFX936_GDN_CHUNK_O_CONFIGS[BT])
-        _chunk_fwd_kernel_o_jit[(triton.cdiv(V, config["BV"]), NT, B * H)](
-            **launch_kwargs, **config, USE_G=True, IS_VARLEN=True)
-        return o
     chunk_fwd_kernel_o[grid](
         q,
         k,

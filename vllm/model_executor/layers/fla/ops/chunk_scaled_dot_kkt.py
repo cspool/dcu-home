@@ -12,9 +12,9 @@ import torch
 
 from vllm.triton_utils import tl, triton
 
+from .gfx936 import gdn_pruner
 from .index import prepare_chunk_indices
 from .op import exp
-from .gfx936 import GFX936_GDN_T4096_COMPILER_OPTIONS, unwrap_triton_jit
 
 
 @triton.heuristics(
@@ -31,6 +31,7 @@ from .gfx936 import GFX936_GDN_T4096_COMPILER_OPTIONS, unwrap_triton_jit
         for num_stages in [2, 3, 4]
     ],
     key=["H", "K", "BT", "IS_VARLEN"],
+    prune_configs_by={"early_config_prune": gdn_pruner},
 )
 @triton.jit(do_not_specialize=["T"])
 def chunk_scaled_dot_kkt_fwd_kernel(
@@ -99,9 +100,6 @@ def chunk_scaled_dot_kkt_fwd_kernel(
     tl.store(p_A, b_A.to(p_A.dtype.element_ty), boundary_check=(0, 1))
 
 
-_chunk_scaled_dot_kkt_fwd_jit = unwrap_triton_jit(chunk_scaled_dot_kkt_fwd_kernel)
-
-
 def chunk_scaled_dot_kkt_fwd(
     k: torch.Tensor,
     g: torch.Tensor | None = None,
@@ -109,7 +107,6 @@ def chunk_scaled_dot_kkt_fwd(
     cu_seqlens: torch.LongTensor | None = None,
     chunk_size: int = 64,
     output_dtype: torch.dtype = torch.float32,
-    use_gfx936_t4096_config: bool = False,
 ) -> torch.Tensor:
     r"""
     Compute beta * K * K^T.
@@ -143,9 +140,7 @@ def chunk_scaled_dot_kkt_fwd(
     NT = triton.cdiv(T, BT) if cu_seqlens is None else len(chunk_indices)
 
     A = torch.empty(B, T, H, BT, device=k.device, dtype=output_dtype)
-    fn = _chunk_scaled_dot_kkt_fwd_jit if use_gfx936_t4096_config else chunk_scaled_dot_kkt_fwd_kernel
-    opts = dict(BK=128, USE_G=True, IS_VARLEN=True, num_warps=4, **GFX936_GDN_T4096_COMPILER_OPTIONS) if use_gfx936_t4096_config else {}
-    fn[(NT, B * H)](
+    chunk_scaled_dot_kkt_fwd_kernel[(NT, B * H)](
         k=k,
         g=g,
         beta=beta,
@@ -157,6 +152,5 @@ def chunk_scaled_dot_kkt_fwd(
         Hg=Hg,
         K=K,
         BT=BT,
-        **opts,
     )
     return A

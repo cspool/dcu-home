@@ -156,9 +156,13 @@ DP=2 与单请求全量复测使用的 Triton clean wheel SHA-256 为
 最终构建已通过 wheel 内容校验、三 seed 实际 Triton 分发检查和 20 项 DP=2
 拓扑测试。
 
+当前 499 行版本保持相同算子、调度和启动参数。2026-08-03 的针对性复验中，
+两个 DP 副本均完成 mixed/decode 图捕获，4 条并发请求全部由两个 API 进程和
+两个 GPU worker 成功处理；复测 4/4 HTTP 200，耗时 9.23 秒。
+
 ### 等价代码压缩最终回归
 
-2026-08-03 使用当前 990 行运行时补丁和 clean wheel
+2026-08-03 的下表使用当时 990 行运行时补丁和 clean wheel
 `50f21c3a6a952be49d9cf5db19b0ec030796d310f8c99e48ad5bfe3b8ecb1d8d`
 重跑相同 concurrency 8 契约。冷启动时 rank0/rank1 分别为 28,224/23,520
 tokens；使用同一缓存热重启后，两侧均直接加载 `rank_0_0`/`rank_0_1` AOT，

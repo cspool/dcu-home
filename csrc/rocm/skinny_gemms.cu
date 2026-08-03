@@ -8,7 +8,6 @@
 
 #include <stdexcept>
 #include <algorithm>
-#include <cstdint>
 
 #include "../cuda_compat.h"
 #include "dispatch_utils.h"
@@ -233,64 +232,6 @@ __global__ void LLGemm1_kernel(const scalar_t* in_a, const scalar_t* in_b,
   }
 }
 
-template <int NUM_A_ROWS_PER_BLOCK>
-__global__ __launch_bounds__(640) void LLGemm1_k5120_pairreduce640_kernel(
-    const c10::BFloat16* __restrict__ in_a,
-    const c10::BFloat16* __restrict__ in_b, c10::BFloat16* __restrict__ out_c) {
-  constexpr int NUM_THREADS = 640, NUM_PAIR_THREADS = 320, WAVE_SIZE = 64, NUM_REDUCTION_WARPS = 5, NUM_K_CHUNKS = 640;
-  using scalar2_t = __hip_bfloat162;
-  const float4* af4 = reinterpret_cast<const float4*>(in_a); const scalar2_t* bf2 = reinterpret_cast<const scalar2_t*>(in_b); __hip_bfloat16* output = reinterpret_cast<__hip_bfloat16*>(out_c);
-  __shared__ float pair_smem[NUM_A_ROWS_PER_BLOCK][NUM_PAIR_THREADS], red_smem[NUM_A_ROWS_PER_BLOCK][NUM_REDUCTION_WARPS];
-  const int thread_id = threadIdx.x, pair_lane = thread_id % NUM_PAIR_THREADS, warp = thread_id / WAVE_SIZE, lane = thread_id % WAVE_SIZE, row_start = blockIdx.x * NUM_A_ROWS_PER_BLOCK;
-  const scalar2_t bx0 = bf2[thread_id * 4], bx1 = bf2[thread_id * 4 + 1], bx2 = bf2[thread_id * 4 + 2], bx3 = bf2[thread_id * 4 + 3];
-  const float2 bx0f = __s22float2(bx0), bx1f = __s22float2(bx1), bx2f = __s22float2(bx2), bx3f = __s22float2(bx3);
-  float4 weight4[NUM_A_ROWS_PER_BLOCK];
-#pragma unroll
-  for (int row_offset = 0; row_offset < NUM_A_ROWS_PER_BLOCK; ++row_offset)
-    weight4[row_offset] = load_ntmprl(&af4[(row_start + row_offset) * NUM_K_CHUNKS + thread_id]);
-  float acc[NUM_A_ROWS_PER_BLOCK] = {};
-#pragma unroll
-  for (int row_offset = 0; row_offset < NUM_A_ROWS_PER_BLOCK; ++row_offset) {
-    auto weight2 = reinterpret_cast<scalar2_t*>(&weight4[row_offset]);
-    float lo = 0.0f, hi = 0.0f;
-    float2 weightf = __s22float2(weight2[0]); lo = fmaf(weightf.x, bx0f.x, lo); hi = fmaf(weightf.y, bx0f.y, hi);
-    weightf = __s22float2(weight2[1]); lo = fmaf(weightf.x, bx1f.x, lo); hi = fmaf(weightf.y, bx1f.y, hi);
-    weightf = __s22float2(weight2[2]); lo = fmaf(weightf.x, bx2f.x, lo); hi = fmaf(weightf.y, bx2f.y, hi);
-    weightf = __s22float2(weight2[3]); lo = fmaf(weightf.x, bx3f.x, lo); hi = fmaf(weightf.y, bx3f.y, hi);
-    acc[row_offset] += lo + hi;
-  }
-  if (thread_id >= NUM_PAIR_THREADS) {
-#pragma unroll
-    for (int row_offset = 0; row_offset < NUM_A_ROWS_PER_BLOCK; ++row_offset)
-      pair_smem[row_offset][pair_lane] = acc[row_offset];
-  }
-  __syncthreads();
-  if (thread_id < NUM_PAIR_THREADS) {
-#pragma unroll
-    for (int row_offset = 0; row_offset < NUM_A_ROWS_PER_BLOCK; ++row_offset)
-      acc[row_offset] += pair_smem[row_offset][thread_id];
-#pragma unroll
-    for (int mask = WAVE_SIZE / 2; mask >= 1; mask /= 2) {
-#pragma unroll
-      for (int row_offset = 0; row_offset < NUM_A_ROWS_PER_BLOCK; ++row_offset)
-        acc[row_offset] += __shfl_xor(acc[row_offset], mask);
-    }
-    if (lane == 0) {
-#pragma unroll
-      for (int row_offset = 0; row_offset < NUM_A_ROWS_PER_BLOCK; ++row_offset)
-        red_smem[row_offset][warp] = acc[row_offset];
-    }
-  }
-  __syncthreads();
-  if (thread_id < NUM_A_ROWS_PER_BLOCK) {
-    float total = 0.0f;
-#pragma unroll
-    for (int source_warp = 0; source_warp < NUM_REDUCTION_WARPS; ++source_warp)
-      total += red_smem[thread_id][source_warp];
-    output[row_start + thread_id] = __float2bfloat16(total);
-  }
-}
-
 torch::Tensor LLMM1(at::Tensor& in_a, at::Tensor& in_b,
                     const int64_t rows_per_block) {
   auto M = in_a.size(0);
@@ -342,30 +283,6 @@ torch::Tensor LLMM1(at::Tensor& in_a, at::Tensor& in_b,
     }
   });
 
-  return out_c;
-}
-
-torch::Tensor qwen35_bf16_gemv(at::Tensor& weight, at::Tensor& input) {
-  TORCH_CHECK(weight.dim() == 2 && input.dim() == 2, "qwen35_bf16_gemv expects two rank-2 tensors.");
-  TORCH_CHECK(weight.is_cuda() && input.is_cuda(), "GPU tensors required.");
-  TORCH_CHECK(weight.device() == input.device(), "Devices must match.");
-  TORCH_CHECK(weight.is_contiguous() && input.is_contiguous(), "Contiguous tensors required.");
-  TORCH_CHECK(weight.dtype() == torch::kBFloat16 && input.dtype() == torch::kBFloat16, "BF16 tensors required.");
-  const int64_t M64 = weight.size(0), K64 = weight.size(1);
-  TORCH_CHECK(input.size(0) == 1, "Input row count must be one.");
-  TORCH_CHECK(input.size(1) == K64, "K dimensions must match.");
-  TORCH_CHECK(reinterpret_cast<uintptr_t>(weight.data_ptr()) % alignof(float4) == 0 && reinterpret_cast<uintptr_t>(input.data_ptr()) % alignof(float4) == 0, "Pointers must be 16-byte aligned.");
-  const bool use_k5120_pairreduce640 = K64 == 5120 && (M64 == 96 || M64 == 14336 || M64 == 16384 || M64 == 34816 || M64 == 248320);
-  TORCH_CHECK(use_k5120_pairreduce640, "Unsupported Qwen3.5 GEMV shape.");
-  const int M = static_cast<int>(M64);
-  auto out_c = torch::empty({1, M}, torch::TensorOptions().dtype(input.dtype()).device(input.device()));
-  const at::cuda::OptionalCUDAGuard device_guard(device_of(input)); const cudaStream_t stream = at::cuda::getCurrentCUDAStream();
-  auto weight_ptr = weight.data_ptr<c10::BFloat16>(); auto input_ptr = input.data_ptr<c10::BFloat16>(); auto output_ptr = out_c.data_ptr<c10::BFloat16>();
-  const int rows_per_block = M == 96 ? 4 : 2, num_blocks = M / rows_per_block;
-  if (rows_per_block == 2)
-    LLGemm1_k5120_pairreduce640_kernel<2><<<num_blocks, 640, 0, stream>>>(weight_ptr, input_ptr, output_ptr);
-  else
-    LLGemm1_k5120_pairreduce640_kernel<4><<<num_blocks, 640, 0, stream>>>(weight_ptr, input_ptr, output_ptr);
   return out_c;
 }
 

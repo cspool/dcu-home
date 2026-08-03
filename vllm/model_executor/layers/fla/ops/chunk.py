@@ -17,7 +17,6 @@ from .chunk_scaled_dot_kkt import chunk_scaled_dot_kkt_fwd
 from .cumsum import chunk_local_cumsum
 from .l2norm import l2norm_fwd
 from .solve_tril import solve_tril
-from .gfx936 import use_gfx936_gdn_chunk_o_config, use_gfx936_gdn_t4096_config
 from .utils import SUPPRESS_LEVEL, input_guard
 from .wy_fast import recompute_w_u_fwd
 
@@ -34,11 +33,11 @@ def chunk_gated_delta_rule_fwd(
     cu_seqlens: torch.LongTensor | None = None,
 ):
     g = chunk_local_cumsum(g, chunk_size=64, cu_seqlens=cu_seqlens)
-    use_fixed_config = use_gfx936_gdn_t4096_config(q, k, v, g, beta, scale, 64, initial_state, output_final_state, cu_seqlens)
-    use_fixed_chunk_o_config = use_gfx936_gdn_chunk_o_config(q, k, v, g, scale, 64, cu_seqlens)
     # obtain WY representation. u is actually the new v.
-    A = chunk_scaled_dot_kkt_fwd(k=k, beta=beta, g=g, cu_seqlens=cu_seqlens, output_dtype=torch.float32, use_gfx936_t4096_config=use_fixed_config)
-    A = solve_tril(A=A, cu_seqlens=cu_seqlens, output_dtype=k.dtype, use_gfx936_t4096_config=use_fixed_config)
+    A = chunk_scaled_dot_kkt_fwd(
+        k=k, beta=beta, g=g, cu_seqlens=cu_seqlens, output_dtype=torch.float32
+    )
+    A = solve_tril(A=A, cu_seqlens=cu_seqlens, output_dtype=k.dtype)
     w, u = recompute_w_u_fwd(
         k=k,
         v=v,
@@ -46,7 +45,6 @@ def chunk_gated_delta_rule_fwd(
         A=A,
         g_cumsum=g,
         cu_seqlens=cu_seqlens,
-        use_gfx936_t4096_config=use_fixed_config,
     )
     h, v_new, final_state = chunk_gated_delta_rule_fwd_h(
         k=k,
@@ -65,8 +63,6 @@ def chunk_gated_delta_rule_fwd(
         g=g,
         scale=scale,
         cu_seqlens=cu_seqlens,
-        use_gfx936_config=use_fixed_chunk_o_config,
-        use_gfx936_t4096_config=use_fixed_config,
     )
     if SUPPRESS_LEVEL < 3:
         return g, o, A, final_state, None, None, None

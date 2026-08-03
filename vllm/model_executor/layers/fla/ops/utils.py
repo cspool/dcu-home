@@ -28,7 +28,6 @@ FLA_GDN_FIX_BT = os.getenv("FLA_GDN_FIX_BT", "0") == "1"
 
 SUPPRESS_LEVEL = int(os.getenv("GDN_RECOMPUTE_SUPPRESS_LEVEL", "0"))
 
-from .gfx936 import GFX936_GDN_T4096_COMPILER_OPTIONS, _is_gfx936_device, unwrap_triton_jit, use_gfx936_gdn_chunk_o_config, use_gfx936_gdn_t4096_config
 
 def tensor_cache(fn: Callable[..., torch.Tensor]) -> Callable[..., torch.Tensor]:
     """

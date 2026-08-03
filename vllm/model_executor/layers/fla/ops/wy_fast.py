@@ -13,8 +13,8 @@ import torch
 
 from vllm.triton_utils import tl, triton
 
+from .gfx936 import gdn_pruner
 from .index import prepare_chunk_indices
-from .gfx936 import GFX936_GDN_T4096_COMPILER_OPTIONS, unwrap_triton_jit
 
 
 @triton.heuristics({"IS_VARLEN": lambda args: args["cu_seqlens"] is not None})
@@ -25,6 +25,7 @@ from .gfx936 import GFX936_GDN_T4096_COMPILER_OPTIONS, unwrap_triton_jit
         for num_stages in [2, 3, 4]
     ],
     key=["H", "K", "V", "BT", "BK", "BV", "IS_VARLEN"],
+    prune_configs_by={"early_config_prune": gdn_pruner},
 )
 @triton.jit(do_not_specialize=["T"])
 def recompute_w_u_fwd_kernel(
@@ -117,9 +118,6 @@ def recompute_w_u_fwd_kernel(
         tl.store(p_w, b_w.to(p_w.dtype.element_ty), boundary_check=(0, 1))
 
 
-_recompute_w_u_fwd_jit = unwrap_triton_jit(recompute_w_u_fwd_kernel)
-
-
 def recompute_w_u_fwd(
     k: torch.Tensor,
     v: torch.Tensor,
@@ -127,7 +125,6 @@ def recompute_w_u_fwd(
     g_cumsum: torch.Tensor,
     A: torch.Tensor,
     cu_seqlens: torch.LongTensor | None,
-    use_gfx936_t4096_config: bool = False,
 ) -> tuple[torch.Tensor, torch.Tensor]:
     B, T, Hg, K, V = *k.shape, v.shape[-1]
     H = v.shape[-2]
@@ -141,9 +138,7 @@ def recompute_w_u_fwd(
     BV = 64
     u = torch.empty_like(v)
     w = k.new_empty(B, T, H, K)
-    fn = _recompute_w_u_fwd_jit if use_gfx936_t4096_config else recompute_w_u_fwd_kernel
-    opts = dict(IS_VARLEN=True, num_warps=2, **GFX936_GDN_T4096_COMPILER_OPTIONS) if use_gfx936_t4096_config else {}
-    fn[(NT, B * H)](
+    recompute_w_u_fwd_kernel[(NT, B * H)](
         k=k,
         v=v,
         beta=beta,
@@ -161,6 +156,5 @@ def recompute_w_u_fwd(
         BT=BT,
         BK=BK,
         BV=BV,
-        **opts,
     )
     return w, u

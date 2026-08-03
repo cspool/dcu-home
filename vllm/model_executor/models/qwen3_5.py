@@ -39,6 +39,7 @@ from vllm.distributed import (
     get_pp_group,
 )
 from vllm.logger import init_logger
+from vllm.model_executor.layers.fla.ops.gfx936 import qwen35_gdn_rmsnorm
 from vllm.model_executor.layers.layernorm import (
     GemmaRMSNorm as Qwen3_5RMSNorm,
 )
@@ -68,10 +69,6 @@ from vllm.transformers_utils.configs.qwen3_5 import (
 from vllm.transformers_utils.configs.qwen3_5_moe import (
     Qwen3_5MoeConfig,
     Qwen3_5MoeTextConfig,
-)
-from vllm.model_executor.layers.rocm_qwen35_gdn import (
-    _can_use_qwen35_gdn_strided_z_rmsnorm,
-    _qwen35_gdn_strided_z_rmsnorm,
 )
 
 from .interfaces import (
@@ -114,7 +111,6 @@ from .utils import (
 logger = init_logger(__name__)
 
 
-
 class Qwen3_5ProcessingInfo(Qwen3VLProcessingInfo):
     def get_hf_config(self):
         return self.ctx.get_hf_config(Qwen3_5Config)
@@ -126,9 +122,6 @@ class Qwen3_5MoeProcessingInfo(Qwen3VLProcessingInfo):
 
 
 class Qwen3_5GatedDeltaNet(Qwen3NextGatedDeltaNet):
-    defer_core_attn_output_zeroing = True
-    warmup_gfx936_gdn_t4096 = True
-
     def fix_query_key_value_ordering(
         self,
         mixed_qkvz: torch.Tensor,
@@ -202,9 +195,6 @@ class Qwen3_5GatedDeltaNet(Qwen3NextGatedDeltaNet):
         # ============================================================
         # Part 2: Core Attention (Custom Op)
         # ============================================================
-        # The Qwen3.5 specialization defers zeroing until _forward_core has
-        # written the real-token prefix, then clears only the untouched padded
-        # tail. Other Qwen3Next users retain their existing allocation policy.
         core_attn_out = torch.empty(
             (num_tokens, self.num_v_heads // self.tp_size, self.head_v_dim),
             dtype=hidden_states.dtype,
@@ -222,22 +212,7 @@ class Qwen3_5GatedDeltaNet(Qwen3NextGatedDeltaNet):
         # ============================================================
         # Part 3: Output Projection
         # ============================================================
-        if _can_use_qwen35_gdn_strided_z_rmsnorm(
-            core_attn_out, z, self.norm.weight
-        ):
-            core_attn_out = _qwen35_gdn_strided_z_rmsnorm(
-                core_attn_out,
-                z,
-                self.norm.weight,
-                self.norm.eps,
-            )
-        else:
-            z_shape_og = z.shape
-            # Reshape input data into 2D tensor
-            core_attn_out = core_attn_out.reshape(-1, core_attn_out.shape[-1])
-            z = z.reshape(-1, z.shape[-1])
-            core_attn_out = self.norm(core_attn_out, z)
-            core_attn_out = core_attn_out.reshape(z_shape_og)
+        core_attn_out = qwen35_gdn_rmsnorm(self.norm, core_attn_out, z)
         core_attn_out = rearrange(core_attn_out, "... h d -> ... (h d)")
         output[:num_tokens], _ = self.out_proj(core_attn_out)
 

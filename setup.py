@@ -819,7 +819,7 @@ def get_version_add(sha: Optional[str] = None) -> str:
     command = "git config --global --add safe.directory "+pwd  
     subprocess.run(command, shell=True, capture_output=False, text=True) 
     vllm_root = os.path.dirname(os.path.abspath(__file__))
-    add_version_path = os.path.join(os.path.join(vllm_root, "vllm"), "_version.py")
+    add_version_path = os.path.join(os.path.join(vllm_root, "vllm"), "version.py")
     major, minor, _ = torch.__version__.split('.')
     if add_git_version:
         if sha != 'Unknown':
@@ -843,8 +843,9 @@ def get_version_add(sha: Optional[str] = None) -> str:
 try:
     __version__ = "0.18.1"
     __version_tuple__ = (0, 18, 1)
-    __hcu_version__ = f'0.18.1+{version}'
-
+    __hcu_version__ = f'0.18.1+{version}' 
+    
+    from vllm.version import __version__, __version_tuple__, __hcu_version__
 except Exception as e:
     import warnings
 
@@ -853,8 +854,8 @@ except Exception as e:
                   stacklevel=2)
     __version__ = "dev"
     __version_tuple__ = (0, 0, __version__)
-
-
+    
+    
 def _prev_minor_version_was(version_str):
     '''Check whether a given version matches the previous minor version.
 
@@ -889,7 +890,7 @@ def _prev_minor_version():
     
 def get_version():
     get_version_add()
-    version_file = 'vllm/_version.py'
+    version_file = 'vllm/version.py'
     with open(version_file, encoding='utf-8') as f:
         exec(compile(f.read(), version_file, 'exec'))
     return locals()['__hcu_version__']
@@ -993,9 +994,9 @@ if _is_cuda() or _is_hip():
     # copying the relevant .py files from the source repository.
     # ext_modules.append(CMakeExtension(name="vllm.triton_kernels", optional=True))
 
+# if _is_hip():
+#     ext_modules.append(CMakeExtension(name="vllm._rocm_C"))
 if _is_hip():
-    # CSCC H10.4: ship the existing ROCm skinny-GEMM extension so the
-    # gfx9 single-request decode path can be benchmarked and shape-gated.
     ext_modules.append(CMakeExtension(name="vllm._rocm_C"))
 
 if _is_cuda():
