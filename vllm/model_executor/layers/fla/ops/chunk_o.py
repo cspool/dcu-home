@@ -16,25 +16,13 @@ from vllm.triton_utils import tl, triton
 
 from .index import prepare_chunk_indices
 from .op import exp
-from .utils import (
-    FLA_GDN_FIX_BT,
-    GFX936_GDN_T4096_COMPILER_OPTIONS,
-    check_shared_mem,
-    is_nvidia_hopper,
-    unwrap_triton_jit,
-)
+from .gfx936 import GFX936_GDN_T4096_COMPILER_OPTIONS, unwrap_triton_jit
+from .utils import FLA_GDN_FIX_BT, check_shared_mem, is_nvidia_hopper
 
 BKV_LIST = [64, 128] if check_shared_mem() else [32, 64]
 NUM_WARPS = [2, 4] if is_nvidia_hopper else [2, 4, 8]
 
-# Offline autotune winners for the gfx936 Qwen3.5 BF16 runtime signature.
-# T is deliberately absent: chunk_fwd_kernel_o marks it do_not_specialize and
-# BT buckets every possible sequence length into these three configurations.
-_GFX936_GDN_CHUNK_O_CONFIGS = {
-    16: {"BK": 32, "BV": 32, "num_warps": 2, "num_stages": 2},
-    32: {"BK": 32, "BV": 32, "num_warps": 2, "num_stages": 3},
-    64: {"BK": 32, "BV": 64, "num_warps": 4, "num_stages": 2},
-}
+_GFX936_GDN_CHUNK_O_CONFIGS = {16: {"BK": 32, "BV": 32, "num_warps": 2, "num_stages": 2}, 32: {"BK": 32, "BV": 32, "num_warps": 2, "num_stages": 3}, 64: {"BK": 32, "BV": 64, "num_warps": 4, "num_stages": 2}}
 
 
 @triton.heuristics(
@@ -183,16 +171,28 @@ def chunk_fwd_o(
     def grid(meta):
         return (triton.cdiv(V, meta["BV"]), NT, B * H)
 
-    launch_kwargs = dict(
-        q=q,
-        k=k,
-        v=v,
-        h=h,
-        g=g,
-        o=o,
-        cu_seqlens=cu_seqlens,
-        chunk_indices=chunk_indices,
-        scale=scale,
+    if use_gfx936_config or use_gfx936_t4096_config:
+        launch_kwargs = dict(
+            q=q, k=k, v=v, h=h, g=g, o=o, cu_seqlens=cu_seqlens,
+            chunk_indices=chunk_indices, scale=scale,
+            T=T, H=H, Hg=Hg, K=K, V=V, BT=BT,
+        )
+        config = ({"BK": 128, "BV": 128, "num_warps": 4,
+                   **GFX936_GDN_T4096_COMPILER_OPTIONS}
+                  if use_gfx936_t4096_config else _GFX936_GDN_CHUNK_O_CONFIGS[BT])
+        _chunk_fwd_kernel_o_jit[(triton.cdiv(V, config["BV"]), NT, B * H)](
+            **launch_kwargs, **config, USE_G=True, IS_VARLEN=True)
+        return o
+    chunk_fwd_kernel_o[grid](
+        q,
+        k,
+        v,
+        h,
+        g,
+        o,
+        cu_seqlens,
+        chunk_indices,
+        scale,
         T=T,
         H=H,
         Hg=Hg,
@@ -200,29 +200,4 @@ def chunk_fwd_o(
         V=V,
         BT=BT,
     )
-    if use_gfx936_t4096_config:
-        candidate_grid = (triton.cdiv(V, 128), NT, B * H)
-        _chunk_fwd_kernel_o_jit[candidate_grid](
-            **launch_kwargs,
-            BK=128,
-            BV=128,
-            USE_G=True,
-            IS_VARLEN=True,
-            num_warps=4,
-            **GFX936_GDN_T4096_COMPILER_OPTIONS,
-        )
-    elif use_gfx936_config:
-        config = _GFX936_GDN_CHUNK_O_CONFIGS[BT]
-        candidate_grid = (triton.cdiv(V, config["BV"]), NT, B * H)
-        _chunk_fwd_kernel_o_jit[candidate_grid](
-            **launch_kwargs,
-            BK=config["BK"],
-            BV=config["BV"],
-            USE_G=True,
-            IS_VARLEN=True,
-            num_warps=config["num_warps"],
-            num_stages=config["num_stages"],
-        )
-    else:
-        chunk_fwd_kernel_o[grid](**launch_kwargs)
     return o

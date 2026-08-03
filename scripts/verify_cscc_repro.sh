@@ -7,6 +7,7 @@ SNAPSHOT_ROOT="67f44ab405d8efed30a42f04f6e74ae2e8370884"
 PROFILE_REL="vllm/platforms/tunable_profiles/gfx936_qwen3_5_27b_bf16_tn_m4096.csv"
 PROFILE_SHA256="169c7b11a0340d9e22405327b5e5667b2aa9e9e8d899bd59e10ca4fb7fb52030"
 SOURCE_MANIFEST="evidence/manifests/repro_minimal_runtime.sha256"
+RUNTIME_CHURN_LIMIT=1000
 WHEEL="${1:-}"
 
 fail() {
@@ -40,6 +41,9 @@ required_files=(
     tests/rocm/test_rocm_tunableop_scope.py
     "$PROFILE_REL"
     vllm/config/parallel.py
+    vllm/model_executor/layers/fla/ops/gfx936.py
+    vllm/model_executor/layers/rocm_qwen35_gdn.py
+    vllm/model_executor/layers/rocm_qwen35_gemv.py
     vllm/platforms/rocm.py
     vllm/platforms/rocm_tunableop.py
     vllm/v1/attention/ops/rocm_aiter_unified_attention_gqa6.py
@@ -51,6 +55,23 @@ for path in "${required_files[@]}"; do
         fail "required tracked file is missing: $path"
 done
 pass "required optimization files are tracked"
+
+if git cat-file -e "$BASELINE^{commit}" 2>/dev/null; then
+    read -r runtime_additions runtime_deletions < <(
+        git diff --numstat "$BASELINE" -- csrc setup.py vllm |
+            awk '{ additions += $1; deletions += $2 }
+                 END { print additions + 0, deletions + 0 }'
+    )
+    runtime_churn=$((runtime_additions + runtime_deletions))
+    (( runtime_churn <= RUNTIME_CHURN_LIMIT )) || fail \
+        "runtime source churn ${runtime_churn} exceeds ${RUNTIME_CHURN_LIMIT} (${runtime_additions} additions + ${runtime_deletions} deletions)"
+    pass "runtime source churn ${runtime_churn}/${RUNTIME_CHURN_LIMIT} (${runtime_additions} additions + ${runtime_deletions} deletions)"
+    while read -r path; do
+        awk -v path="$path" '$2 == path { found = 1 } END { exit !found }' \
+            "$SOURCE_MANIFEST" || fail "runtime file is absent from manifest: $path"
+    done < <(git diff --name-only "$BASELINE" -- csrc setup.py vllm)
+    pass "runtime source manifest coverage"
+fi
 
 sha256sum -c "$SOURCE_MANIFEST" >/dev/null || \
     fail "runtime source manifest mismatch"
@@ -80,6 +101,7 @@ pass "frozen TunableOp profile"
 
 required_patterns=(
     "qwen35_bf16_gemv"
+    "qwen35_output_gemv"
     "speculative_config is None"
     "page784_split_prefill"
     "use_gfx936_gdn_t4096_config"
@@ -99,6 +121,7 @@ forbidden_patterns=(
     "rocm_gateup_swiglu"
     "VLLM_CSCC_DISABLE_GATEUP_SWIGLU_FUSION"
     "CSCC_DISABLE_DECODE_OUTPUT_GEMV_K17408"
+    "LLGemm1_qwen35_output_kernel"
 )
 for pattern in "${forbidden_patterns[@]}"; do
     if git grep -q -F "$pattern" -- csrc vllm; then
@@ -129,9 +152,12 @@ PYTHONPYCACHEPREFIX="$VERIFY_TMP/pycache" python3 -m py_compile \
     vllm/model_executor/layers/fla/ops/chunk_o.py \
     vllm/model_executor/layers/fla/ops/chunk_scaled_dot_kkt.py \
     vllm/model_executor/layers/fla/ops/fused_recurrent.py \
+    vllm/model_executor/layers/fla/ops/gfx936.py \
     vllm/model_executor/layers/fla/ops/solve_tril.py \
     vllm/model_executor/layers/fla/ops/utils.py \
     vllm/model_executor/layers/fla/ops/wy_fast.py \
+    vllm/model_executor/layers/rocm_qwen35_gdn.py \
+    vllm/model_executor/layers/rocm_qwen35_gemv.py \
     vllm/model_executor/layers/utils.py \
     vllm/model_executor/models/qwen3_5.py \
     vllm/model_executor/models/qwen3_next.py \
@@ -151,9 +177,9 @@ bash -n \
     scripts/cscc_gfx936_env.sh \
     scripts/serve_cscc_dp2.sh
 if git cat-file -e "$BASELINE^{commit}" 2>/dev/null; then
-    git diff --check "$BASELINE"..HEAD
+    git diff --check "$BASELINE" --
 else
-    git diff --check "$SNAPSHOT_ROOT"..HEAD
+    git diff --check "$SNAPSHOT_ROOT" --
 fi
 pass "Python, shell, and patch-format checks"
 
@@ -165,6 +191,10 @@ if [[ -n "$WHEEL" ]]; then
         fail "wheel does not contain vllm/_rocm_C"
     grep -q "^vllm/platforms/tunable_profiles/$(basename "$PROFILE_REL")$" \
         "$wheel_files" || fail "wheel does not contain the frozen profile"
+    for module in gfx936.py rocm_qwen35_gdn.py rocm_qwen35_gemv.py; do
+        grep -q "/${module}$" "$wheel_files" || \
+            fail "wheel does not contain ${module}"
+    done
     if grep -Eq '(^|/)(__pycache__/|.*\.pyc$)' "$wheel_files"; then
         fail "wheel contains Python bytecode from a reused build tree"
     fi

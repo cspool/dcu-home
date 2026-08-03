@@ -349,40 +349,16 @@ def fused_recurrent_gated_delta_rule_packed_decode(
     validate: bool = True,
 ) -> tuple[torch.Tensor, torch.Tensor]:
     if validate:
-        if mixed_qkv.ndim != 2:
-            raise ValueError(
-                f"`mixed_qkv` must be a 2D tensor (got ndim={mixed_qkv.ndim})."
-            )
-        if mixed_qkv.stride(-1) != 1:
-            raise ValueError("`mixed_qkv` must be contiguous in the last dim.")
-        if a.ndim != 2 or b.ndim != 2:
-            raise ValueError(
-                f"`a` and `b` must be 2D tensors (got a.ndim={a.ndim}, b.ndim={b.ndim})."
-            )
-        if a.stride(-1) != 1 or b.stride(-1) != 1:
-            raise ValueError("`a`/`b` must be contiguous in the last dim.")
-        if A_log.ndim != 1 or dt_bias.ndim != 1:
-            raise ValueError("`A_log`/`dt_bias` must be 1D tensors.")
-        if A_log.stride(0) != 1 or dt_bias.stride(0) != 1:
-            raise ValueError("`A_log`/`dt_bias` must be contiguous.")
-        if ssm_state_indices.ndim != 1:
-            raise ValueError(
-                f"`ssm_state_indices` must be 1D for packed decode (got ndim={ssm_state_indices.ndim})."
-            )
-        if not out.is_contiguous():
-            raise ValueError("`out` must be contiguous.")
-
+        if mixed_qkv.ndim != 2: raise ValueError(f"`mixed_qkv` must be a 2D tensor (got ndim={mixed_qkv.ndim}).")
+        if mixed_qkv.stride(-1) != 1: raise ValueError("`mixed_qkv` must be contiguous in the last dim.")
+        if a.ndim != 2 or b.ndim != 2: raise ValueError(f"`a` and `b` must be 2D tensors (got a.ndim={a.ndim}, b.ndim={b.ndim}).")
+        if a.stride(-1) != 1 or b.stride(-1) != 1: raise ValueError("`a`/`b` must be contiguous in the last dim.")
+        if A_log.ndim != 1 or dt_bias.ndim != 1: raise ValueError("`A_log`/`dt_bias` must be 1D tensors.")
+        if A_log.stride(0) != 1 or dt_bias.stride(0) != 1: raise ValueError("`A_log`/`dt_bias` must be contiguous.")
+        if ssm_state_indices.ndim != 1: raise ValueError(f"`ssm_state_indices` must be 1D for packed decode (got ndim={ssm_state_indices.ndim}).")
+        if not out.is_contiguous(): raise ValueError("`out` must be contiguous.")
         dev = mixed_qkv.device
-        if (
-            a.device != dev
-            or b.device != dev
-            or A_log.device != dev
-            or dt_bias.device != dev
-            or initial_state.device != dev
-            or out.device != dev
-            or ssm_state_indices.device != dev
-        ):
-            raise ValueError("All inputs must be on the same device.")
+        if any(x.device != dev for x in (a, b, A_log, dt_bias, initial_state, out, ssm_state_indices)): raise ValueError("All inputs must be on the same device.")
 
     B = mixed_qkv.shape[0]
     if validate and (a.shape[0] != B or b.shape[0] != B):
@@ -435,22 +411,11 @@ def fused_recurrent_gated_delta_rule_packed_decode(
         raise ValueError(
             f"Packed decode kernel only supports NK=1 (got K={K}, BK={BK})."
         )
-    # The Qwen3.5-27B single-token packed-decode shape is reduction limited on
-    # gfx936.  Four warps at BV=32 are ~36% faster than the generic one-warp
-    # launch.  A 64-step stateful audit across four seeds bounded the BF16
-    # output/state differences at 3.8e-6/3.1e-5 respectively.
-    is_qwen35_gfx936_decode = (
-        B == 1
-        and H == 16
-        and HV == 48
-        and K == 128
-        and V == 128
-        and mixed_qkv.dtype == torch.bfloat16
-        and initial_state.dtype == torch.bfloat16
-    )
-    BV = 32 if is_qwen35_gfx936_decode else min(triton.next_power_of_2(V), 32)
-    num_stages = 1 if is_qwen35_gfx936_decode else 3
-    num_warps = 4 if is_qwen35_gfx936_decode else 1
+    BV = min(triton.next_power_of_2(V), 32)
+    num_stages = 3
+    num_warps = 1
+    if B == 1 and H == 16 and HV == 48 and K == V == 128 and mixed_qkv.dtype == initial_state.dtype == torch.bfloat16:
+        BV, num_stages, num_warps = 32, 1, 4
 
     stride_mixed_qkv_tok = mixed_qkv.stride(0)
     stride_a_tok = a.stride(0)

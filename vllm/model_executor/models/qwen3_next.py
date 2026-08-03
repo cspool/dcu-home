@@ -39,6 +39,7 @@ from vllm.model_executor.layers.fla.ops import (
     fused_sigmoid_gating_delta_rule_update,
 )
 from vllm.model_executor.layers.fla.ops.chunk import l2norm_fwd
+from vllm.model_executor.layers.fla.ops.gfx936 import _is_gfx936_device
 from vllm.model_executor.layers.fused_moe import SharedFusedMoE
 from vllm.model_executor.layers.layernorm import (
     GemmaRMSNorm as Qwen3NextRMSNorm,
@@ -712,16 +713,6 @@ class Qwen3NextGatedDeltaNet(nn.Module, MambaBase):
         is part of its autotune key, we run warmup passes with T = 16,
         32, and 64 to cover all possible ``BT`` values.
 
-        Triton also appends every tensor dtype to that key.  Qwen3.5 runtime
-        metadata uses int32 ``cu_seqlens``, so its gfx936 warmup must use
-        int32 as well; an int64 warmup cannot protect a later short residual
-        prefill from recompilation.
-
-        The exact gfx936 Qwen3.5 specialization additionally has fixed
-        T=4096 kernels. Warm both its no-state and existing-state variants
-        here so their Triton compilation time is never charged to the first
-        long-context request.
-
         The decode path uses ``fused_sigmoid_gating_delta_rule_update``
         which has fixed kernel parameters (no autotuning), so only the
         prefill (chunked) path needs warming up.
@@ -735,37 +726,21 @@ class Qwen3NextGatedDeltaNet(nn.Module, MambaBase):
         num_k_heads = self.num_k_heads // self.tp_size
         num_v_heads = self.num_v_heads // self.tp_size
         _, state_dtype = self.get_state_dtype()
-        warmup_gfx936_gdn_t4096 = False
-        if (
+        warmup_gfx936_gdn_t4096 = (
             getattr(self, "warmup_gfx936_gdn_t4096", False)
             and device.type == "cuda"
             and device.index is not None
             and dtype == torch.bfloat16
-            and num_k_heads == 16
-            and num_v_heads == 48
-            and self.head_k_dim == 128
-            and self.head_v_dim == 128
-        ):
-            try:
-                properties = torch.cuda.get_device_properties(device.index)
-            except (AssertionError, RuntimeError):
-                pass
-            else:
-                warmup_gfx936_gdn_t4096 = (
-                    getattr(properties, "gcnArchName", "").split(":", 1)[0]
-                    == "gfx936"
-                )
+            and (num_k_heads, num_v_heads, self.head_k_dim, self.head_v_dim)
+            == (16, 48, 128, 128)
+            and _is_gfx936_device(device.index)
+        )
 
         # Run warmup for each possible BT value of chunk_fwd_kernel_o:
         #   T=16 → BT=16, T=32 → BT=32, T=64 → BT=64.
         # Other kernels always use BT=chunk_size(64), so their autotune
         # cache is populated on the first pass and reused thereafter.
-        warmup_lengths = (16, 32, 64, 4096) if warmup_gfx936_gdn_t4096 else (
-            16,
-            32,
-            64,
-        )
-        for T in warmup_lengths:
+        for T in ((16, 32, 64, 4096) if warmup_gfx936_gdn_t4096 else (16, 32, 64)):
             is_gfx936_t4096 = warmup_gfx936_gdn_t4096 and T == 4096
             q = torch.randn(
                 1, T, num_k_heads, self.head_k_dim, device=device, dtype=dtype
@@ -786,53 +761,47 @@ class Qwen3NextGatedDeltaNet(nn.Module, MambaBase):
                 device=device,
                 dtype=state_dtype,
             )
-            cu_seqlens = torch.tensor(
-                [0, T],
-                device=device,
-                dtype=torch.int32 if warmup_gfx936_gdn_t4096 else torch.long,
+            cu_seqlens = torch.tensor([0, T], device=device, dtype=torch.long)
+            if warmup_gfx936_gdn_t4096: cu_seqlens = cu_seqlens.int()
+            extras = ((state, True), (None, True)) if is_gfx936_t4096 else (
+                ((None, True),) if self.chunk_gated_delta_rule.supports_none_initial_state else ()
             )
-            if is_gfx936_t4096:
-                # Cover both the fixed output-state specialization and the
-                # fallback no-output-state variant. The latter has a larger
-                # Triton autotune set and caused a measurable first-request
-                # stall before it was included in initialization.
-                warmup_cases = [(state, False), (state, True), (None, True)]
+            try:
+                self.chunk_gated_delta_rule(
+                    q=q,
+                    k=k,
+                    v=v,
+                    g=g,
+                    beta=beta,
+                    initial_state=state,
+                    output_final_state=False,
+                    cu_seqlens=cu_seqlens,
+                    use_qk_l2norm_in_kernel=True,
+                )
+            except Exception:
+                logger.warning(
+                    "GDN prefill kernel warmup (T=%d) failed for "
+                    "layer %s. First inference may OOM due to "
+                    "autotuner.",
+                    T,
+                    self.prefix,
+                    exc_info=True,
+                )
             else:
-                warmup_cases = [(state, False)]
-                if self.chunk_gated_delta_rule.supports_none_initial_state:
-                    warmup_cases.append((None, True))
-
-            for warmup_state, warmup_output_final_state in warmup_cases:
+                logger.debug(
+                    "GDN prefill kernel warmup (T=%d) completed for layer %s",
+                    T,
+                    self.prefix,
+                )
+            for warmup_state, output_final_state in extras:
                 try:
                     self.chunk_gated_delta_rule(
-                        q=q,
-                        k=k,
-                        v=v,
-                        g=g,
-                        beta=beta,
-                        initial_state=warmup_state,
-                        output_final_state=warmup_output_final_state,
-                        cu_seqlens=cu_seqlens,
+                        q=q, k=k, v=v, g=g, beta=beta, initial_state=warmup_state,
+                        output_final_state=output_final_state, cu_seqlens=cu_seqlens,
                         use_qk_l2norm_in_kernel=True,
                     )
                 except Exception:
-                    logger.warning(
-                        "GDN prefill kernel warmup (T=%d, initial_state=%s) "
-                        "failed for layer %s. First inference may OOM due to "
-                        "autotuner.",
-                        T,
-                        "none" if warmup_state is None else "tensor",
-                        self.prefix,
-                        exc_info=True,
-                    )
-                else:
-                    logger.debug(
-                        "GDN prefill kernel warmup (T=%d, initial_state=%s) "
-                        "completed for layer %s",
-                        T,
-                        "none" if warmup_state is None else "tensor",
-                        self.prefix,
-                    )
+                    logger.warning("Extra GDN warmup failed", exc_info=True)
             del q, k, v, g, beta, state, cu_seqlens
 
         torch.accelerator.empty_cache()
@@ -873,10 +842,8 @@ class Qwen3NextGatedDeltaNet(nn.Module, MambaBase):
                 attn_metadata=attn_metadata,
                 virtual_engine=forward_context.virtual_engine,
             )
-            if (
-                getattr(self, "defer_core_attn_output_zeroing", False)
-                and attn_metadata.num_actual_tokens < core_attn_out.shape[0]
-            ):
+            if (getattr(self, "defer_core_attn_output_zeroing", False)
+                    and attn_metadata.num_actual_tokens < core_attn_out.shape[0]):
                 core_attn_out[attn_metadata.num_actual_tokens :].zero_()
             return
 
@@ -1007,18 +974,10 @@ class Qwen3NextGatedDeltaNet(nn.Module, MambaBase):
 
         # 2.2: Process the remaining part
         if attn_metadata.num_prefills > 0:
-            if (
-                attn_metadata.has_initial_state_any is False
-                and self.chunk_gated_delta_rule.supports_none_initial_state
-            ):
-                initial_state = None
-            elif attn_metadata.has_initial_state_any is False:
-                initial_state = ssm_state.new_zeros(
-                    (
-                        non_spec_state_indices_tensor.shape[0],
-                        *ssm_state.shape[1:],
-                    )
-                )
+            if attn_metadata.has_initial_state_any is False:
+                initial_state = (None if self.chunk_gated_delta_rule.supports_none_initial_state
+                                 else ssm_state.new_zeros((non_spec_state_indices_tensor.shape[0],
+                                                           *ssm_state.shape[1:])))
             else:
                 initial_state = ssm_state[non_spec_state_indices_tensor].contiguous()
                 if attn_metadata.has_initial_state_all is not True:
@@ -1077,10 +1036,8 @@ class Qwen3NextGatedDeltaNet(nn.Module, MambaBase):
             core_attn_out[:num_actual_tokens] = core_attn_out_spec.squeeze(0)
         else:
             core_attn_out[:num_actual_tokens] = core_attn_out_non_spec.squeeze(0)
-        if (
-            getattr(self, "defer_core_attn_output_zeroing", False)
-            and num_actual_tokens < core_attn_out.shape[0]
-        ):
+        if (getattr(self, "defer_core_attn_output_zeroing", False)
+                and num_actual_tokens < core_attn_out.shape[0]):
             core_attn_out[num_actual_tokens:].zero_()
 
     def _forward_core_decode_non_spec(

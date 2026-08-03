@@ -275,10 +275,7 @@ class Worker(WorkerBase):
             # Set random seed.
             set_random_seed(self.model_config.seed)
             if current_platform.is_rocm():
-                from vllm.platforms.rocm_tunableop import (
-                    maybe_init_rocm_tunableop,
-                )
-
+                from vllm.platforms.rocm_tunableop import maybe_init_rocm_tunableop
                 self._rocm_tunableop_state = maybe_init_rocm_tunableop(
                     self.vllm_config, self.device
                 )
@@ -613,13 +610,8 @@ class Worker(WorkerBase):
         kernel_warmup(self)
 
         if self._rocm_tunableop_state is not None:
-            from vllm.platforms.rocm_tunableop import (
-                assert_rocm_tunableop_pre_capture,
-            )
-
-            assert_rocm_tunableop_pre_capture(
-                self._rocm_tunableop_state
-            )
+            from vllm.platforms.rocm_tunableop import assert_rocm_tunableop_pre_capture
+            assert_rocm_tunableop_pre_capture(self._rocm_tunableop_state)
 
         cuda_graph_memory_bytes = 0
         if not self.model_config.enforce_eager:

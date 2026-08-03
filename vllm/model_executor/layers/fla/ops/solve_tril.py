@@ -16,13 +16,8 @@ from vllm.triton_utils import tl, triton
 
 from .index import prepare_chunk_indices
 from .op import make_tensor_descriptor
-from .utils import (
-    GFX936_GDN_T4096_COMPILER_OPTIONS,
-    input_guard,
-    is_amd,
-    is_tma_supported,
-    unwrap_triton_jit,
-)
+from .gfx936 import GFX936_GDN_T4096_COMPILER_OPTIONS, unwrap_triton_jit
+from .utils import input_guard, is_amd, is_tma_supported
 
 FLA_TRIL_PRECISION = os.environ.get("FLA_TRIL_PRECISION", "ieee")
 ALLOWED_TRIL_PRECISIONS = ["ieee", "tf32"] if is_amd else ["ieee", "tf32", "tf32x3"]
@@ -509,9 +504,7 @@ def merge_16x16_to_64x64_inverse_kernel(
         )
 
 
-_merge_16x16_to_64x64_inverse_jit = unwrap_triton_jit(
-    merge_16x16_to_64x64_inverse_kernel
-)
+_merge_16x16_to_64x64_inverse_jit = unwrap_triton_jit(merge_16x16_to_64x64_inverse_kernel)
 
 
 @input_guard
@@ -554,7 +547,10 @@ def solve_tril(
     elif BT == 64:
         merge_fn = merge_16x16_to_64x64_inverse_kernel
 
-    launch_kwargs = dict(
+    fixed = use_gfx936_t4096_config and BT == 64
+    fn = _merge_16x16_to_64x64_inverse_jit if fixed else merge_fn
+    opts = dict(IS_VARLEN=True, num_warps=2, **GFX936_GDN_T4096_COMPILER_OPTIONS) if fixed else {}
+    fn[NT, B * H](
         A=A,
         Ai=Ai,
         cu_seqlens=cu_seqlens,
@@ -564,14 +560,6 @@ def solve_tril(
         BT=BT,
         USE_TMA=is_tma_supported,
         DOT_PRECISION=FLA_TRIL_PRECISION,
+        **opts,
     )
-    if use_gfx936_t4096_config and BT == 64:
-        _merge_16x16_to_64x64_inverse_jit[NT, B * H](
-            **launch_kwargs,
-            IS_VARLEN=True,
-            num_warps=2,
-            **GFX936_GDN_T4096_COMPILER_OPTIONS,
-        )
-    else:
-        merge_fn[NT, B * H](**launch_kwargs)
     return Ai

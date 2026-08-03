@@ -696,16 +696,15 @@ class GPUModelRunner(
             compile_sizes = self.compilation_config.compile_sizes
             self._use_static_contiguous_mrope_buffer = (
                 current_platform.is_rocm()
-                and self.model_config.architectures
-                == ["Qwen3_5ForConditionalGeneration"]
+                and self.model_config.architectures == ["Qwen3_5ForConditionalGeneration"]
                 and self.dtype == torch.bfloat16
                 and self.max_num_tokens == 4096
                 and compile_sizes is not None
                 and set(compile_sizes) == {4096}
                 and self.speculative_config is None
-                and self.parallel_config.tensor_parallel_size == 1
-                and self.parallel_config.pipeline_parallel_size == 1
-                and self.parallel_config.data_parallel_size == 1
+                and (self.parallel_config.tensor_parallel_size,
+                     self.parallel_config.pipeline_parallel_size,
+                     self.parallel_config.data_parallel_size) == (1, 1, 1)
             )
             # NOTE: `mrope_positions` is implemented with one additional dummy
             # position on purpose to make it non-contiguous so that it can work
@@ -717,22 +716,10 @@ class GPUModelRunner(
             # identical position IDs, making M-RoPE functionally equivalent to
             # 1D-RoPE.
             # See page 5 of https://arxiv.org/abs/2409.12191
-            #
-            # The fixed Qwen3.5 submission graph always consumes all 4096
-            # positions. Give that exact configuration a persistent contiguous
-            # backing buffer, so the H2D destination can be passed to the graph
-            # directly instead of launching a second 96-KiB D2D copy on every
-            # decode step. Other configurations retain the upstream dummy
-            # column and the per-shape contiguous staging buffers below.
-            mrope_buffer_width = self.max_num_tokens + (
-                not self._use_static_contiguous_mrope_buffer
-            )
+            mrope_buffer_width = self.max_num_tokens + (not self._use_static_contiguous_mrope_buffer)
             self.mrope_positions = self._make_buffer(
                 (3, mrope_buffer_width), dtype=torch.int64
             )
-            # Compiled graph inputs require a contiguous per-shape stride.
-            # Keep these buffers alive because CUDA graphs retain their input
-            # addresses across requests.
             self._contiguous_mrope_positions: dict[int, torch.Tensor] = {}
 
         # Only relevant for models using XD-RoPE (e.g, HunYuan-VL)
@@ -921,19 +908,12 @@ class GPUModelRunner(
                             param.fill_(v_scale_val)
 
     def _get_mrope_positions(self, num_tokens: int) -> torch.Tensor:
-        if (
-            self._use_static_contiguous_mrope_buffer
-            and num_tokens == self.max_num_tokens
-        ):
+        if self._use_static_contiguous_mrope_buffer and num_tokens == self.max_num_tokens:
             return self.mrope_positions.gpu
 
         positions = self._contiguous_mrope_positions.get(num_tokens)
         if positions is None:
-            positions = torch.empty(
-                (3, num_tokens),
-                dtype=torch.int64,
-                device=self.device,
-            )
+            positions = torch.empty((3, num_tokens), dtype=torch.int64, device=self.device)
             self._contiguous_mrope_positions[num_tokens] = positions
         positions.copy_(self.mrope_positions.gpu[:, :num_tokens])
         return positions
@@ -1860,12 +1840,6 @@ class GPUModelRunner(
         )
 
         if self.uses_mrope:
-            # Only relevant for models using M-RoPE (e.g, Qwen2-VL). Copy the
-            # complete persistent buffer so the transfer is contiguous. The
-            # active ``[:, :total_num_scheduled_tokens]`` view is strided; on
-            # ROCm, repeatedly copying that tiny view during decode can turn
-            # the nominally asynchronous H2D copy into a host-side stall.
-            # The model still consumes exactly the same active slice below.
             self.mrope_positions.copy_to_gpu()
         elif self.uses_xdrope_dim > 0:
             # Only relevant for models using XD-RoPE (e.g, HunYuan-VL)

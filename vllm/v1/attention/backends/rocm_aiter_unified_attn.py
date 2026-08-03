@@ -26,9 +26,7 @@ logger = init_logger(__name__)
 
 @cache
 def _is_gfx936() -> bool:
-    """Resolve the exact H11.3 target without depending on other candidates."""
-    properties = torch.cuda.get_device_properties(torch.cuda.current_device())
-    return "gfx936" in getattr(properties, "gcnArchName", "")
+    return "gfx936" in getattr(torch.cuda.get_device_properties(torch.cuda.current_device()), "gcnArchName", "")
 
 
 class RocmAiterUnifiedAttentionBackend(RocmAttentionBackend):
@@ -134,35 +132,13 @@ class RocmAiterUnifiedAttentionImpl(RocmAttentionImpl):
         from aiter.ops.triton.unified_attention import unified_attention
 
         self.unified_attention = unified_attention
-        self._h11_3_gqa6_prefill = None
-        self._page784_split_prefill = None
-        if (
-            _is_gfx936()
-            and num_heads == 24
-            and num_kv_heads == 4
-            and head_size == 256
-            and kv_cache_dtype == "auto"
-            and alibi_slopes is None
-            and sliding_window is None
-            and logits_soft_cap in (None, 0, 0.0)
-            and sinks is None
-            and attn_type == AttentionType.DECODER
-        ):
-            from vllm.v1.attention.ops.rocm_aiter_unified_attention_gqa6 import (
-                unified_attention_gqa6_prefill,
-            )
-            from vllm.v1.attention.ops.rocm_page784_split_attention import (
-                page784_split_prefill,
-            )
-
+        self._h11_3_gqa6_prefill = self._page784_split_prefill = None
+        if _is_gfx936() and (num_heads, num_kv_heads, head_size) == (24, 4, 256) and kv_cache_dtype == "auto" and alibi_slopes is sliding_window is None and logits_soft_cap in (None, 0, 0.0) and sinks is None and attn_type == AttentionType.DECODER:
+            from vllm.v1.attention.ops.rocm_aiter_unified_attention_gqa6 import unified_attention_gqa6_prefill
+            from vllm.v1.attention.ops.rocm_page784_split_attention import page784_split_prefill
             self._h11_3_gqa6_prefill = unified_attention_gqa6_prefill
             self._page784_split_prefill = page784_split_prefill
-            logger.info_once(
-                "H11.3 mapping + H11.4 compiler layout + H11.5 wide causal "
-                "tiles and aligned page784 later-Prefill wrapper enabled for "
-                "gfx936 BF16 head256 GQA6 prefill; "
-                "non-target and decode calls keep the original AITER path"
-            )
+            logger.info_once("H11.3/H11.4/H11.5 page784 later-Prefill wrapper enabled")
 
     def forward(
         self,
@@ -246,64 +222,16 @@ class RocmAiterUnifiedAttentionImpl(RocmAttentionImpl):
             key.shape[1] if key is not None else self.num_kv_heads,
         )
 
-        # H11.3 fixes AITER's BLOCK_M=16/GQA6 overlap only for the exact
-        # Qwen3.5 full-attention prefill shape.  All checks are CPU metadata,
-        # dtype, or shape checks and do not introduce a device synchronization.
-        use_h11_3_gqa6_prefill = (
-            self._h11_3_gqa6_prefill is not None
-            and max_seqlen_q > 1
-            and query.dtype == torch.bfloat16
-            and key_cache.dtype == torch.bfloat16
-            and value_cache.dtype == torch.bfloat16
-            and output.dtype == torch.bfloat16
-            and query.ndim == 3
-            and query.shape[1:] == (24, 256)
-            and key_cache.ndim == 4
-            and key_cache.shape[2:] == (4, 256)
-            and value_cache.ndim == 4
-            and value_cache.shape[2:] == (4, 256)
-        )
-        use_page784_split_prefill = (
-            use_h11_3_gqa6_prefill
-            and self._page784_split_prefill is not None
-            and cu_seqlens_q.numel() == 2
-            and num_actual_tokens == max_seqlen_q
-            and max_seqlen_q >= 128
-            and max_seqlen_k > max_seqlen_q
-            and max_seqlen_k - max_seqlen_q >= 784
-            and key is not None
-            and value is not None
-            and key.ndim == 3
-            and value.ndim == 3
-            and key.shape[0] >= num_actual_tokens
-            and value.shape[0] >= num_actual_tokens
-            and key.shape[1:] == (4, 256)
-            and value.shape[1:] == (4, 256)
-            and key_cache.shape[1] == 784
-            and value_cache.shape[1] == 784
-            and block_table.ndim == 2
-            and block_table.shape[0] == 1
-        )
+        use_h11_3_gqa6_prefill = self._h11_3_gqa6_prefill is not None and max_seqlen_q > 1 and query.dtype == key_cache.dtype == value_cache.dtype == output.dtype == torch.bfloat16 and query.ndim == 3 and query.shape[1:] == (24, 256) and key_cache.ndim == value_cache.ndim == 4 and key_cache.shape[2:] == value_cache.shape[2:] == (4, 256)
+        use_page784_split_prefill = use_h11_3_gqa6_prefill and self._page784_split_prefill is not None and cu_seqlens_q.numel() == 2 and num_actual_tokens == max_seqlen_q and max_seqlen_q >= 128 and max_seqlen_k > max_seqlen_q and max_seqlen_k - max_seqlen_q >= 784 and key is not None and value is not None and key.ndim == value.ndim == 3 and key.shape[0] >= num_actual_tokens <= value.shape[0] and key.shape[1:] == value.shape[1:] == (4, 256) and key_cache.shape[1] == value_cache.shape[1] == 784 and block_table.ndim == 2 and block_table.shape[0] == 1
         if use_page784_split_prefill:
             self._page784_split_prefill(
-                query=query[:num_actual_tokens],
-                key=key[:num_actual_tokens],
-                value=value[:num_actual_tokens],
-                key_cache=key_cache,
-                value_cache=value_cache,
-                output=output[:num_actual_tokens],
-                cu_seqlens_q=cu_seqlens_q,
-                block_table=block_table,
-                max_seqlen_q=max_seqlen_q,
-                max_seqlen_k=max_seqlen_k,
-                softmax_scale=self.scale,
+                query=query[:num_actual_tokens], key=key[:num_actual_tokens], value=value[:num_actual_tokens],
+                key_cache=key_cache, value_cache=value_cache, output=output[:num_actual_tokens],
+                cu_seqlens_q=cu_seqlens_q, block_table=block_table, max_seqlen_q=max_seqlen_q, max_seqlen_k=max_seqlen_k, softmax_scale=self.scale,
             )
             return output
-        attention_fn = (
-            self._h11_3_gqa6_prefill
-            if use_h11_3_gqa6_prefill
-            else self.unified_attention
-        )
+        attention_fn = self._h11_3_gqa6_prefill if use_h11_3_gqa6_prefill else self.unified_attention
         attention_fn(
             q=query[:num_actual_tokens],
             k=key_cache,

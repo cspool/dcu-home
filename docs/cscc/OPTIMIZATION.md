@@ -26,10 +26,11 @@ KV cache。非目标 shape、decode 或多序列路径回退到 AITER/vLLM 原�
 
 - `vllm/model_executor/layers/fla/ops/{chunk,chunk_o}.py`
 - `vllm/model_executor/layers/fla/ops/chunk_scaled_dot_kkt.py`
+- `vllm/model_executor/layers/fla/ops/gfx936.py`
 - `vllm/model_executor/layers/fla/ops/{solve_tril,wy_fast,utils}.py`
 - `vllm/model_executor/models/qwen3_next.py`
 
-`utils.py` 统一 gate gfx936 Qwen3.5 GDN 的张量 shape、dtype、layout、
+`gfx936.py` 统一 gate gfx936 Qwen3.5 GDN 的张量 shape、dtype、layout、
 `cu_seqlens=int32` 和 T=4096 条件。命中时绕过大规模在线 autotune，使用离线
 验证的 Triton meta/compiler 配置；短 residual prefill 按 BT=16/32/64 使用
 固定 `chunk_o` 配置。
@@ -42,6 +43,7 @@ KV cache。非目标 shape、decode 或多序列路径回退到 AITER/vLLM 原�
 主要文件：
 
 - `vllm/model_executor/layers/fla/ops/fused_recurrent.py`
+- `vllm/model_executor/layers/rocm_qwen35_gdn.py`
 - `vllm/model_executor/models/qwen3_5.py`
 - `vllm/model_executor/models/qwen3_next.py`
 - `vllm/v1/attention/backends/gdn_attn.py`
@@ -62,20 +64,26 @@ Qwen3.5 专用路径还包含：
 
 - `csrc/rocm/{ops.h,skinny_gemms.cu,torch_bindings.cpp}`
 - `vllm/_custom_ops.py`
+- `vllm/model_executor/layers/rocm_qwen35_gemv.py`
 - `vllm/model_executor/layers/utils.py`
 
-唯一公开入口为 `qwen35_bf16_gemv(weight, input)`。C++ 自行选择布局，不再让
-Python 传 `rows_per_block` 或 thread 数：
+外层统一从 `rocm_unquantized_gemm` 按精确 shape 分发。原来需要手写 load、
+FP32 FMA、wave shuffle、LDS 和 launch bounds 的 output projection 已改为
+Triton reduction；K=5120 的多行 pair-reduction 仍保留现有 HIP kernel。其
+源码只做语法等价压缩，640 threads、320 pairs、wave64、5 个归约 wave、
+K chunk=640、2/4 rows per block 及 load/FMA/reduction 顺序均不变：
 
-| Weight `(M,K)` | 内核 |
+| Weight `(M,K)` | 实现 |
 | --- | --- |
-| `(5120,17408)` | 1024-thread output-projection kernel |
-| `(96,5120)` | 4 rows/block，640-thread pair reduction |
-| `(14336/16384/34816/248320,5120)` | 2 rows/block，640-thread pair reduction |
+| `(5120,17408)` | 16-warp Triton reduction，`BLOCK_K=2048` |
+| `(96,5120)` | HIP，4 rows/block，640-thread pair reduction |
+| `(14336/16384/34816/248320,5120)` | HIP，2 rows/block，640-thread pair reduction |
 
-入口要求 BF16、单 token、连续、16-byte 对齐和上述精确 shape。其他 GEMM 走
-原路径。旧 generic 320-thread kernel、旧 `LLMM1Strided` ABI、SwiGLU 融合
-实验和所有 disable 环境变量均已删除。
+两条路径都只接受 gfx936、BF16、单 token、连续且无 bias 的精确 shape；其他
+GEMM 走原路径。`qwen35_bf16_gemv(weight, input)` 现在只承载 K=5120 HIP
+shape，C++ 自行选择 rows/block。旧 K=17408 手写 kernel、generic 320-thread
+kernel、旧 `LLMM1Strided` ABI、SwiGLU 融合实验和所有 disable 环境变量均已
+删除。
 
 ## 5. M=4096 rocBLAS profile 与静态编译图
 

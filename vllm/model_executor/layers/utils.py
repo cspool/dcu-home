@@ -128,46 +128,24 @@ def rocm_unquantized_gemm_impl(
     m = weight.shape[0]
     k = weight.shape[1]
 
-    # CSCC H10.11: the Qwen3.5 dense-MLP down projection is the remaining
-    # dominant single-token GEMV not covered by the K=5120 pair-reduction
-    # path below. Keep this inside the existing opaque GEMM op so the model
-    # graph and CUDA Graph boundaries do not change.
-    use_cscc_output_llmm1 = (
+    use_qwen35_gemv = (
         on_gfx936()
         and n == 1
-        and m == 5120
-        and k == 17408
-        and x.dtype == torch.bfloat16
-        and weight.dtype == torch.bfloat16
+        and x.dtype == weight.dtype == torch.bfloat16
         and bias is None
         and weight.is_contiguous()
         and x.stride(-1) == 1
+        and ((m, k) == (5120, 17408)
+             or (k == 5120 and m in (96, 14336, 16384, 34816, 248320)))
     )
-    if use_cscc_output_llmm1:
+    if use_qwen35_gemv:
+        if k == 17408:
+            from vllm.model_executor.layers.rocm_qwen35_gemv import qwen35_output_gemv
+            gemv = qwen35_output_gemv
+        else:
+            gemv = ops.qwen35_bf16_gemv
         x_view = x.reshape(-1, x.size(-1))
-        out = ops.qwen35_bf16_gemv(weight, x_view)
-        return out.reshape(*x.shape[:-1], weight.shape[0])
-
-    # CSCC H10.4-H10.8/R29: use fixed K=5120 single-token GEMV layouts selected
-    # by same-device microbenchmarks.  The pair-reduction kernel joins two
-    # 320-thread halves while preserving the per-row FP32 accumulation order.
-    # Keep the gate deliberately exact: nearby output sizes and k=6144 were
-    # neutral or slower.  Two-row blocks are fastest for every large target;
-    # the tiny m=96 gate retains four rows and the repaired FP32 reduction.
-    use_cscc_llmm1 = (
-        on_gfx936()
-        and n == 1
-        and k == 5120
-        and m in (96, 14336, 16384, 34816, 248320)
-        and x.dtype == torch.bfloat16
-        and weight.dtype == torch.bfloat16
-        and bias is None
-        and weight.is_contiguous()
-        and x.stride(-1) == 1
-    )
-    if use_cscc_llmm1:
-        x_view = x.reshape(-1, x.size(-1))
-        out = ops.qwen35_bf16_gemv(weight, x_view)
+        out = gemv(weight, x_view)
         return out.reshape(*x.shape[:-1], weight.shape[0])
 
     cu_count = num_compute_units()

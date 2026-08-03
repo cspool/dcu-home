@@ -60,11 +60,13 @@ python3 - <<'PY'
 import torch
 import vllm
 import vllm._rocm_C
+from vllm.model_executor.layers.rocm_qwen35_gemv import qwen35_output_gemv
 
 assert vllm.__version__ == "0.18.1"
 assert hasattr(torch.ops._rocm_C, "qwen35_bf16_gemv")
 assert not hasattr(torch.ops._rocm_C, "LLMM1Strided")
 assert not hasattr(torch.ops._rocm_C, "LLMM1StridedSilu")
+assert callable(qwen35_output_gemv)
 print("native ABI: PASS")
 PY
 ```

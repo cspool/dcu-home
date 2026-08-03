@@ -14,7 +14,7 @@ from vllm.triton_utils import tl, triton
 
 from .index import prepare_chunk_indices
 from .op import exp
-from .utils import GFX936_GDN_T4096_COMPILER_OPTIONS, unwrap_triton_jit
+from .gfx936 import GFX936_GDN_T4096_COMPILER_OPTIONS, unwrap_triton_jit
 
 
 @triton.heuristics(
@@ -99,9 +99,7 @@ def chunk_scaled_dot_kkt_fwd_kernel(
     tl.store(p_A, b_A.to(p_A.dtype.element_ty), boundary_check=(0, 1))
 
 
-_chunk_scaled_dot_kkt_fwd_jit = unwrap_triton_jit(
-    chunk_scaled_dot_kkt_fwd_kernel
-)
+_chunk_scaled_dot_kkt_fwd_jit = unwrap_triton_jit(chunk_scaled_dot_kkt_fwd_kernel)
 
 
 def chunk_scaled_dot_kkt_fwd(
@@ -145,7 +143,9 @@ def chunk_scaled_dot_kkt_fwd(
     NT = triton.cdiv(T, BT) if cu_seqlens is None else len(chunk_indices)
 
     A = torch.empty(B, T, H, BT, device=k.device, dtype=output_dtype)
-    launch_kwargs = dict(
+    fn = _chunk_scaled_dot_kkt_fwd_jit if use_gfx936_t4096_config else chunk_scaled_dot_kkt_fwd_kernel
+    opts = dict(BK=128, USE_G=True, IS_VARLEN=True, num_warps=4, **GFX936_GDN_T4096_COMPILER_OPTIONS) if use_gfx936_t4096_config else {}
+    fn[(NT, B * H)](
         k=k,
         g=g,
         beta=beta,
@@ -157,16 +157,6 @@ def chunk_scaled_dot_kkt_fwd(
         Hg=Hg,
         K=K,
         BT=BT,
+        **opts,
     )
-    if use_gfx936_t4096_config:
-        _chunk_scaled_dot_kkt_fwd_jit[(NT, B * H)](
-            **launch_kwargs,
-            BK=128,
-            USE_G=True,
-            IS_VARLEN=True,
-            num_warps=4,
-            **GFX936_GDN_T4096_COMPILER_OPTIONS,
-        )
-    else:
-        chunk_scaled_dot_kkt_fwd_kernel[(NT, B * H)](**launch_kwargs)
     return A

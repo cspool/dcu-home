@@ -14,7 +14,7 @@ import torch
 from vllm.triton_utils import tl, triton
 
 from .index import prepare_chunk_indices
-from .utils import GFX936_GDN_T4096_COMPILER_OPTIONS, unwrap_triton_jit
+from .gfx936 import GFX936_GDN_T4096_COMPILER_OPTIONS, unwrap_triton_jit
 
 
 @triton.heuristics({"IS_VARLEN": lambda args: args["cu_seqlens"] is not None})
@@ -141,7 +141,9 @@ def recompute_w_u_fwd(
     BV = 64
     u = torch.empty_like(v)
     w = k.new_empty(B, T, H, K)
-    launch_kwargs = dict(
+    fn = _recompute_w_u_fwd_jit if use_gfx936_t4096_config else recompute_w_u_fwd_kernel
+    opts = dict(IS_VARLEN=True, num_warps=2, **GFX936_GDN_T4096_COMPILER_OPTIONS) if use_gfx936_t4096_config else {}
+    fn[(NT, B * H)](
         k=k,
         v=v,
         beta=beta,
@@ -159,14 +161,6 @@ def recompute_w_u_fwd(
         BT=BT,
         BK=BK,
         BV=BV,
+        **opts,
     )
-    if use_gfx936_t4096_config:
-        _recompute_w_u_fwd_jit[(NT, B * H)](
-            **launch_kwargs,
-            IS_VARLEN=True,
-            num_warps=2,
-            **GFX936_GDN_T4096_COMPILER_OPTIONS,
-        )
-    else:
-        recompute_w_u_fwd_kernel[(NT, B * H)](**launch_kwargs)
     return w, u

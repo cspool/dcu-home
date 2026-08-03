@@ -333,9 +333,7 @@ class ParallelConfig:
     """Equal to the data parallel rank but not used for torch process groups
     and not overridden for dense models."""
     data_parallel_size_original: int = Field(default=1, init=False)
-    """Global DP size before a dense engine is normalized to local DP=1."""
     data_parallel_size_local_original: int = Field(default=1, init=False)
-    """Local DP size before a dense engine is normalized to local DP=1."""
 
     _api_process_count: int = Field(default=1, gt=0)
     """

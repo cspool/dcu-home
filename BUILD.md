@@ -51,10 +51,13 @@ bash scripts/verify_cscc_repro.sh "$WHEEL"
 校验内容包括：
 
 - OpenDAS 基线对象或提交快照关系；
+- 相对 OpenDAS 基线的运行时源码改动量不超过 1000 行（新增与删除之和）；
+- 每个相对基线有改动的运行时文件均被 source manifest 覆盖；
 - 必需优化文件、profile SHA-256、5 个 validators 和 5 个结果；
 - Python/shell 语法和补丁格式；
 - 已否决 GEMV/SwiGLU 实验不存在；
 - wheel 包含 `_rocm_C` 和冻结 profile；
+- wheel 包含 gfx936 gate、GDN RMSNorm 和 output-projection Triton 模块；
 - wheel 不含 `.pyc`、`__pycache__` 或已删除实验模块。
 
 ## 安装与导入
@@ -65,11 +68,13 @@ python3 - <<'PY'
 import torch
 import vllm
 import vllm._rocm_C
+from vllm.model_executor.layers.rocm_qwen35_gemv import qwen35_output_gemv
 
 assert vllm.__version__ == "0.18.1"
 assert hasattr(torch.ops._rocm_C, "qwen35_bf16_gemv")
 assert not hasattr(torch.ops._rocm_C, "LLMM1Strided")
-print("vLLM and qwen35_bf16_gemv: OK")
+assert callable(qwen35_output_gemv)
+print("vLLM native K5120 and Triton K17408 GEMV: OK")
 PY
 ```
 

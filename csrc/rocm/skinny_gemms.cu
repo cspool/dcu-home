@@ -233,204 +233,61 @@ __global__ void LLGemm1_kernel(const scalar_t* in_a, const scalar_t* in_b,
   }
 }
 
-// CSCC H10.11: the main ROCm extension is built with -mno-fma for legacy
-// kernels, while the fastest gfx936 output-projection probe relies on an
-// FP32 FMA chain.  Keep the override local to the two exact Qwen3.5 shapes so
-// existing GEMV arithmetic and outputs are unchanged.
-__device__ __forceinline__ float qwen35_output_fmac(float acc, float lhs,
-                                                    float rhs) {
-  asm("v_fmac_f32 %0, %1, %2" : "+v"(acc) : "v"(lhs), "v"(rhs));
-  return acc;
-}
-
-template <int K, int NUM_THREADS>
-__global__ __launch_bounds__(NUM_THREADS) void
-LLGemm1_qwen35_output_kernel(
-    const c10::BFloat16* __restrict__ weight,
-    const c10::BFloat16* __restrict__ input,
-    c10::BFloat16* __restrict__ output) {
-  static_assert(NUM_THREADS % WARP_SIZE == 0);
-  constexpr int NUM_WARPS = NUM_THREADS / WARP_SIZE;
-  constexpr int NUM_K_CHUNKS = K / 8;
-  using scalar2_t = __hip_bfloat162;
-
-  const auto weight4 = reinterpret_cast<const float4*>(weight);
-  const auto input2 = reinterpret_cast<const scalar2_t*>(input);
-  auto output1 = reinterpret_cast<__hip_bfloat16*>(output);
-  __shared__ float red_smem[NUM_WARPS];
-
-  const int thread_id = threadIdx.x;
-  const int warp = thread_id / WARP_SIZE;
-  const int lane = thread_id % WARP_SIZE;
-  const int row = blockIdx.x;
-  float acc = 0.0f;
-
-  for (int chunk = thread_id; chunk < NUM_K_CHUNKS;
-       chunk += NUM_THREADS) {
-    const scalar2_t bx0 = input2[chunk * 4 + 0];
-    const scalar2_t bx1 = input2[chunk * 4 + 1];
-    const scalar2_t bx2 = input2[chunk * 4 + 2];
-    const scalar2_t bx3 = input2[chunk * 4 + 3];
-    const float2 bx0f = __s22float2(bx0);
-    const float2 bx1f = __s22float2(bx1);
-    const float2 bx2f = __s22float2(bx2);
-    const float2 bx3f = __s22float2(bx3);
-    const float4 packed_weight =
-        load_ntmprl(&weight4[row * NUM_K_CHUNKS + chunk]);
-    const auto weight2 = reinterpret_cast<const scalar2_t*>(&packed_weight);
-
-    float lo = 0.0f;
-    float hi = 0.0f;
-    float2 weightf = __s22float2(weight2[0]);
-    lo = qwen35_output_fmac(lo, weightf.x, bx0f.x);
-    hi = qwen35_output_fmac(hi, weightf.y, bx0f.y);
-    weightf = __s22float2(weight2[1]);
-    lo = qwen35_output_fmac(lo, weightf.x, bx1f.x);
-    hi = qwen35_output_fmac(hi, weightf.y, bx1f.y);
-    weightf = __s22float2(weight2[2]);
-    lo = qwen35_output_fmac(lo, weightf.x, bx2f.x);
-    hi = qwen35_output_fmac(hi, weightf.y, bx2f.y);
-    weightf = __s22float2(weight2[3]);
-    lo = qwen35_output_fmac(lo, weightf.x, bx3f.x);
-    hi = qwen35_output_fmac(hi, weightf.y, bx3f.y);
-    acc += lo + hi;
-  }
-
-#pragma unroll
-  for (int mask = WARP_SIZE / 2; mask >= 1; mask /= 2) {
-    acc += __shfl_xor(acc, mask);
-  }
-  if (lane == 0) {
-    red_smem[warp] = acc;
-  }
-  __syncthreads();
-
-  if (warp == 0 && lane == 0) {
-    float total = 0.0f;
-#pragma unroll
-    for (int source_warp = 0; source_warp < NUM_WARPS; ++source_warp) {
-      total += red_smem[source_warp];
-    }
-    output1[row] = __float2bfloat16(total);
-  }
-}
-
-// CSCC H10.8/R29: gfx936 BF16 K=5120 specialization for the tiny gate,
-// three large single-token projections, and the 248320-row LM head.  A
-// 640-thread workgroup lets each lane consume exactly one 8-element K chunk
-// and issue every row load before starting arithmetic.  Threads 320..639
-// publish their partials to the corresponding
-// lanes in threads 0..319.  Pairing the two halves before the existing
-// five-wave reduction preserves the H10.7 accumulation order: chunk t is
-// added to chunk t+320, then the same wave shuffle and cross-wave sums run.
 template <int NUM_A_ROWS_PER_BLOCK>
 __global__ __launch_bounds__(640) void LLGemm1_k5120_pairreduce640_kernel(
     const c10::BFloat16* __restrict__ in_a,
     const c10::BFloat16* __restrict__ in_b, c10::BFloat16* __restrict__ out_c) {
-  constexpr int NUM_THREADS = 640;
-  constexpr int NUM_PAIR_THREADS = NUM_THREADS / 2;
-  constexpr int WAVE_SIZE = 64;
-  constexpr int NUM_REDUCTION_WARPS = NUM_PAIR_THREADS / WAVE_SIZE;
-  constexpr int NUM_K_CHUNKS = 5120 / 8;
-
+  constexpr int NUM_THREADS = 640, NUM_PAIR_THREADS = 320, WAVE_SIZE = 64, NUM_REDUCTION_WARPS = 5, NUM_K_CHUNKS = 640;
   using scalar2_t = __hip_bfloat162;
-  auto af4 = reinterpret_cast<const float4*>(in_a);
-  auto bf2 = reinterpret_cast<const scalar2_t*>(in_b);
-  auto output = reinterpret_cast<__hip_bfloat16*>(out_c);
-
-  // ROWS * (320 + 5) * sizeof(float) bytes of LDS.
-  __shared__ float pair_smem[NUM_A_ROWS_PER_BLOCK][NUM_PAIR_THREADS];
-  __shared__ float red_smem[NUM_A_ROWS_PER_BLOCK][NUM_REDUCTION_WARPS];
-
-  const int thread_id = threadIdx.x;
-  const int pair_lane = thread_id % NUM_PAIR_THREADS;
-  const int warp = thread_id / WAVE_SIZE;
-  const int lane = thread_id % WAVE_SIZE;
-  const int row_start = blockIdx.x * NUM_A_ROWS_PER_BLOCK;
-
-  const scalar2_t bx0 = bf2[thread_id * 4 + 0];
-  const scalar2_t bx1 = bf2[thread_id * 4 + 1];
-  const scalar2_t bx2 = bf2[thread_id * 4 + 2];
-  const scalar2_t bx3 = bf2[thread_id * 4 + 3];
-  const float2 bx0f = __s22float2(bx0);
-  const float2 bx1f = __s22float2(bx1);
-  const float2 bx2f = __s22float2(bx2);
-  const float2 bx3f = __s22float2(bx3);
-
-  // Keep all independent row loads ahead of the FP32 FMA chains.  The exact
-  // divisibility guard makes every row in the workgroup valid.
+  const float4* af4 = reinterpret_cast<const float4*>(in_a); const scalar2_t* bf2 = reinterpret_cast<const scalar2_t*>(in_b); __hip_bfloat16* output = reinterpret_cast<__hip_bfloat16*>(out_c);
+  __shared__ float pair_smem[NUM_A_ROWS_PER_BLOCK][NUM_PAIR_THREADS], red_smem[NUM_A_ROWS_PER_BLOCK][NUM_REDUCTION_WARPS];
+  const int thread_id = threadIdx.x, pair_lane = thread_id % NUM_PAIR_THREADS, warp = thread_id / WAVE_SIZE, lane = thread_id % WAVE_SIZE, row_start = blockIdx.x * NUM_A_ROWS_PER_BLOCK;
+  const scalar2_t bx0 = bf2[thread_id * 4], bx1 = bf2[thread_id * 4 + 1], bx2 = bf2[thread_id * 4 + 2], bx3 = bf2[thread_id * 4 + 3];
+  const float2 bx0f = __s22float2(bx0), bx1f = __s22float2(bx1), bx2f = __s22float2(bx2), bx3f = __s22float2(bx3);
   float4 weight4[NUM_A_ROWS_PER_BLOCK];
 #pragma unroll
-  for (int row_offset = 0; row_offset < NUM_A_ROWS_PER_BLOCK; ++row_offset) {
-    weight4[row_offset] =
-        load_ntmprl(&af4[(row_start + row_offset) * NUM_K_CHUNKS + thread_id]);
-  }
-
+  for (int row_offset = 0; row_offset < NUM_A_ROWS_PER_BLOCK; ++row_offset)
+    weight4[row_offset] = load_ntmprl(&af4[(row_start + row_offset) * NUM_K_CHUNKS + thread_id]);
   float acc[NUM_A_ROWS_PER_BLOCK] = {};
 #pragma unroll
   for (int row_offset = 0; row_offset < NUM_A_ROWS_PER_BLOCK; ++row_offset) {
     auto weight2 = reinterpret_cast<scalar2_t*>(&weight4[row_offset]);
-    float lo = 0.0f;
-    float hi = 0.0f;
-
-    float2 weightf = __s22float2(weight2[0]);
-    lo = fmaf(weightf.x, bx0f.x, lo);
-    hi = fmaf(weightf.y, bx0f.y, hi);
-    weightf = __s22float2(weight2[1]);
-    lo = fmaf(weightf.x, bx1f.x, lo);
-    hi = fmaf(weightf.y, bx1f.y, hi);
-    weightf = __s22float2(weight2[2]);
-    lo = fmaf(weightf.x, bx2f.x, lo);
-    hi = fmaf(weightf.y, bx2f.y, hi);
-    weightf = __s22float2(weight2[3]);
-    lo = fmaf(weightf.x, bx3f.x, lo);
-    hi = fmaf(weightf.y, bx3f.y, hi);
+    float lo = 0.0f, hi = 0.0f;
+    float2 weightf = __s22float2(weight2[0]); lo = fmaf(weightf.x, bx0f.x, lo); hi = fmaf(weightf.y, bx0f.y, hi);
+    weightf = __s22float2(weight2[1]); lo = fmaf(weightf.x, bx1f.x, lo); hi = fmaf(weightf.y, bx1f.y, hi);
+    weightf = __s22float2(weight2[2]); lo = fmaf(weightf.x, bx2f.x, lo); hi = fmaf(weightf.y, bx2f.y, hi);
+    weightf = __s22float2(weight2[3]); lo = fmaf(weightf.x, bx3f.x, lo); hi = fmaf(weightf.y, bx3f.y, hi);
     acc[row_offset] += lo + hi;
   }
-
   if (thread_id >= NUM_PAIR_THREADS) {
 #pragma unroll
-    for (int row_offset = 0; row_offset < NUM_A_ROWS_PER_BLOCK; ++row_offset) {
+    for (int row_offset = 0; row_offset < NUM_A_ROWS_PER_BLOCK; ++row_offset)
       pair_smem[row_offset][pair_lane] = acc[row_offset];
-    }
   }
   __syncthreads();
-
   if (thread_id < NUM_PAIR_THREADS) {
 #pragma unroll
-    for (int row_offset = 0; row_offset < NUM_A_ROWS_PER_BLOCK; ++row_offset) {
+    for (int row_offset = 0; row_offset < NUM_A_ROWS_PER_BLOCK; ++row_offset)
       acc[row_offset] += pair_smem[row_offset][thread_id];
-    }
-
 #pragma unroll
     for (int mask = WAVE_SIZE / 2; mask >= 1; mask /= 2) {
 #pragma unroll
-      for (int row_offset = 0; row_offset < NUM_A_ROWS_PER_BLOCK;
-           ++row_offset) {
+      for (int row_offset = 0; row_offset < NUM_A_ROWS_PER_BLOCK; ++row_offset)
         acc[row_offset] += __shfl_xor(acc[row_offset], mask);
-      }
     }
-
     if (lane == 0) {
 #pragma unroll
-      for (int row_offset = 0; row_offset < NUM_A_ROWS_PER_BLOCK;
-           ++row_offset) {
+      for (int row_offset = 0; row_offset < NUM_A_ROWS_PER_BLOCK; ++row_offset)
         red_smem[row_offset][warp] = acc[row_offset];
-      }
     }
   }
-  // Threads in both halves must reach both workgroup barriers.
   __syncthreads();
-
   if (thread_id < NUM_A_ROWS_PER_BLOCK) {
     float total = 0.0f;
 #pragma unroll
-    for (int source_warp = 0; source_warp < NUM_REDUCTION_WARPS;
-         ++source_warp) {
+    for (int source_warp = 0; source_warp < NUM_REDUCTION_WARPS; ++source_warp)
       total += red_smem[thread_id][source_warp];
-    }
-    const int row = row_start + thread_id;
-    output[row] = __float2bfloat16(total);
+    output[row_start + thread_id] = __float2bfloat16(total);
   }
 }
 
@@ -489,65 +346,26 @@ torch::Tensor LLMM1(at::Tensor& in_a, at::Tensor& in_b,
 }
 
 torch::Tensor qwen35_bf16_gemv(at::Tensor& weight, at::Tensor& input) {
-  TORCH_CHECK(weight.dim() == 2 && input.dim() == 2,
-              "qwen35_bf16_gemv expects two rank-2 tensors.");
-  TORCH_CHECK(weight.is_cuda() && input.is_cuda(),
-              "qwen35_bf16_gemv expects GPU tensors.");
-  TORCH_CHECK(weight.device() == input.device(),
-              "Weight and activation tensors must be on the same device.");
-  TORCH_CHECK(weight.is_contiguous() && input.is_contiguous(),
-              "Weight and activation tensors must be contiguous.");
-  TORCH_CHECK(weight.dtype() == torch::kBFloat16 &&
-                  input.dtype() == torch::kBFloat16,
-              "qwen35_bf16_gemv expects BF16 tensors.");
-
-  const int64_t M64 = weight.size(0);
-  const int64_t K64 = weight.size(1);
-  TORCH_CHECK(input.size(0) == 1,
-              "Row number of activation tensor must be 1.");
-  TORCH_CHECK(input.size(1) == K64,
-              "Weight and activation K dimensions must match.");
-  TORCH_CHECK(reinterpret_cast<uintptr_t>(weight.data_ptr()) %
-                          alignof(float4) ==
-                      0 &&
-                  reinterpret_cast<uintptr_t>(input.data_ptr()) %
-                          alignof(float4) ==
-                      0,
-              "Weight and activation pointers must be 16-byte aligned.");
-
-  const bool use_qwen35_output_tuned = M64 == 5120 && K64 == 17408;
-  const bool use_k5120_pairreduce640 =
-      K64 == 5120 &&
-      (M64 == 96 || M64 == 14336 || M64 == 16384 || M64 == 34816 ||
-       M64 == 248320);
-  TORCH_CHECK(
-      use_qwen35_output_tuned || use_k5120_pairreduce640,
-      "qwen35_bf16_gemv only supports the frozen Qwen3.5 decode shapes.");
-
+  TORCH_CHECK(weight.dim() == 2 && input.dim() == 2, "qwen35_bf16_gemv expects two rank-2 tensors.");
+  TORCH_CHECK(weight.is_cuda() && input.is_cuda(), "GPU tensors required.");
+  TORCH_CHECK(weight.device() == input.device(), "Devices must match.");
+  TORCH_CHECK(weight.is_contiguous() && input.is_contiguous(), "Contiguous tensors required.");
+  TORCH_CHECK(weight.dtype() == torch::kBFloat16 && input.dtype() == torch::kBFloat16, "BF16 tensors required.");
+  const int64_t M64 = weight.size(0), K64 = weight.size(1);
+  TORCH_CHECK(input.size(0) == 1, "Input row count must be one.");
+  TORCH_CHECK(input.size(1) == K64, "K dimensions must match.");
+  TORCH_CHECK(reinterpret_cast<uintptr_t>(weight.data_ptr()) % alignof(float4) == 0 && reinterpret_cast<uintptr_t>(input.data_ptr()) % alignof(float4) == 0, "Pointers must be 16-byte aligned.");
+  const bool use_k5120_pairreduce640 = K64 == 5120 && (M64 == 96 || M64 == 14336 || M64 == 16384 || M64 == 34816 || M64 == 248320);
+  TORCH_CHECK(use_k5120_pairreduce640, "Unsupported Qwen3.5 GEMV shape.");
   const int M = static_cast<int>(M64);
-  auto out_c = torch::empty(
-      {1, M},
-      torch::TensorOptions().dtype(input.dtype()).device(input.device()));
-  const at::cuda::OptionalCUDAGuard device_guard(device_of(input));
-  const cudaStream_t stream = at::cuda::getCurrentCUDAStream();
-  auto weight_ptr = weight.data_ptr<c10::BFloat16>();
-  auto input_ptr = input.data_ptr<c10::BFloat16>();
-  auto output_ptr = out_c.data_ptr<c10::BFloat16>();
-
-  if (use_k5120_pairreduce640) {
-    const int rows_per_block = M == 96 ? 4 : 2;
-    const int num_blocks = M / rows_per_block;
-    if (rows_per_block == 2) {
-      LLGemm1_k5120_pairreduce640_kernel<2><<<num_blocks, 640, 0, stream>>>(
-          weight_ptr, input_ptr, output_ptr);
-    } else {
-      LLGemm1_k5120_pairreduce640_kernel<4><<<num_blocks, 640, 0, stream>>>(
-          weight_ptr, input_ptr, output_ptr);
-    }
-  } else {
-    LLGemm1_qwen35_output_kernel<17408, 1024><<<M, 1024, 0, stream>>>(
-        weight_ptr, input_ptr, output_ptr);
-  }
+  auto out_c = torch::empty({1, M}, torch::TensorOptions().dtype(input.dtype()).device(input.device()));
+  const at::cuda::OptionalCUDAGuard device_guard(device_of(input)); const cudaStream_t stream = at::cuda::getCurrentCUDAStream();
+  auto weight_ptr = weight.data_ptr<c10::BFloat16>(); auto input_ptr = input.data_ptr<c10::BFloat16>(); auto output_ptr = out_c.data_ptr<c10::BFloat16>();
+  const int rows_per_block = M == 96 ? 4 : 2, num_blocks = M / rows_per_block;
+  if (rows_per_block == 2)
+    LLGemm1_k5120_pairreduce640_kernel<2><<<num_blocks, 640, 0, stream>>>(weight_ptr, input_ptr, output_ptr);
+  else
+    LLGemm1_k5120_pairreduce640_kernel<4><<<num_blocks, 640, 0, stream>>>(weight_ptr, input_ptr, output_ptr);
   return out_c;
 }
 
