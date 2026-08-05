@@ -129,7 +129,7 @@ def rocm_unquantized_gemm_impl(
     k = weight.shape[1]
 
     if bias is None:
-        from vllm.model_executor.layers.fla.ops.gfx936 import qwen35_gemv
+        from vllm.model_executor.layers.rocm_qwen35_gemv import qwen35_gemv
 
         if (output := qwen35_gemv(weight, x)) is not None:
             return output

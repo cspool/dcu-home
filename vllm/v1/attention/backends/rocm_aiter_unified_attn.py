@@ -4,10 +4,12 @@
 
 import torch
 
+from qwen35_rocm_opt import attention as gqa6
+from qwen35_rocm_opt.target import is_gfx936
+
 from vllm import _custom_ops as ops
 from vllm._aiter_ops import rocm_aiter_ops
 from vllm.logger import init_logger
-from vllm.model_executor.layers.fla.ops.gfx936 import is_gfx936
 from vllm.model_executor.layers.quantization.utils.quant_utils import (
     QuantKey,
     kFp8StaticTensorSym,
@@ -19,7 +21,6 @@ from vllm.v1.attention.backends.rocm_attn import (
     RocmAttentionImpl,
     RocmAttentionMetadataBuilder,
 )
-from vllm.v1.attention.ops import rocm_aiter_unified_attention_gqa6 as gqa6
 
 logger = init_logger(__name__)
 

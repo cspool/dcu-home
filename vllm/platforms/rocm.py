@@ -11,6 +11,8 @@ import torch
 from torch.distributed import PrefixStore, ProcessGroup
 from torch.distributed.distributed_c10d import is_nccl_available
 
+from qwen35_rocm_opt.runtime import load_tunable_profile
+
 import vllm.envs as envs
 from vllm.logger import init_logger
 from vllm.utils.torch_utils import cuda_device_count_stateless
@@ -568,10 +570,7 @@ class RocmPlatform(Platform):
         """
         torch.cuda.set_device(device)
         if profile := os.getenv("VLLM_ROCM_TUNABLEOP_PROFILE"):
-            torch.empty(0, device=device)
-            filename = os.path.join(os.path.dirname(__file__), "tunable_profiles", f"{profile}.csv")
-            torch.cuda.tunable.set_filename(filename)
-            assert torch.cuda.tunable.get_results(), f"empty TunableOp profile: {filename}"
+            load_tunable_profile(profile, device)
 
     @classmethod
     @lru_cache(maxsize=8)

@@ -1,0 +1,93 @@
+{
+  "schema_version": 1,
+  "reference": {
+    "frozen_branch": "repro-800",
+    "frozen_commit": "773645327ace48233980a3eba85d7df8db65c91e",
+    "official_baseline": "fa718036bdb9dfd80a872b86c8ac16c9d02bfd31",
+    "best_score": 91.676381851,
+    "minimum_score": 90.759618032
+  },
+  "validated_environment": {
+    "python": "3.10",
+    "torch": "2.10.0",
+    "torch_hip": "6.3.26093",
+    "triton": "3.4.0",
+    "target": "gfx936",
+    "vllm": "0.18.1+das.dtk2604",
+    "aiter": "0.1.dev1+g9daa788.d20260401",
+    "host_baseline_commit": "fa718036bdb9dfd80a872b86c8ac16c9d02bfd31"
+  },
+  "dependency_policy": {
+    "core_required": ["python", "torch", "triton", "ROCm/gfx936"],
+    "current_host": ["vllm", "AITER", "vLLM vendored FLA"],
+    "replaceable_provider": "torch.ops._rocm_C.LLMM1",
+    "standalone_provider": "qwen35_rocm_opt.native.load_k5120_provider",
+    "forbidden_core_imports": ["vllm", "sglang"]
+  },
+  "modules": [
+    {
+      "id": "A",
+      "name": "attention",
+      "portable_files": [
+        "qwen35_rocm_opt/attention.py",
+        "qwen35_rocm_opt/target.py"
+      ],
+      "host_anchors": [
+        ["vllm/platforms/rocm.py", "def _get_backend_priorities"],
+        ["vllm/v1/attention/backends/rocm_aiter_unified_attn.py", "class RocmAiterUnifiedAttentionImpl"]
+      ],
+      "vllm_symbols": [
+        "RocmAiterUnifiedAttentionImpl",
+        "FlashAttentionMetadata",
+        "AttentionType.DECODER",
+        "aiter.ops.triton.unified_attention"
+      ]
+    },
+    {
+      "id": "B",
+      "name": "gdn",
+      "portable_files": [
+        "qwen35_rocm_opt/gdn.py"
+      ],
+      "host_anchors": [
+        ["vllm/model_executor/layers/fla/ops/chunk.py", "def chunk_gated_delta_rule"],
+        ["vllm/model_executor/layers/fla/ops/chunk_o.py", "def chunk_fwd_o"],
+        ["vllm/v1/attention/backends/gdn_attn.py", "class GDNAttentionMetadataBuilder"],
+        ["vllm/model_executor/models/qwen3_next.py", "class Qwen3NextGatedDeltaNet"],
+        ["vllm/model_executor/models/qwen3_5.py", "class Qwen3_5GatedDeltaNet"]
+      ],
+      "vllm_symbols": [
+        "fused_recurrent_gated_delta_rule_packed_decode_kernel",
+        "GDNAttentionMetadataBuilder",
+        "Qwen3NextGatedDeltaNet",
+        "ChunkGatedDeltaRule"
+      ]
+    },
+    {
+      "id": "C",
+      "name": "gemv_runtime",
+      "portable_files": [
+        "qwen35_rocm_opt/gemv.py",
+        "qwen35_rocm_opt/native.py",
+        "qwen35_rocm_opt/runtime.py",
+        "qwen35_rocm_opt/csrc/binding.cpp",
+        "qwen35_rocm_opt/csrc/k5120_gemv.cu",
+        "qwen35_rocm_opt/profiles/gfx936_qwen3_5_27b_bf16_tn_m4096.csv"
+      ],
+      "host_anchors": [
+        ["vllm/model_executor/layers/utils.py", "def rocm_unquantized_gemm_impl"],
+        ["vllm/model_executor/models/qwen3_next.py", "class Qwen3NextMLP"],
+        ["vllm/platforms/rocm.py", "def set_device"],
+        ["vllm/v1/worker/gpu_model_runner.py", "def _get_positions"],
+        ["csrc/rocm/skinny_gemms.cu", "LLGemm1_k5120_pairreduce640_kernel"]
+      ],
+      "vllm_symbols": [
+        "rocm_unquantized_gemm_impl",
+        "torch.ops._rocm_C.LLMM1",
+        "Qwen2MoeMLP",
+        "RocmPlatform.set_device",
+        "GPUModelRunner"
+      ]
+    }
+  ]
+}

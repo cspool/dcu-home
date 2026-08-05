@@ -66,6 +66,7 @@ from vllm.model_executor.layers.mamba.ops.causal_conv1d import (
     causal_conv1d_update,
 )
 from vllm.model_executor.layers.quantization import QuantizationConfig
+from vllm.model_executor.layers.rocm_qwen35_gemv import qwen35_gemv
 from vllm.model_executor.layers.rotary_embedding import get_rope
 from vllm.model_executor.layers.vocab_parallel_embedding import (
     ParallelLMHead,
@@ -112,7 +113,7 @@ KVCache = tuple[torch.Tensor, torch.Tensor]
 class Qwen3NextMLP(Qwen2MoeMLP):
     def forward(self, x):
         if self.expert_gate is None:
-            gate_up = gfx936.qwen35_gemv(self.gate_up_proj.weight, x)
+            gate_up = qwen35_gemv(self.gate_up_proj.weight, x)
             if gate_up is not None:
                 return self.down_proj(self.act_fn(gate_up))[0]
         return super().forward(x)
