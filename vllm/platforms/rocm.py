@@ -567,8 +567,11 @@ class RocmPlatform(Platform):
         Set the device for the current platform.
         """
         torch.cuda.set_device(device)
-        if filename := os.getenv("PYTORCH_TUNABLEOP_FILENAME"):
+        if profile := os.getenv("VLLM_ROCM_TUNABLEOP_PROFILE"):
+            torch.empty(0, device=device)
+            filename = os.path.join(os.path.dirname(__file__), "tunable_profiles", f"{profile}.csv")
             torch.cuda.tunable.set_filename(filename)
+            assert torch.cuda.tunable.get_results(), f"empty TunableOp profile: {filename}"
 
     @classmethod
     @lru_cache(maxsize=8)

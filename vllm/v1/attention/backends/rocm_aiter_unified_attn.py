@@ -20,7 +20,6 @@ from vllm.v1.attention.backends.rocm_attn import (
     RocmAttentionMetadataBuilder,
 )
 from vllm.v1.attention.ops import rocm_aiter_unified_attention_gqa6 as gqa6
-from vllm.v1.attention.ops import rocm_page784_split_attention as page784
 
 logger = init_logger(__name__)
 
@@ -222,29 +221,9 @@ class RocmAiterUnifiedAttentionImpl(RocmAttentionImpl):
         use_gqa6 = (
             self.gfx936_gqa6
             and max_seqlen_q > 1
-            and cu_seqlens_q.numel() == 2
-            and output_scale is None
-            and query.dtype == key_cache.dtype == torch.bfloat16
-            and key_cache.shape[1] in (64, 784)
-            and key_cache.is_contiguous()
-            and query.stride() == output.stride() == (6144, 256, 1)
+            and query.dtype == key_cache.dtype == value_cache.dtype
+            == output.dtype == torch.bfloat16
         )
-        qkv = (query, key, value)
-        if (
-            use_gqa6
-            and num_actual_tokens == max_seqlen_q
-            and max_seqlen_q >= 128
-            and max_seqlen_k - max_seqlen_q >= 784
-            and key_cache.shape[1] == value_cache.shape[1] == 784
-            and all(tensor.is_contiguous() for tensor in (*qkv, output))
-        ):
-            page784.prefill(
-                tuple(tensor[:num_actual_tokens] for tensor in qkv),
-                (key_cache, value_cache),
-                output[:num_actual_tokens],
-                (cu_seqlens_q, block_table, max_seqlen_q, max_seqlen_k, self.scale),
-            )
-            return output
         (gqa6.prefill if use_gqa6 else self.unified_attention)(
             q=query[:num_actual_tokens],
             k=key_cache,

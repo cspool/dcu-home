@@ -8,7 +8,7 @@ backend。每个数据并行副本仍运行完整模型；请求由 vLLM 的 DP 
 因此不需要把已有单卡 kernel 改写为 TP kernel。
 
 该路径继续使用 `max_num_batched_tokens=4096`、`max_num_seqs=128`、BF16、
-continuous batching 和现有 page784/TunableOp/GEMV 优化。量化、prefix cache、
+continuous batching 和现有 GQA6/TunableOp/GEMV 优化。量化、prefix cache、
 投机解码以及 draft/MTP 模型均未启用。Ray、外部 LB、hybrid DP、跨节点和
 `TP>1` 不在本次支持范围内；专用 ROCm 路径对这些拓扑 fail closed。
 
@@ -23,7 +23,8 @@ continuous batching 和现有 page784/TunableOp/GEMV 优化。量化、prefix ca
 ```text
 vllm-0.18.1+das.dtk2604-cp310-cp310-linux_x86_64.whl
 SHA-256: 1603b2ce5a77e04d6fdabce1aa6af9894ffc81ff8ad2d28ffd837afb8cb13465
-当前等价压缩版: 50f21c3a6a952be49d9cf5db19b0ec030796d310f8c99e48ad5bfe3b8ecb1d8d
+990 行等价压缩版: 50f21c3a6a952be49d9cf5db19b0ec030796d310f8c99e48ad5bfe3b8ecb1d8d
+499 行批量修复版: cb4db9cba095b0eaea14dc5b7dc2688a212c2e761163ef2ee40ba9080be76d7b
 ```
 
 wheel 从空 build tree 构建，不含 `.pyc`；`vllm._rocm_C` 可以加载，且包含
@@ -184,6 +185,50 @@ KV cache 均为 28,224 tokens，INIT/PRE_CAPTURE 各两次 `status=ready`。
 ```text
 当前三档 summary: a33c7bf222d950c072af451d74b4398151936164dfeb912bb0c1697b49ab828b
 8–16K repeat result: b1a29042cb4327af332c851812a7bc26e2dd6a892c4fa9779776aa1b1044bc7e
+```
+
+### 499 行最终双卡全矩阵回归
+
+2026-08-05 使用空 build tree 构建上述 499 行批量修复 wheel，并在两个 rank
+均为 28,224-token KV cache、`gpu-memory-utilization=0.95` 的热服务上执行
+concurrency 2/4/8 与三档输入的完整笛卡尔积。九个 case 均为 8 条正式请求、
+每条固定输出 1024 token：
+
+| 并发 | 4–8K tok/s | 8–16K tok/s | 16–32K tok/s | 成功 |
+| ---: | ---: | ---: | ---: | ---: |
+| 2 | 48.040019 | 44.777397 | 41.517538 | 24/24 |
+| 4 | 81.989201 | 68.676498 | 63.618960 | 24/24 |
+| 8 | 144.800996 | 115.695862 | 96.358738 | 24/24 |
+
+合计 `72/72` 成功、失败 0、无 OOM。concurrency 8 的 8–16K 首轮存在完成
+长尾；同一热服务立即重复为 `119.756462 tok/s`，8/8 成功。相对 2656 行
+最优实现的匹配参考，concurrency 8 三档依次为 `99.695%`、`100.360%`、
+`98.257%`，几何平均 `99.433%`；8–16K 的 concurrency 2/4 分别为
+`100.348%` 和 `97.725%`。所有匹配点均高于 0.95 性能门禁。
+
+全量精度前的 8 并发定向测试曾发现压缩版 packed GDN decode 的第二维 grid
+仍固定为 48，只覆盖 batch 中第一个序列。最终实现改为
+`batch_size * 48`；B=1/2/4/8 的 GPU 对照中输出最大绝对误差不超过
+`3.7e-9`、状态误差不超过 `2.38e-7`，随后 3 轮 8 并发 Retrieval 请求
+`24/24` exact。该修复没有改变算法、KV cache 或调度参数。
+
+完成上述九 case 压力测试后，在同一双卡服务上运行固定全量精度脚本：
+
+| 数据集 | 请求 | 499 行版 | 结果 |
+| --- | ---: | ---: | --- |
+| HotpotQA | 20/20 | 77.96 | pass |
+| GovReport | 30/30 | 32.76 | pass |
+| Retrieval Multi Point | 30/30 | 100.00 | exact |
+| Aggregation Keyword | 30/30 | 100.00 | exact |
+
+总计 `110/110`、API 错误 0，未发现异常重复字符。HotpotQA prediction 与先前
+正确最优版逐字节一致；GovReport 为官方基线的 `99.390%`；两个 RULER 项均
+按多重集合独立复核为 30/30，最终四项精度系数均为 1。
+
+```text
+九 case summary: 52ffd9554e17c827c1dfbaa18dfcf7ebb3a1329919aa8d5a6807c0ea88f4bf44
+8–16K hot repeat: e01aa91ee2e92a6d1628fa50ddde9680a0811c6ac4c5bbb39ebe7a8cc4bf6c21
+精度 summary CSV: 7ec8395ad26e33366be077773ef3292b022c1763b462985ce744ea3c194dd755
 ```
 
 8–16K 的并发扩展结果：

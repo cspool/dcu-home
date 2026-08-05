@@ -28,14 +28,14 @@
 
 ## 数值语义
 
-page784/GQA6、GDN 和 GEMV 会改变浮点归约排布，但仍计算完整 causal
+GQA6、GDN 和 GEMV 会改变浮点归约排布，但仍计算完整 causal
 attention、完整 token/head/layer 和相同权重。没有近似注意力、token 丢弃或
 提前停止。精度以固定 110 条评测和生成文本回归门禁验证，不以 kernel 单测
 替代端到端证据。
 
 ## Fail-closed 范围
 
-- Attention：gfx936、BF16、head256、GQA6、page784、causal prefill。
+- Attention：gfx936、BF16、head256、GQA6、causal prefill。
 - GDN T4096：gfx936、BF16、Q/K/V/head layout、int32 metadata、单序列。
 - GEMV：BF16、单 token、连续/对齐、6 个固定 `(M,K)` shape。
 - TunableOp：Qwen3.5、BF16、4096 chunk、TP/PP/PCP/DP=1、冻结工具链。
@@ -59,7 +59,7 @@ attention、完整 token/head/layer 和相同权重。没有近似注意力、to
 
 ## 第三方边界
 
-项目沿用 Apache License 2.0。GQA6 路径参考 AMD AITER，page784 wrapper
-调用平台 FlashAttention API，GDN 代码包含 flash-linear-attention 来源。
+项目沿用 Apache License 2.0。GQA6 路径参考 AMD AITER，GDN 代码包含
+flash-linear-attention 来源。
 精确版本、许可证和改动边界见根目录
 `THIRD_PARTY_NOTICES.md`；不把第三方 kernel 表述为自研成果。

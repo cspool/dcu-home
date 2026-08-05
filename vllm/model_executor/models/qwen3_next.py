@@ -76,7 +76,7 @@ from vllm.model_executor.model_loader.weight_utils import (
     maybe_remap_kv_scale_name,
     sharded_weight_loader,
 )
-from vllm.model_executor.models.qwen2_moe import Qwen2MoeMLP as Qwen3NextMLP
+from vllm.model_executor.models.qwen2_moe import Qwen2MoeMLP
 from vllm.model_executor.models.utils import sequence_parallel_chunk
 from vllm.model_executor.utils import set_weight_attrs
 from vllm.platforms import current_platform
@@ -107,6 +107,15 @@ from .utils import (
 logger = init_logger(__name__)
 
 KVCache = tuple[torch.Tensor, torch.Tensor]
+
+
+class Qwen3NextMLP(Qwen2MoeMLP):
+    def forward(self, x):
+        if self.expert_gate is None:
+            gate_up = gfx936.qwen35_gemv(self.gate_up_proj.weight, x)
+            if gate_up is not None:
+                return self.down_proj(self.act_fn(gate_up))[0]
+        return super().forward(x)
 
 
 def fi_chunk_gated_delta_rule(
@@ -214,6 +223,7 @@ class ChunkGatedDeltaRule(CustomOp):
         output_final_state: bool,
         cu_seqlens: torch.LongTensor | None = None,
         use_qk_l2norm_in_kernel: bool = True,
+        output: torch.Tensor | None = None,
     ):
         return fi_chunk_gated_delta_rule(
             q=q,
@@ -238,6 +248,7 @@ class ChunkGatedDeltaRule(CustomOp):
         output_final_state: bool,
         cu_seqlens: torch.LongTensor | None = None,
         use_qk_l2norm_in_kernel: bool = True,
+        output: torch.Tensor | None = None,
     ):
         return fla_chunk_gated_delta_rule(
             q=q,
@@ -249,6 +260,7 @@ class ChunkGatedDeltaRule(CustomOp):
             output_final_state=output_final_state,
             cu_seqlens=cu_seqlens,
             use_qk_l2norm_in_kernel=use_qk_l2norm_in_kernel,
+            output=output,
         )
 
 
@@ -792,7 +804,6 @@ class Qwen3NextGatedDeltaNet(nn.Module, MambaBase):
             finally:
                 extras = [state] * (fixed_gdn and T == 4096)
                 extras += [None] * self.chunk_gated_delta_rule.native_gdn
-                warmup = self.chunk_gated_delta_rule
                 extra_args = dict(
                     q=q, k=k, v=v, g=g, beta=beta,
                     output_final_state=True, cu_seqlens=cu_seqlens,
@@ -800,7 +811,7 @@ class Qwen3NextGatedDeltaNet(nn.Module, MambaBase):
                 )
                 for warmup_state in extras:
                     try:
-                        warmup(initial_state=warmup_state, **extra_args)
+                        self.chunk_gated_delta_rule(initial_state=warmup_state, **extra_args)
                     except Exception:
                         logger.warning("Extra GDN warmup failed", exc_info=True)
                 del q, k, v, g, beta, state, cu_seqlens
@@ -994,6 +1005,11 @@ class Qwen3NextGatedDeltaNet(nn.Module, MambaBase):
                 output_final_state=True,
                 cu_seqlens=non_spec_query_start_loc,
                 use_qk_l2norm_in_kernel=True,
+                output=(
+                    core_attn_out[:num_actual_tokens].unsqueeze(0)
+                    if spec_sequence_masks is None
+                    else None
+                ),
             )
             # Init cache
             ssm_state[non_spec_state_indices_tensor] = last_recurrent_state.to(
@@ -1072,12 +1088,11 @@ class Qwen3NextGatedDeltaNet(nn.Module, MambaBase):
             validate_data=False,
         )
         out_buf = core_attn_out[:num_actual_tokens].unsqueeze(1)
-        packed_decode = (
+        (
             gfx936.qwen35_packed_decode
             if self.gfx936_qwen35 and gfx936.use_gfx936(mixed_qkv_non_spec)
             else fused_recurrent_gated_delta_rule_packed_decode
-        )
-        packed_decode(
+        )(
             mixed_qkv=mixed_qkv_non_spec,
             a=a,
             b=b,

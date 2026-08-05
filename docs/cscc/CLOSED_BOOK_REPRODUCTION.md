@@ -138,7 +138,6 @@ Setting attention block size to 784 tokens
 Using the validated 4096-token static compile shape
 VLLM_ROCM_TUNABLEOP_INIT status=ready
 VLLM_ROCM_TUNABLEOP_PRE_CAPTURE status=ready
-page784 later-Prefill wrapper enabled
 ```
 
 DP2 外层配置为 `data_parallel_size=2`；dense worker 内部会规范化为 DP1，

@@ -32,7 +32,7 @@ def gdn_pruner(configs, args, **kwargs):
     args = {**args, **kwargs}
     name = next(name for name in ("q", "v", "k", "A") if name in args)
     if name == "q":
-        schedule = _CHUNK_O.get(args["T"])
+        schedule = _CHUNK_O.get(4096 if args["T"] == 4096 else args["BT"])
         shape = (1, args["T"], 16, 128)
     else:
         shape = (1, 4096, *((48, 64) if name == "A" else (16, 128)))
@@ -46,10 +46,10 @@ def gdn_pruner(configs, args, **kwargs):
 
 def qwen35_packed_decode(**args):
     state = args["initial_state"]
-    indices = args["ssm_state_indices"]
     names = ("mixed_qkv", "a", "b", "A_log", "dt_bias", "out")
-    tensors = tuple(args[name] for name in names) + (state, state, indices)
-    recurrent.fused_recurrent_gated_delta_rule_packed_decode_kernel[(4, 48)](
+    tensors = tuple(args[n] for n in names) + (state, state, args["ssm_state_indices"])
+    grid = (4, tensors[0].shape[0] * 48)
+    recurrent.fused_recurrent_gated_delta_rule_packed_decode_kernel[grid](
         *tensors,
         args["scale"],
         *(tensor.stride(0) for tensor in (*tensors[:3], *tensors[-3:])),

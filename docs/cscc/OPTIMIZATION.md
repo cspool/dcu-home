@@ -3,22 +3,21 @@
 本文只描述当前 `repro-minimal` 运行时仍可达、且有性能/精度证据的路径。
 阶段编号仅用于追溯，不再作为启动接口。
 
-## 1. page784 与 GQA6 长上下文 prefill
+## 1. stride-aware GQA6 长上下文 prefill
 
 主要文件：
 
 - `vllm/v1/attention/backends/rocm_aiter_unified_attn.py`
 - `vllm/v1/attention/ops/rocm_aiter_unified_attention_gqa6.py`
-- `vllm/v1/attention/ops/rocm_page784_split_attention.py`
 
 精确目标为 gfx936、BF16、head size 256、GQA6、单序列 causal prefill、
 cache block 784。GQA6 将每个 KV head 的 6 个 query heads 分成三个双头组；
 逻辑 64-token K/V tile 按两个 32-token 数值子块执行 FP32 online softmax。
 
-page784 不能直接满足 64-token 对齐。wrapper 把物理页分成 768-token 主体和
-16-token 尾部，主体调用 vendor paged attention，尾部重排后调用 contiguous
-attention，再用 FP32 log-sum-exp 合并状态。workspace 有界复用，不展开完整
-KV cache。非目标 shape、decode 或多序列路径回退到 AITER/vLLM 原实现。
+kernel 直接使用 block table 和真实 tensor stride 读取 KV cache；当一个数值
+tile 跨越物理页边界时，在同一 Triton program 中读取下一页，不展开完整 KV
+cache，也不再保留独立 page784 wrapper。非目标 shape 或 decode 路径回退到
+AITER/vLLM 原实现。
 
 ## 2. GDN prefill 固定配置与完整预热
 

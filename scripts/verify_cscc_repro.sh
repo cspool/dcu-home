@@ -44,7 +44,6 @@ required_files=(
     vllm/platforms/rocm.py
     vllm/v1/attention/backends/rocm_aiter_unified_attn.py
     vllm/v1/attention/ops/rocm_aiter_unified_attention_gqa6.py
-    vllm/v1/attention/ops/rocm_page784_split_attention.py
     vllm/v1/worker/gpu_model_runner.py
 )
 for path in "${required_files[@]}"; do
@@ -100,7 +99,6 @@ required_patterns=(
     "qwen35_gemv"
     "_output_gemv"
     "speculative_config is None"
-    "page784.prefill"
     "fixed_gdn"
     "qwen35_packed_decode"
     "_mrope_scratch"
@@ -159,7 +157,6 @@ PYTHONPYCACHEPREFIX="$VERIFY_TMP/pycache" python3 -m py_compile \
     vllm/v1/attention/backends/gdn_attn.py \
     vllm/v1/attention/backends/rocm_aiter_unified_attn.py \
     vllm/v1/attention/ops/rocm_aiter_unified_attention_gqa6.py \
-    vllm/v1/attention/ops/rocm_page784_split_attention.py \
     vllm/v1/engine/core.py \
     vllm/v1/worker/gpu_model_runner.py \
     vllm/v1/worker/gpu_worker.py
@@ -183,8 +180,7 @@ if [[ -n "$WHEEL" ]]; then
         fail "wheel does not contain vllm/_rocm_C"
     grep -q "^vllm/platforms/tunable_profiles/$(basename "$PROFILE_REL")$" \
         "$wheel_files" || fail "wheel does not contain the frozen profile"
-    for module in gfx936.py rocm_aiter_unified_attention_gqa6.py \
-        rocm_page784_split_attention.py; do
+    for module in gfx936.py rocm_aiter_unified_attention_gqa6.py; do
         grep -q "/${module}$" "$wheel_files" || \
             fail "wheel does not contain ${module}"
     done
