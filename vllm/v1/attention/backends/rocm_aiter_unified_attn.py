@@ -136,6 +136,7 @@ class RocmAiterUnifiedAttentionImpl(RocmAttentionImpl):
         self.unified_attention = unified_attention
         self._h11_3_gqa6_prefill = None
         self._page784_split_prefill = None
+        self._gqa6_decode_80cu = None
         if (
             _is_gfx936()
             and num_heads == 24
@@ -151,17 +152,21 @@ class RocmAiterUnifiedAttentionImpl(RocmAttentionImpl):
             from vllm.v1.attention.ops.rocm_aiter_unified_attention_gqa6 import (
                 unified_attention_gqa6_prefill,
             )
+            from vllm.v1.attention.ops.rocm_aiter_decode_attention_gqa6 import (
+                unified_attention_gqa6_decode_80cu,
+            )
             from vllm.v1.attention.ops.rocm_page784_split_attention import (
                 page784_split_prefill,
             )
 
             self._h11_3_gqa6_prefill = unified_attention_gqa6_prefill
             self._page784_split_prefill = page784_split_prefill
+            self._gqa6_decode_80cu = unified_attention_gqa6_decode_80cu
             logger.info_once(
                 "H11.3 mapping + H11.4 compiler layout + H11.5 wide causal "
-                "tiles and aligned page784 later-Prefill wrapper enabled for "
-                "gfx936 BF16 head256 GQA6 prefill; "
-                "non-target and decode calls keep the original AITER path"
+                "tiles, aligned page784 later-Prefill, and 80-CU decode "
+                "segment mapping enabled for gfx936 BF16 head256 GQA6; "
+                "non-target calls keep the original AITER path"
             )
 
     def forward(
@@ -299,10 +304,34 @@ class RocmAiterUnifiedAttentionImpl(RocmAttentionImpl):
                 softmax_scale=self.scale,
             )
             return output
+        use_gqa6_decode_80cu = (
+            self._gqa6_decode_80cu is not None
+            and max_seqlen_q == 1
+            and num_actual_tokens == 1
+            and query.dtype == torch.bfloat16
+            and key_cache.dtype == torch.bfloat16
+            and value_cache.dtype == torch.bfloat16
+            and output.dtype == torch.bfloat16
+            and query.ndim == 3
+            and query.shape[1:] == (24, 256)
+            and output.ndim == 3
+            and output.shape == query.shape
+            and key_cache.ndim == 4
+            and key_cache.shape[1:] == (784, 4, 256)
+            and value_cache.shape == key_cache.shape
+            and cu_seqlens_q.numel() == 2
+            and seqused_k.numel() == 1
+            and block_table.ndim == 2
+            and block_table.shape[0] == 1
+        )
         attention_fn = (
-            self._h11_3_gqa6_prefill
-            if use_h11_3_gqa6_prefill
-            else self.unified_attention
+            self._gqa6_decode_80cu
+            if use_gqa6_decode_80cu
+            else (
+                self._h11_3_gqa6_prefill
+                if use_h11_3_gqa6_prefill
+                else self.unified_attention
+            )
         )
         attention_fn(
             q=query[:num_actual_tokens],

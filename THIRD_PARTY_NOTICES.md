@@ -28,12 +28,15 @@
 - AITER 安装分发包随附许可证：MIT
 - 参考源文件自身 SPDX：Apache-2.0，Copyright contributors to the vLLM project
 - 本提交对应文件：
-  `vllm/v1/attention/ops/rocm_aiter_unified_attention_gqa6.py`
+  `vllm/v1/attention/ops/rocm_aiter_unified_attention_gqa6.py`、
+  `vllm/v1/attention/ops/rocm_aiter_decode_attention_gqa6.py`
 
-该文件是对非 segmented 2D unified-attention 算法的窄范围特化，保留
+前一文件是对非 segmented 2D unified-attention 算法的窄范围特化，保留
 online-softmax 和 cache-block 选择语义，并为 gfx936/BF16/head256/GQA6
-修正 query-head 行重叠及增加 H11.5 wide-causal 编译配置。提交文件自身保留
-Apache-2.0 SPDX 与 vLLM contributors 版权头。
+修正 query-head 行重叠及增加 H11.5 wide-causal 编译配置。后一文件复用 AITER
+segmented 3D 主 kernel，并由 AITER `reduce_segments` 派生 masked 20-of-32
+FP32 reduction，使四个 KV heads 恰好产生 80 个主 workgroups。两个提交文件
+均保留 Apache-2.0 SPDX 与 vLLM contributors 版权头。
 
 ## 3. FlashAttention / 平台 ROCm 分发包
 
