@@ -436,21 +436,40 @@ def fused_recurrent_gated_delta_rule_packed_decode(
             f"Packed decode kernel only supports NK=1 (got K={K}, BK={BK})."
         )
     # The Qwen3.5-27B single-token packed-decode shape is reduction limited on
-    # gfx936.  Four warps at BV=32 are ~36% faster than the generic one-warp
-    # launch.  A 64-step stateful audit across four seeds bounded the BF16
-    # output/state differences at 3.8e-6/3.1e-5 respectively.
-    is_qwen35_gfx936_decode = (
+    # gfx936.  Keep the existing four-wave schedule for BF16 recurrent state.
+    # The service uses FP32 state: splitting only the independent V dimension
+    # into BV=8 one-wave CTAs retains each complete K=128 reduction tree.  A
+    # four-seed, 64-step stateful audit was output/state bitwise to BV=32 while
+    # lowering the kernel median by 25.7% and the resource class from 132 to
+    # 56 VGPR.
+    is_qwen35_gfx936_decode_shape = (
         B == 1
         and H == 16
         and HV == 48
         and K == 128
         and V == 128
         and mixed_qkv.dtype == torch.bfloat16
+    )
+    is_qwen35_gfx936_decode_bf16_state = (
+        is_qwen35_gfx936_decode_shape
         and initial_state.dtype == torch.bfloat16
     )
-    BV = 32 if is_qwen35_gfx936_decode else min(triton.next_power_of_2(V), 32)
-    num_stages = 1 if is_qwen35_gfx936_decode else 3
-    num_warps = 4 if is_qwen35_gfx936_decode else 1
+    is_qwen35_gfx936_decode_fp32_state = (
+        is_qwen35_gfx936_decode_shape
+        and initial_state.dtype == torch.float32
+    )
+    if is_qwen35_gfx936_decode_fp32_state:
+        BV = 8
+        num_stages = 1
+        num_warps = 1
+    elif is_qwen35_gfx936_decode_bf16_state:
+        BV = 32
+        num_stages = 1
+        num_warps = 4
+    else:
+        BV = min(triton.next_power_of_2(V), 32)
+        num_stages = 3
+        num_warps = 1
 
     stride_mixed_qkv_tok = mixed_qkv.stride(0)
     stride_a_tok = a.stride(0)
