@@ -1043,12 +1043,7 @@ package_data = {
         "model_executor/layers/quantization/utils/configs/*.json",
         "entrypoints/serve/instrumentator/static/*.js",
         "entrypoints/serve/instrumentator/static/*.css",
-    ],
-    "qwen35_rocm_opt": [
-        "profiles/*.csv",
-        "csrc/*.cpp",
-        "csrc/*.cu",
-    ],
+    ]
 }
 
 

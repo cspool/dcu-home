@@ -66,7 +66,6 @@ from vllm.model_executor.layers.mamba.ops.causal_conv1d import (
     causal_conv1d_update,
 )
 from vllm.model_executor.layers.quantization import QuantizationConfig
-from vllm.model_executor.layers.rocm_qwen35_gemv import qwen35_gemv
 from vllm.model_executor.layers.rotary_embedding import get_rope
 from vllm.model_executor.layers.vocab_parallel_embedding import (
     ParallelLMHead,
@@ -113,9 +112,9 @@ KVCache = tuple[torch.Tensor, torch.Tensor]
 class Qwen3NextMLP(Qwen2MoeMLP):
     def forward(self, x):
         if self.expert_gate is None:
-            gate_up = qwen35_gemv(self.gate_up_proj.weight, x)
+            gate_up = gfx936.qwen35_gemv(self.gate_up_proj.weight, x, True)
             if gate_up is not None:
-                return self.down_proj(self.act_fn(gate_up))[0]
+                return self.down_proj(gate_up)[0]
         return super().forward(x)
 
 
@@ -224,7 +223,6 @@ class ChunkGatedDeltaRule(CustomOp):
         output_final_state: bool,
         cu_seqlens: torch.LongTensor | None = None,
         use_qk_l2norm_in_kernel: bool = True,
-        output: torch.Tensor | None = None,
     ):
         return fi_chunk_gated_delta_rule(
             q=q,
@@ -249,7 +247,6 @@ class ChunkGatedDeltaRule(CustomOp):
         output_final_state: bool,
         cu_seqlens: torch.LongTensor | None = None,
         use_qk_l2norm_in_kernel: bool = True,
-        output: torch.Tensor | None = None,
     ):
         return fla_chunk_gated_delta_rule(
             q=q,
@@ -261,7 +258,6 @@ class ChunkGatedDeltaRule(CustomOp):
             output_final_state=output_final_state,
             cu_seqlens=cu_seqlens,
             use_qk_l2norm_in_kernel=use_qk_l2norm_in_kernel,
-            output=output,
         )
 
 
@@ -1006,11 +1002,6 @@ class Qwen3NextGatedDeltaNet(nn.Module, MambaBase):
                 output_final_state=True,
                 cu_seqlens=non_spec_query_start_loc,
                 use_qk_l2norm_in_kernel=True,
-                output=(
-                    core_attn_out[:num_actual_tokens].unsqueeze(0)
-                    if spec_sequence_masks is None
-                    else None
-                ),
             )
             # Init cache
             ssm_state[non_spec_state_indices_tensor] = last_recurrent_state.to(
@@ -1089,11 +1080,7 @@ class Qwen3NextGatedDeltaNet(nn.Module, MambaBase):
             validate_data=False,
         )
         out_buf = core_attn_out[:num_actual_tokens].unsqueeze(1)
-        (
-            gfx936.qwen35_packed_decode
-            if self.gfx936_qwen35 and gfx936.use_gfx936(mixed_qkv_non_spec)
-            else fused_recurrent_gated_delta_rule_packed_decode
-        )(
+        fused_recurrent_gated_delta_rule_packed_decode(
             mixed_qkv=mixed_qkv_non_spec,
             a=a,
             b=b,
@@ -1104,6 +1091,7 @@ class Qwen3NextGatedDeltaNet(nn.Module, MambaBase):
             out=out_buf,
             ssm_state_indices=non_spec_state_indices_tensor[:num_actual_tokens],
             use_qk_l2norm_in_kernel=True,
+            validate=False,
         )
         self._zero_core_padding(core_attn_out, num_actual_tokens)
         return

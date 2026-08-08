@@ -4,12 +4,10 @@
 
 import torch
 
-from qwen35_rocm_opt import attention as gqa6
-from qwen35_rocm_opt.target import is_gfx936
-
 from vllm import _custom_ops as ops
 from vllm._aiter_ops import rocm_aiter_ops
 from vllm.logger import init_logger
+from vllm.model_executor.layers.fla.ops.gfx936 import is_gfx936
 from vllm.model_executor.layers.quantization.utils.quant_utils import (
     QuantKey,
     kFp8StaticTensorSym,
@@ -21,6 +19,7 @@ from vllm.v1.attention.backends.rocm_attn import (
     RocmAttentionImpl,
     RocmAttentionMetadataBuilder,
 )
+from vllm.v1.attention.ops import rocm_aiter_unified_attention_gqa6 as gqa6
 
 logger = init_logger(__name__)
 
@@ -222,9 +221,16 @@ class RocmAiterUnifiedAttentionImpl(RocmAttentionImpl):
         use_gqa6 = (
             self.gfx936_gqa6
             and max_seqlen_q > 1
+            and cu_seqlens_q.numel() == 2
+            and key_cache.shape[1:] == value_cache.shape[1:] == (784, 4, 256)
+            and query.is_contiguous() and output.is_contiguous() and key_cache.stride() == value_cache.stride()
             and query.dtype == key_cache.dtype == value_cache.dtype
             == output.dtype == torch.bfloat16
         )
+        if use_gqa6 and gqa6.page784_prefill(
+            query, key, value, key_cache, value_cache, output, attn_metadata, self.scale
+        ):
+            return output
         (gqa6.prefill if use_gqa6 else self.unified_attention)(
             q=query[:num_actual_tokens],
             k=key_cache,

@@ -14,7 +14,7 @@ import torch
 
 from vllm.triton_utils import tl, triton
 
-from .gfx936 import gdn_pruner
+from .gfx936 import _CHUNK_O, gdn_kernel
 from .index import prepare_chunk_indices
 from .op import exp
 from .utils import FLA_GDN_FIX_BT, check_shared_mem, is_nvidia_hopper
@@ -37,8 +37,7 @@ NUM_WARPS = [2, 4] if is_nvidia_hopper else [2, 4, 8]
         for num_warps in NUM_WARPS
         for num_stages in [2, 3, 4]
     ],
-    key=["T", "H", "K", "V", "BT"],
-    prune_configs_by={"early_config_prune": gdn_pruner},
+    key=["H", "K", "V", "BT"],
 )
 @triton.jit(do_not_specialize=["T"])
 def chunk_fwd_kernel_o(
@@ -149,7 +148,6 @@ def chunk_fwd_o(
     scale: float | None = None,
     cu_seqlens: torch.LongTensor | None = None,
     chunk_size: int = 64,
-    output: torch.Tensor | None = None,
 ) -> torch.Tensor:
     B, T, Hg, K, V = *q.shape, v.shape[-1]
     H = v.shape[-2]
@@ -161,12 +159,14 @@ def chunk_fwd_o(
     if scale is None:
         scale = k.shape[-1] ** -0.5
 
-    o = torch.empty_like(v) if output is None else output
+    o = torch.empty_like(v)
 
     def grid(meta):
         return (triton.cdiv(V, meta["BV"]), NT, B * H)
 
-    chunk_fwd_kernel_o[grid](
+    fixed = _CHUNK_O.get(4096 if T == 4096 else BT) if g is not None and cu_seqlens is not None else None
+    kernel, options = gdn_kernel(chunk_fwd_kernel_o, q, fixed, USE_G=True, IS_VARLEN=True)
+    kernel[grid](
         q,
         k,
         v,
@@ -182,5 +182,6 @@ def chunk_fwd_o(
         K=K,
         V=V,
         BT=BT,
+        **options,
     )
     return o

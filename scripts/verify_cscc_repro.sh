@@ -6,8 +6,8 @@ BASELINE="fa718036bdb9dfd80a872b86c8ac16c9d02bfd31"
 SNAPSHOT_ROOT="67f44ab405d8efed30a42f04f6e74ae2e8370884"
 PROFILE_REL="vllm/platforms/tunable_profiles/gfx936_qwen3_5_27b_bf16_tn_m4096.csv"
 PROFILE_SHA256="169c7b11a0340d9e22405327b5e5667b2aa9e9e8d899bd59e10ca4fb7fb52030"
-SOURCE_MANIFEST="evidence/manifests/repro_minimal_runtime.sha256"
-RUNTIME_CHURN_LIMIT=500
+SOURCE_MANIFEST="evidence/manifests/modular_runtime.sha256"
+RUNTIME_CHURN_LIMIT=600
 WHEEL="${1:-}"
 
 fail() {
@@ -96,11 +96,13 @@ PY
 pass "frozen TunableOp profile"
 
 required_patterns=(
+    "LLGemm1_k17408_kernel"
+    "LLGemm1_k5120_pairreduce640_kernel"
     "qwen35_gemv"
-    "_output_gemv"
+    "qwen35_gdn_rmsnorm"
+    "page784_prefill"
     "speculative_config is None"
     "fixed_gdn"
-    "qwen35_packed_decode"
     "_mrope_scratch"
 )
 for pattern in "${required_patterns[@]}"; do

@@ -267,6 +267,7 @@ class Worker(WorkerBase):
                 self.local_rank,
                 current_platform.dist_backend,
             )
+            current_platform.set_device(self.device)
 
             if self.use_v2_model_runner:
                 logger.info_once("Using V2 Model Runner", scope="local")

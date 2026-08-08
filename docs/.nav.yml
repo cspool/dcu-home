@@ -48,6 +48,11 @@ nav:
       - Plugins:
         - design/*plugin*.md
       - design/*
+  - CSCC Optimization:
+    - cscc/README.md
+    - cscc/OFFICIAL_BASE_OPTIMIZATION_GUIDE.md
+    - cscc/MODULAR_3K_PARITY.md
+    - cscc/DP2_MULTI_REQUEST.md
   - Benchmarking:
       - benchmarking/README.md
       - benchmarking/cli.md

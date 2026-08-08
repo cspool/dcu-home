@@ -13,7 +13,7 @@ import torch
 
 from vllm.triton_utils import tl, triton
 
-from .gfx936 import gdn_pruner
+from .gfx936 import gdn_kernel
 from .index import prepare_chunk_indices
 
 
@@ -25,7 +25,6 @@ from .index import prepare_chunk_indices
         for num_stages in [2, 3, 4]
     ],
     key=["H", "K", "V", "BT", "BK", "BV", "IS_VARLEN"],
-    prune_configs_by={"early_config_prune": gdn_pruner},
 )
 @triton.jit(do_not_specialize=["T"])
 def recompute_w_u_fwd_kernel(
@@ -138,7 +137,9 @@ def recompute_w_u_fwd(
     BV = 64
     u = torch.empty_like(v)
     w = k.new_empty(B, T, H, K)
-    recompute_w_u_fwd_kernel[(NT, B * H)](
+    fixed = ({}, 2, 1) if T == 4096 and cu_seqlens is not None else None
+    kernel, options = gdn_kernel(recompute_w_u_fwd_kernel, v, fixed, IS_VARLEN=True)
+    kernel[(NT, B * H)](
         k=k,
         v=v,
         beta=beta,
@@ -156,5 +157,6 @@ def recompute_w_u_fwd(
         BT=BT,
         BK=BK,
         BV=BV,
+        **options,
     )
     return w, u

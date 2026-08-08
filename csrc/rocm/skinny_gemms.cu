@@ -8,7 +8,7 @@
 
 #include <stdexcept>
 #include <algorithm>
-#include "../cub_helpers.h"
+
 #include "../cuda_compat.h"
 #include "dispatch_utils.h"
 #include "quantization/w8a8/fp8/common.cuh"
@@ -232,57 +232,106 @@ __global__ void LLGemm1_kernel(const scalar_t* in_a, const scalar_t* in_b,
   }
 }
 
-template <int NUM_A_ROWS_PER_BLOCK>
-__global__ __launch_bounds__(640) void LLGemm1_k5120_pairreduce640_kernel(
-    const c10::BFloat16* __restrict__ in_a,
-    const c10::BFloat16* __restrict__ in_b,
-    c10::BFloat16* __restrict__ out_c) {
-  constexpr int NUM_K_CHUNKS = 640;
+template <bool NATIVE_FMAC>
+__device__ __forceinline__ float qwen35_dot8(float4 packed,
+                                             const float2* input) {
   using scalar2_t = __hip_bfloat162;
-  using BlockReduce = cub::BlockReduce<float, NUM_K_CHUNKS>;
-
-  const auto* weights = reinterpret_cast<const float4*>(in_a);
-  const auto* input = reinterpret_cast<const scalar2_t*>(in_b);
-  auto* output = reinterpret_cast<__hip_bfloat16*>(out_c);
-  __shared__ typename BlockReduce::TempStorage reductions[NUM_A_ROWS_PER_BLOCK];
-
-  const int thread_id = threadIdx.x;
-  const int row_start = blockIdx.x * NUM_A_ROWS_PER_BLOCK;
-  float2 inputs[4];
-  float4 weight4[NUM_A_ROWS_PER_BLOCK];
-
+  auto* weight = reinterpret_cast<scalar2_t*>(&packed);
+  float low = 0.0f, high = 0.0f;
 #pragma unroll
   for (int i = 0; i < 4; ++i) {
-    inputs[i] = __s22float2(input[thread_id * 4 + i]);
-  }
-#pragma unroll
-  for (int row = 0; row < NUM_A_ROWS_PER_BLOCK; ++row) {
-    weight4[row] =
-        load_ntmprl(&weights[(row_start + row) * NUM_K_CHUNKS + thread_id]);
-  }
-
-  float accumulators[NUM_A_ROWS_PER_BLOCK] = {};
-#pragma unroll
-  for (int row = 0; row < NUM_A_ROWS_PER_BLOCK; ++row) {
-    auto* weight2 = reinterpret_cast<scalar2_t*>(&weight4[row]);
-    float low = 0.0f;
-    float high = 0.0f;
-#pragma unroll
-    for (int i = 0; i < 4; ++i) {
-      const float2 value = __s22float2(weight2[i]);
-      low = fmaf(value.x, inputs[i].x, low);
-      high = fmaf(value.y, inputs[i].y, high);
+    const float2 value = __s22float2(weight[i]);
+    if constexpr (NATIVE_FMAC) {
+      asm("v_fmac_f32 %0, %1, %2" : "+v"(low) : "v"(value.x), "v"(input[i].x));
+      asm("v_fmac_f32 %0, %1, %2" : "+v"(high) : "v"(value.y), "v"(input[i].y));
+    } else {
+      low = fmaf(value.x, input[i].x, low);
+      high = fmaf(value.y, input[i].y, high);
     }
-    accumulators[row] = low + high;
   }
+  return low + high;
+}
 
+__global__ __launch_bounds__(1024) void LLGemm1_k17408_kernel(
+    const c10::BFloat16* weight, const c10::BFloat16* input,
+    c10::BFloat16* output) {
+  constexpr int CHUNKS = 17408 / 8;
+  using scalar2_t = __hip_bfloat162;
+  auto* weights = reinterpret_cast<const float4*>(weight);
+  auto* inputs = reinterpret_cast<const scalar2_t*>(input);
+  __shared__ float reductions[16];
+  const int thread = threadIdx.x, lane = thread % 64, row = blockIdx.x;
+  float acc = 0.0f;
+  for (int chunk = thread; chunk < CHUNKS; chunk += 1024) {
+    float2 values[4];
 #pragma unroll
-  for (int local_row = 0; local_row < NUM_A_ROWS_PER_BLOCK; ++local_row) {
-    const float total = BlockReduce(reductions[local_row])
-                            .Reduce(accumulators[local_row], CubAddOp{});
-    if (thread_id != 0) continue;
-    const int row = row_start + local_row;
-    output[row] = __float2bfloat16(total);
+    for (int i = 0; i < 4; ++i) values[i] = __s22float2(inputs[chunk * 4 + i]);
+    acc += qwen35_dot8<true>(load_ntmprl(&weights[row * CHUNKS + chunk]), values);
+  }
+#pragma unroll
+  for (int mask = 32; mask; mask /= 2) acc += __shfl_xor(acc, mask);
+  if (lane == 0) reductions[thread / 64] = acc;
+  __syncthreads();
+  if (thread == 0) {
+    float total = 0.0f;
+#pragma unroll
+    for (int i = 0; i < 16; ++i) total += reductions[i];
+    reinterpret_cast<__hip_bfloat16*>(output)[row] = __float2bfloat16(total);
+  }
+}
+
+template <int ROWS, bool SILU = false>
+__global__ __launch_bounds__(640) void LLGemm1_k5120_pairreduce640_kernel(
+    const c10::BFloat16* in_a, const c10::BFloat16* in_b,
+    const c10::BFloat16* gate, c10::BFloat16* out_c) {
+  constexpr int HALF = 320, WAVES = 5, CHUNKS = 640;
+  using scalar2_t = __hip_bfloat162;
+  auto* weights = reinterpret_cast<const float4*>(in_a);
+  auto* input = reinterpret_cast<const scalar2_t*>(in_b);
+  auto* output = reinterpret_cast<__hip_bfloat16*>(out_c);
+  auto* gates = reinterpret_cast<const __hip_bfloat16*>(gate);
+  __shared__ float halves[ROWS][HALF], reductions[ROWS][WAVES];
+  const int thread = threadIdx.x, pair = thread % HALF;
+  const int lane = thread % 64, wave = thread / 64, row_start = blockIdx.x * ROWS;
+  float2 values[4];
+  float4 packed[ROWS];
+#pragma unroll
+  for (int i = 0; i < 4; ++i) values[i] = __s22float2(input[thread * 4 + i]);
+#pragma unroll
+  for (int row = 0; row < ROWS; ++row)
+    packed[row] = load_ntmprl(&weights[(row_start + row) * CHUNKS + thread]);
+  float acc[ROWS];
+#pragma unroll
+  for (int row = 0; row < ROWS; ++row) acc[row] = qwen35_dot8<false>(packed[row], values);
+  if (thread >= HALF)
+#pragma unroll
+    for (int row = 0; row < ROWS; ++row) halves[row][pair] = acc[row];
+  __syncthreads();
+  if (thread < HALF) {
+#pragma unroll
+    for (int row = 0; row < ROWS; ++row) acc[row] += halves[row][thread];
+#pragma unroll
+    for (int mask = 32; mask; mask /= 2)
+#pragma unroll
+      for (int row = 0; row < ROWS; ++row) acc[row] += __shfl_xor(acc[row], mask);
+    if (lane == 0)
+#pragma unroll
+      for (int row = 0; row < ROWS; ++row) reductions[row][wave] = acc[row];
+  }
+  __syncthreads();
+  if (thread < ROWS) {
+    float total = 0.0f;
+#pragma unroll
+    for (int source = 0; source < WAVES; ++source) total += reductions[thread][source];
+    const int row = row_start + thread;
+    const __hip_bfloat16 rounded = __float2bfloat16(total);
+    if constexpr (SILU) {
+      const float value = static_cast<float>(gates[row]);
+      const __hip_bfloat16 activated = __float2bfloat16(value / (1.0f + expf(-value)));
+      output[row] = __float2bfloat16(static_cast<float>(activated) * static_cast<float>(rounded));
+    } else {
+      output[row] = rounded;
+    }
   }
 }
 
@@ -296,12 +345,16 @@ torch::Tensor LLMM1(at::Tensor& in_a, at::Tensor& in_b,
   TORCH_CHECK(in_a.dtype() == in_b.dtype());
   TORCH_CHECK(in_b.dtype() == torch::kFloat16 ||
               in_b.dtype() == torch::kBFloat16);
+  const bool swiglu = rows_per_block == -2 && M == 34816;
   const bool qwen35 =
       K == 5120 && in_b.dtype() == torch::kBFloat16 &&
       (M == 96 || M == 14336 || M == 16384 || M == 34816 || M == 248320);
+  const bool output_gemv = rows_per_block == 1 && M == 5120 && K == 17408 &&
+                           in_b.dtype() == torch::kBFloat16;
 
   auto out_c = torch::empty(
-      {N, M}, torch::TensorOptions().dtype(in_b.dtype()).device(in_b.device()));
+      {N, swiglu ? M / 2 : M},
+      torch::TensorOptions().dtype(in_b.dtype()).device(in_b.device()));
 
   // NUM_TREADS need to be a multiple of WARP_SIZE, as we are using warp shuffle
   // operations.
@@ -316,16 +369,29 @@ torch::Tensor LLMM1(at::Tensor& in_a, at::Tensor& in_b,
   const at::cuda::OptionalCUDAGuard device_guard(device_of(in_b));
   const cudaStream_t stream = at::cuda::getCurrentCUDAStream();
 
+  if (output_gemv) {
+    LLGemm1_k17408_kernel<<<M, 1024, 0, stream>>>(
+        in_a.data_ptr<c10::BFloat16>(), in_b.data_ptr<c10::BFloat16>(),
+        out_c.data_ptr<c10::BFloat16>());
+    return out_c;
+  }
   if (qwen35) {
     auto* weight = in_a.data_ptr<c10::BFloat16>();
     auto* input = in_b.data_ptr<c10::BFloat16>();
     auto* output = out_c.data_ptr<c10::BFloat16>();
-    if (M == 96) {
+    if (swiglu) {
+      auto gate = torch::empty_like(out_c);
+      auto* gate_ptr = gate.data_ptr<c10::BFloat16>();
+      LLGemm1_k5120_pairreduce640_kernel<2><<<M / 4, 640, 0, stream>>>(
+          weight, input, nullptr, gate_ptr);
+      LLGemm1_k5120_pairreduce640_kernel<2, true><<<M / 4, 640, 0, stream>>>(
+          weight + M / 2 * K, input, gate_ptr, output);
+    } else if (M == 96) {
       LLGemm1_k5120_pairreduce640_kernel<4>
-          <<<M / 4, 640, 0, stream>>>(weight, input, output);
+          <<<M / 4, 640, 0, stream>>>(weight, input, nullptr, output);
     } else {
       LLGemm1_k5120_pairreduce640_kernel<2>
-          <<<M / 2, 640, 0, stream>>>(weight, input, output);
+          <<<M / 2, 640, 0, stream>>>(weight, input, nullptr, output);
     }
     return out_c;
   }

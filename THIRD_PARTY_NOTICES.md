@@ -32,8 +32,8 @@
 
 该文件是对非 segmented 2D unified-attention 算法的窄范围特化，保留
 online-softmax 和 cache-block 选择语义，并为 gfx936/BF16/head256/GQA6
-修正 query-head 行重叠及增加 H11.5 wide-causal 编译配置。提交文件自身保留
-Apache-2.0 SPDX 与 vLLM contributors 版权头。
+实现双 query-head CTA、动态 cache stride 和 page784 跨页读取。提交文件自身
+保留 Apache-2.0 SPDX；非目标 shape 和 decode 继续调用 AITER 原路径。
 
 ## 3. FlashAttention / 平台 ROCm 分发包
 
@@ -45,7 +45,7 @@ Apache-2.0 SPDX 与 vLLM contributors 版权头。
 - 本提交调用接口：`flash_attn_2_cuda.varlen_fwd` 与
   `flash_attn.flash_attn_interface.varlen_fwd_unified`
 - 本提交对应文件：
-  `vllm/v1/attention/ops/rocm_page784_split_attention.py`
+  `vllm/v1/attention/ops/rocm_aiter_unified_attention_gqa6.py`
 
 新 wrapper 调用评测容器预装的 contiguous/paged attention 二进制接口，不在
 仓库中重新分发其二进制或复制其 kernel 源码。仓库内新增代码负责 page784 的

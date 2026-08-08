@@ -346,6 +346,7 @@ def fused_recurrent_gated_delta_rule_packed_decode(
     out: torch.Tensor,
     ssm_state_indices: torch.Tensor,
     use_qk_l2norm_in_kernel: bool = False,
+    validate: bool = True,
 ) -> tuple[torch.Tensor, torch.Tensor]:
     if mixed_qkv.ndim != 2:
         raise ValueError(
@@ -433,9 +434,10 @@ def fused_recurrent_gated_delta_rule_packed_decode(
         raise ValueError(
             f"Packed decode kernel only supports NK=1 (got K={K}, BK={BK})."
         )
-    BV = min(triton.next_power_of_2(V), 32)
-    num_stages = 3
-    num_warps = 1
+    qwen35 = (B, H, HV, K, V, mixed_qkv.dtype, initial_state.dtype) == (
+        1, 16, 48, 128, 128, torch.bfloat16, torch.bfloat16)
+    BV = 32 if qwen35 else min(triton.next_power_of_2(V), 32)
+    num_stages, num_warps = (1, 4) if qwen35 else (3, 1)
 
     stride_mixed_qkv_tok = mixed_qkv.stride(0)
     stride_a_tok = a.stride(0)

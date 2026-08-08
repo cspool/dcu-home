@@ -5,77 +5,100 @@
 | 组件 | 版本 |
 | --- | --- |
 | Python | 3.10.12 |
-| DTK / HIP | 6.2.0-0，运行时 validator 为 HIP 603 |
+| DTK / HIP | 6.2.0-0；TunableOp validator 为 HIP 603 |
 | PyTorch | 2.10.0+das.opt1.dtk2604.20260325.g6b060a |
 | Triton | 3.4.0+git1ef59765 |
 | AITER | 0.1.dev1+g9daa788.d20260401 |
 | CMake / Ninja | 3.29.0 / 1.11.1 |
-| 目标 | gfx936，BF16，单卡 |
+| 目标 | gfx936，Qwen3.5-27B BF16 |
 
-评测容器已提供定制依赖。不要用公开 PyPI requirements 覆盖 PyTorch、
-Triton、AITER 或 DTK。
+评测容器已提供配套依赖。不要从公开 PyPI 覆盖 PyTorch、Triton、AITER 或
+DTK；ROCm wheel 与运行时工具链不一致时，即使构建成功也不能沿用性能结论。
 
-## 构建
+## 构建前核对官方差异
 
-先确保 `TMPDIR` 所在文件系统有空间。HIP 编译器会在其中创建较大的临时
-目标；仓库和输出目录有空间并不能弥补 `/tmp` 已满。该变量也会被服务进程
-用于 ZMQ IPC，因此路径应尽量短，连同随机文件名必须小于 107 字符。
+当前实现的唯一代码比较基线为：
+
+```bash
+OFFICIAL=fa718036bdb9dfd80a872b86c8ac16c9d02bfd31
+git cat-file -e "$OFFICIAL^{commit}"
+git diff --check "$OFFICIAL" --
+git diff --name-status "$OFFICIAL" -- csrc setup.py vllm
+git diff --numstat "$OFFICIAL" -- csrc setup.py vllm | \
+  awk '{a += $1; d += $2; n += 1} END {print n, a, d, a + d}'
+```
+
+最后一条预期输出为 `18 567 33 600`。不要用当前 `HEAD` 代替 `OFFICIAL`：
+`HEAD` 只反映工作树增量，不能回答“相对官方原版修改多少”。完整文件清单见
+[官方原版优化实施指南](docs/cscc/OFFICIAL_BASE_OPTIMIZATION_GUIDE.md)。
+
+## 从空 build tree 生成 wheel
+
+先为 HIP 临时目标选择一个空间充足且路径较短的目录：
 
 ```bash
 export TMPDIR=/path/on/a-filesystem-with-free-space
-DIST_DIR="$PWD/dist-repro" bash scripts/build_cscc_wheel.sh
-```
-
-脚本固定 `VLLM_TARGET_DEVICE=rocm`、默认 `MAX_JOBS=16`，并在一个新的空
-`BUILD_BASE` 中构建。因此旧 `build/` 内的 `.pyc`、已删除模块或旧 native
-binary 不会混入 wheel。默认临时 build tree 在退出时删除。
-
-如需保留 build tree 做运行时检查，传入一个尚不存在的路径：
-
-```bash
+DIST_DIR=/path/to/output/dist \
 MAX_JOBS=16 \
-BUILD_BASE=/path/to/new-build-tree \
-DIST_DIR=/path/to/dist \
 bash scripts/build_cscc_wheel.sh
 ```
 
-为防止污染，显式 `BUILD_BASE` 已存在时脚本会失败，不会复用。
-
-## 强制校验
+脚本固定 `VLLM_TARGET_DEVICE=rocm`，用 `mktemp` 创建新的 build tree，并在
+退出时删除临时构建目录；它不会复用仓库中的 `build/`、`dist/` 或旧 native
+binary。如需保留中间目标进行调试，`BUILD_BASE` 必须指向尚不存在的路径：
 
 ```bash
-WHEEL="$(find "$PWD/dist-repro" -maxdepth 1 -name 'vllm-*.whl' -print -quit)"
-bash scripts/verify_cscc_repro.sh "$WHEEL"
+BUILD_BASE=/path/to/new-build-tree \
+DIST_DIR=/path/to/output/dist \
+MAX_JOBS=16 \
+bash scripts/build_cscc_wheel.sh
 ```
 
-校验内容包括：
+## wheel 静态验收
 
-- OpenDAS 基线对象或提交快照关系；
-- 相对 OpenDAS 基线的运行时源码改动量不超过 1000 行（新增与删除之和）；
-- 每个相对基线有改动的运行时文件均被 source manifest 覆盖；
-- 必需优化文件、profile SHA-256、5 个 validators 和 5 个结果；
-- Python/shell 语法和补丁格式；
-- 已否决 GEMV/SwiGLU 实验不存在；
-- wheel 包含 `_rocm_C` 和冻结 profile；
-- wheel 包含 gfx936 gate、GDN RMSNorm 和 output-projection Triton 模块；
-- wheel 不含 `.pyc`、`__pycache__` 或已删除实验模块。
+```bash
+WHEEL="$(find /path/to/output/dist -maxdepth 1 -name 'vllm-*.whl' -print -quit)"
+test -n "$WHEEL"
+unzip -Z1 "$WHEEL" | grep -E '/_rocm_C[^/]*[.]so$'
+unzip -Z1 "$WHEEL" | \
+  grep 'vllm/platforms/tunable_profiles/gfx936_qwen3_5_27b_bf16_tn_m4096.csv'
+if unzip -Z1 "$WHEEL" | grep -Eq '(^|/)(__pycache__/|.*[.]pyc$)'; then
+  echo 'wheel contains stale bytecode' >&2
+  exit 1
+fi
+sha256sum "$WHEEL"
+```
 
-## 安装与导入
+wheel 必须包含 `_rocm_C`、共享 gfx936 helper、GQA6 op 和冻结 profile，且不得
+包含 `qwen35_rocm_opt`、`rocm_qwen35_gemv.py`、编译缓存或实验日志。
+
+## 安装与 ABI 验收
 
 ```bash
 python3 -m pip install --force-reinstall --no-deps "$WHEEL"
 python3 - <<'PY'
+from pathlib import Path
+
 import torch
 import vllm
 import vllm._rocm_C
-from vllm.model_executor.layers.rocm_qwen35_gemv import qwen35_output_gemv
 
+profile = Path(vllm.__file__).parent / (
+    "platforms/tunable_profiles/gfx936_qwen3_5_27b_bf16_tn_m4096.csv"
+)
 assert vllm.__version__ == "0.18.1"
-assert hasattr(torch.ops._rocm_C, "qwen35_bf16_gemv")
-assert not hasattr(torch.ops._rocm_C, "LLMM1Strided")
-assert callable(qwen35_output_gemv)
-print("vLLM native K5120 and Triton K17408 GEMV: OK")
+assert hasattr(torch.ops._rocm_C, "LLMM1")
+assert profile.is_file()
+assert len(profile.read_text(encoding="utf-8").splitlines()) == 10
+print("ROCm ABI and TunableOp profile: PASS")
 PY
 ```
 
-`--no-deps` 是必要的：它保留评测镜像内经过配套验证的定制依赖。
+`--no-deps` 用于保留评测镜像内已经配套验证的依赖。安装后先做算子数值与
+fallback 检查，再启动服务；不要以 wheel 能导入代替端到端精度验证。
+
+## 仓库卫生
+
+`build/`、`dist/`、wheel、`.so`、Triton/Inductor cache、模型权重和评测结果都
+不属于源码提交。清理时只删除自己创建且已核对路径的构建目录；不要递归删除
+共享缓存根目录。
