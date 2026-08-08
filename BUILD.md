@@ -97,6 +97,9 @@ PY
 `--no-deps` 用于保留评测镜像内已经配套验证的依赖。安装后先做算子数值与
 fallback 检查，再启动服务；不要以 wheel 能导入代替端到端精度验证。
 
+每次源码修改后的 wheel/导入路径验真、DCU 0 冷编译、热重启和缓存失效闭环见
+[源码修改后的构建与冷热缓存复测](docs/cscc/SOURCE_CHANGE_REBUILD_AND_CACHE.md)。
+
 ## 仓库卫生
 
 `build/`、`dist/`、wheel、`.so`、Triton/Inductor cache、模型权重和评测结果都

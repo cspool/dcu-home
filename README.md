@@ -74,6 +74,7 @@ HIP_VISIBLE_DEVICES=0 vllm serve /path/to/Qwen3.5-27B \
 
 - [CSCC 文档索引](docs/cscc/README.md)
 - [官方原版优化实施指南](docs/cscc/OFFICIAL_BASE_OPTIMIZATION_GUIDE.md)
+- [源码修改后的构建与冷热缓存复测](docs/cscc/SOURCE_CHANGE_REBUILD_AND_CACHE.md)
 - [600 行全量性能与精度报告](docs/cscc/MODULAR_3K_PARITY.md)
 - [DP=2 配置与验收边界](docs/cscc/DP2_MULTI_REQUEST.md)
 - [环境变量](ENVIRONMENT.md)

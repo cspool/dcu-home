@@ -51,6 +51,7 @@ nav:
   - CSCC Optimization:
     - cscc/README.md
     - cscc/OFFICIAL_BASE_OPTIMIZATION_GUIDE.md
+    - cscc/SOURCE_CHANGE_REBUILD_AND_CACHE.md
     - cscc/MODULAR_3K_PARITY.md
     - cscc/DP2_MULTI_REQUEST.md
   - Benchmarking:
