@@ -98,7 +98,7 @@ PY
 fallback 检查，再启动服务；不要以 wheel 能导入代替端到端精度验证。
 
 每次源码修改后的 wheel/导入路径验真、DCU 0 冷编译、热重启和缓存失效闭环见
-[源码修改后的构建与冷热缓存复测](docs/cscc/SOURCE_CHANGE_REBUILD_AND_CACHE.md)。
+[源码构建、启动与冷热缓存简明流程](docs/cscc/BUILD_SERVE_CACHE_QUICKSTART.md)。
 
 ## 仓库卫生
 

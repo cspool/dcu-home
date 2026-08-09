@@ -95,4 +95,4 @@ vllm serve /path/to/Qwen3.5-27B \
 
 决赛多卡准备保留 `HIP_VISIBLE_DEVICES=0,1`、`TP=1`、`DP=2`、`backend=mp`
 配置；它不是初赛单卡成绩的一部分。使用方法和双 rank 热重启检查见
-[docs/cscc/DP2_MULTI_REQUEST.md](docs/cscc/DP2_MULTI_REQUEST.md)。
+[docs/cscc/BUILD_SERVE_CACHE_QUICKSTART.md](docs/cscc/BUILD_SERVE_CACHE_QUICKSTART.md)。

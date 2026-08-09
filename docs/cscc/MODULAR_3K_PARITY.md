@@ -2,8 +2,8 @@
 
 本文是最终性能、精度和规则证据；如何以官方 `fa718036` 为起点逐文件实现、
 以及各优化的性能/难度优先级，见
-[官方原版优化实施指南](OFFICIAL_BASE_OPTIMIZATION_GUIDE.md)。可选 DP=2 配置
-单独保存在 [DP2_MULTI_REQUEST.md](DP2_MULTI_REQUEST.md)，不参与本页单卡结果。
+[官方原版优化实施指南](OFFICIAL_BASE_OPTIMIZATION_GUIDE.md)。可选 DP=2 配置与启动
+命令见 [构建与启动简明流程](BUILD_SERVE_CACHE_QUICKSTART.md)，不参与本页单卡结果。
 
 ## 1. 目标、对象与边界
 

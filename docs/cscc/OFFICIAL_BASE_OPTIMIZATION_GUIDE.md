@@ -319,7 +319,7 @@ store；没有创建持久量化权重、剪枝、重排压缩或模型格式转
 输出长度、层/head/token 数、batch scheduler 或统一 API。
 
 初赛规则要求单卡、并发 1；可选 DP=2 仅为决赛多卡准备，配置与当前验证边界见
-[DP2_MULTI_REQUEST.md](DP2_MULTI_REQUEST.md)。决赛具体卡数与评分规则公布后再
+[构建与启动简明流程](BUILD_SERVE_CACHE_QUICKSTART.md)。决赛具体卡数与评分规则公布后再
 复验，不能将 DP=2 历史吞吐计入初赛成绩。
 
 ## 9. 不要恢复的旧路径

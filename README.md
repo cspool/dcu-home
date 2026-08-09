@@ -67,16 +67,15 @@ HIP_VISIBLE_DEVICES=0 vllm serve /path/to/Qwen3.5-27B \
 压力测试；两个 DP rank 各自运行完整单卡副本，不改变单卡 kernel 数学语义。
 初赛官方评分仍是单卡、并发 1，DP=2 数据不得混入单卡得分。
 
-启动参数、冷编译后热重启条件、benchmark 命令和历史验证边界见
-[DP=2 配置](docs/cscc/DP2_MULTI_REQUEST.md)。
+构建、单卡/DP=2 启动和冷编译后热重启命令见
+[构建与启动简明流程](docs/cscc/BUILD_SERVE_CACHE_QUICKSTART.md)。
 
 ## 文档入口
 
 - [CSCC 文档索引](docs/cscc/README.md)
 - [官方原版优化实施指南](docs/cscc/OFFICIAL_BASE_OPTIMIZATION_GUIDE.md)
-- [源码修改后的构建与冷热缓存复测](docs/cscc/SOURCE_CHANGE_REBUILD_AND_CACHE.md)
+- [源码构建、启动与冷热缓存简明流程](docs/cscc/BUILD_SERVE_CACHE_QUICKSTART.md)
 - [600 行全量性能与精度报告](docs/cscc/MODULAR_3K_PARITY.md)
-- [DP=2 配置与验收边界](docs/cscc/DP2_MULTI_REQUEST.md)
 - [环境变量](ENVIRONMENT.md)
 - [干净构建](BUILD.md)
 - [第三方代码与许可证](THIRD_PARTY_NOTICES.md)
