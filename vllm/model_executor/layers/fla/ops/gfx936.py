@@ -1,22 +1,13 @@
 # SPDX-License-Identifier: Apache-2.0
-"""Narrow gfx936 fast paths shared by Qwen3.5 layers."""
-
 from functools import cache
 
 import torch
 
-_K5120_ROWS_PER_BLOCK = {
-    (96, 5120): 4,
-    (14336, 5120): 2,
-    (16384, 5120): 2,
-    (34816, 5120): 2,
-    (248320, 5120): 2,
-}
+_K5120_OUTPUT_FEATURES = {96, 14336, 16384, 34816, 248320}
 
 
 @cache
 def is_gfx936(device: int | torch.device) -> bool:
-    """Return whether *device* is a gfx936 accelerator."""
     return torch.cuda.get_device_properties(device).gcnArchName.startswith("gfx936:")
 
 
@@ -26,10 +17,11 @@ def qwen35_k5120_gemv(
     *,
     fuse_silu: bool = False,
 ) -> torch.Tensor | None:
-    """Run a Qwen3.5 BF16 K=5120 GEMV, or decline with ``None``."""
     output_features, input_features = weight.shape
     supported_input = (
-        x.numel() == input_features
+        input_features == 5120
+        and output_features in _K5120_OUTPUT_FEATURES
+        and x.numel() == input_features
         and x.dtype == weight.dtype == torch.bfloat16
         and weight.is_contiguous()
         and x.stride(-1) == 1
@@ -40,9 +32,9 @@ def qwen35_k5120_gemv(
         return None
 
     if fuse_silu:
-        rows_per_block = -2 if weight.shape == (34816, 5120) else None
+        rows_per_block = -2 if output_features == 34816 else None
     else:
-        rows_per_block = _K5120_ROWS_PER_BLOCK.get(weight.shape)
+        rows_per_block = 4 if output_features == 96 else 2
     if rows_per_block is None:
         return None
 

@@ -232,28 +232,16 @@ __global__ void LLGemm1_kernel(const scalar_t* in_a, const scalar_t* in_b,
   }
 }
 
-using BFloat16x2 = __hip_bfloat162;
-
-template <bool USE_NATIVE_FMAC>
 __device__ __forceinline__ float dot_bfloat16x8(float4 packed_weights,
                                                 const float2* input_values) {
-  auto* weight_pairs = reinterpret_cast<BFloat16x2*>(&packed_weights);
+  auto* weight_pairs = reinterpret_cast<__hip_bfloat162*>(&packed_weights);
   float even_sum = 0.0f;
   float odd_sum = 0.0f;
 #pragma unroll
   for (int i = 0; i < 4; ++i) {
     const float2 weights = __s22float2(weight_pairs[i]);
-    if constexpr (USE_NATIVE_FMAC) {
-      asm("v_fmac_f32 %0, %1, %2"
-          : "+v"(even_sum)
-          : "v"(weights.x), "v"(input_values[i].x));
-      asm("v_fmac_f32 %0, %1, %2"
-          : "+v"(odd_sum)
-          : "v"(weights.y), "v"(input_values[i].y));
-    } else {
-      even_sum = fmaf(weights.x, input_values[i].x, even_sum);
-      odd_sum = fmaf(weights.y, input_values[i].y, odd_sum);
-    }
+    even_sum = fmaf(weights.x, input_values[i].x, even_sum);
+    odd_sum = fmaf(weights.y, input_values[i].y, odd_sum);
   }
   return even_sum + odd_sum;
 }
@@ -266,7 +254,7 @@ __global__ __launch_bounds__(640) void qwen35_gemv_k5120(
   constexpr int WAVES = 5;
   constexpr int CHUNKS = 640;
   auto* weights = reinterpret_cast<const float4*>(weight);
-  auto* inputs = reinterpret_cast<const BFloat16x2*>(input);
+  auto* inputs = reinterpret_cast<const __hip_bfloat162*>(input);
   auto* outputs = reinterpret_cast<__hip_bfloat16*>(output);
   auto* gates = reinterpret_cast<const __hip_bfloat16*>(gate);
   __shared__ float halves[ROWS][HALF];
@@ -293,7 +281,7 @@ __global__ __launch_bounds__(640) void qwen35_gemv_k5120(
   float sums[ROWS];
 #pragma unroll
   for (int row = 0; row < ROWS; ++row) {
-    sums[row] = dot_bfloat16x8<false>(packed_weights[row], input_values);
+    sums[row] = dot_bfloat16x8(packed_weights[row], input_values);
   }
 
   if (thread >= HALF) {

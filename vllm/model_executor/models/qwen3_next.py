@@ -35,9 +35,9 @@ from vllm.model_executor.layers.fla.ops import (
     chunk_gated_delta_rule as fla_chunk_gated_delta_rule,
 )
 from vllm.model_executor.layers.fla.ops import (
-    gfx936,
     fused_recurrent_gated_delta_rule_packed_decode,
     fused_sigmoid_gating_delta_rule_update,
+    gfx936,
 )
 from vllm.model_executor.layers.fla.ops.chunk import l2norm_fwd
 from vllm.model_executor.layers.fused_moe import SharedFusedMoE
@@ -110,8 +110,6 @@ KVCache = tuple[torch.Tensor, torch.Tensor]
 
 
 class Qwen3NextMLP(Qwen2MoeMLP):
-    """Qwen3Next MLP with a narrow, fused gfx936 GateUp fast path."""
-
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         if self.expert_gate is None:
             gate_up = gfx936.qwen35_k5120_gemv(

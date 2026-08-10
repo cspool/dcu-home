@@ -128,8 +128,7 @@ class RocmAiterUnifiedAttentionImpl(RocmAttentionImpl):
 
         self.unified_attention = unified_attention
         self.supports_gfx936_gqa6 = (
-            (num_heads, num_kv_heads, head_size, kv_cache_dtype)
-            == (24, 4, 256, "auto")
+            (num_heads, num_kv_heads, head_size, kv_cache_dtype) == (24, 4, 256, "auto")
             and alibi_slopes is sliding_window is sinks is None
             and not logits_soft_cap
             and attn_type == AttentionType.DECODER
@@ -218,14 +217,12 @@ class RocmAiterUnifiedAttentionImpl(RocmAttentionImpl):
             key.shape[1] if key is not None else self.num_kv_heads,
         )
 
-        target_cache = (
-            key_cache.shape[1:] == value_cache.shape[1:] == (784, 4, 256)
-            and key_cache.stride() == value_cache.stride()
-        )
-        target_tensors = (
-            query.is_contiguous()
-            and output.is_contiguous()
-            and query.dtype
+        target_cache = key_cache.shape[1:] == value_cache.shape[1:] == (784, 4, 256)
+        target_cache &= key_cache.stride() == value_cache.stride()
+        target_cache &= key_cache.is_contiguous()
+        target_tensors = query.is_contiguous() and output.is_contiguous()
+        target_tensors &= (
+            query.dtype
             == key_cache.dtype
             == value_cache.dtype
             == output.dtype
