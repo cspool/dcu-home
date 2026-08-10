@@ -18,9 +18,11 @@ def qwen35_k5120_gemv(
     fuse_silu: bool = False,
 ) -> torch.Tensor | None:
     output_features, input_features = weight.shape
+    target_shape = (
+        input_features == 5120 and output_features in _K5120_OUTPUT_FEATURES
+    ) or (input_features == 17408 and output_features == 5120)
     supported_input = (
-        input_features == 5120
-        and output_features in _K5120_OUTPUT_FEATURES
+        target_shape
         and x.numel() == input_features
         and x.dtype == weight.dtype == torch.bfloat16
         and weight.is_contiguous()
@@ -31,7 +33,9 @@ def qwen35_k5120_gemv(
     if not supported_input:
         return None
 
-    if fuse_silu:
+    if input_features == 17408:
+        rows_per_block = None if fuse_silu else 1
+    elif fuse_silu:
         rows_per_block = -2 if output_features == 34816 else None
     else:
         rows_per_block = 4 if output_features == 96 else 2

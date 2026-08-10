@@ -232,6 +232,7 @@ __global__ void LLGemm1_kernel(const scalar_t* in_a, const scalar_t* in_b,
   }
 }
 
+template <bool USE_NATIVE_FMAC>
 __device__ __forceinline__ float dot_bfloat16x8(float4 packed_weights,
                                                 const float2* input_values) {
   auto* weight_pairs = reinterpret_cast<__hip_bfloat162*>(&packed_weights);
@@ -240,10 +241,60 @@ __device__ __forceinline__ float dot_bfloat16x8(float4 packed_weights,
 #pragma unroll
   for (int i = 0; i < 4; ++i) {
     const float2 weights = __s22float2(weight_pairs[i]);
-    even_sum = fmaf(weights.x, input_values[i].x, even_sum);
-    odd_sum = fmaf(weights.y, input_values[i].y, odd_sum);
+    if constexpr (USE_NATIVE_FMAC) {
+      asm("v_fmac_f32 %0, %1, %2"
+          : "+v"(even_sum)
+          : "v"(weights.x), "v"(input_values[i].x));
+      asm("v_fmac_f32 %0, %1, %2"
+          : "+v"(odd_sum)
+          : "v"(weights.y), "v"(input_values[i].y));
+    } else {
+      even_sum = fmaf(weights.x, input_values[i].x, even_sum);
+      odd_sum = fmaf(weights.y, input_values[i].y, odd_sum);
+    }
   }
   return even_sum + odd_sum;
+}
+
+__global__ __launch_bounds__(1024) void qwen35_gemv_k17408(
+    const c10::BFloat16* weight, const c10::BFloat16* input,
+    c10::BFloat16* output) {
+  constexpr int CHUNKS = 17408 / 8;
+  auto* weights = reinterpret_cast<const float4*>(weight);
+  auto* inputs = reinterpret_cast<const __hip_bfloat162*>(input);
+  auto* outputs = reinterpret_cast<__hip_bfloat16*>(output);
+  __shared__ float reductions[16];
+
+  const int thread = threadIdx.x;
+  const int lane = thread % 64;
+  const int row = blockIdx.x;
+  float sum = 0.0f;
+  for (int chunk = thread; chunk < CHUNKS; chunk += 1024) {
+    float2 input_values[4];
+#pragma unroll
+    for (int i = 0; i < 4; ++i) {
+      input_values[i] = __s22float2(inputs[chunk * 4 + i]);
+    }
+    sum += dot_bfloat16x8<true>(
+        load_ntmprl(&weights[row * CHUNKS + chunk]), input_values);
+  }
+#pragma unroll
+  for (int mask = 32; mask; mask /= 2) {
+    sum += __shfl_xor(sum, mask);
+  }
+  if (lane == 0) {
+    reductions[thread / 64] = sum;
+  }
+  __syncthreads();
+
+  if (thread == 0) {
+    float total = 0.0f;
+#pragma unroll
+    for (int wave = 0; wave < 16; ++wave) {
+      total += reductions[wave];
+    }
+    outputs[row] = __float2bfloat16(total);
+  }
 }
 
 template <int ROWS, bool FUSE_SILU = false>
@@ -281,7 +332,7 @@ __global__ __launch_bounds__(640) void qwen35_gemv_k5120(
   float sums[ROWS];
 #pragma unroll
   for (int row = 0; row < ROWS; ++row) {
-    sums[row] = dot_bfloat16x8(packed_weights[row], input_values);
+    sums[row] = dot_bfloat16x8<false>(packed_weights[row], input_values);
   }
 
   if (thread >= HALF) {
@@ -346,6 +397,9 @@ torch::Tensor LLMM1(at::Tensor& in_a, at::Tensor& in_b,
   const bool qwen35_k5120_gemv =
       K == 5120 && in_b.dtype() == torch::kBFloat16 &&
       (M == 96 || M == 14336 || M == 16384 || M == 34816 || M == 248320);
+  const bool qwen35_k17408_gemv = rows_per_block == 1 && M == 5120 &&
+                                  K == 17408 &&
+                                  in_b.dtype() == torch::kBFloat16;
 
   auto out_c = torch::empty(
       {N, fuse_swiglu ? M / 2 : M},
@@ -363,6 +417,13 @@ torch::Tensor LLMM1(at::Tensor& in_a, at::Tensor& in_b,
 
   const at::cuda::OptionalCUDAGuard device_guard(device_of(in_b));
   const cudaStream_t stream = at::cuda::getCurrentCUDAStream();
+
+  if (qwen35_k17408_gemv) {
+    qwen35_gemv_k17408<<<M, 1024, 0, stream>>>(
+        in_a.data_ptr<c10::BFloat16>(), in_b.data_ptr<c10::BFloat16>(),
+        out_c.data_ptr<c10::BFloat16>());
+    return out_c;
+  }
 
   if (qwen35_k5120_gemv) {
     auto* weight = in_a.data_ptr<c10::BFloat16>();
