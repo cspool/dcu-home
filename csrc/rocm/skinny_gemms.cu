@@ -261,7 +261,6 @@ __global__ __launch_bounds__(640) void qwen35_gemv_k5120(
   __shared__ float reductions[ROWS][WAVES];
 
   const int thread = threadIdx.x;
-  const int pair = thread % HALF;
   const int lane = thread % 64;
   const int wave = thread / 64;
   const int row_start = blockIdx.x * ROWS;
@@ -287,7 +286,7 @@ __global__ __launch_bounds__(640) void qwen35_gemv_k5120(
   if (thread >= HALF) {
 #pragma unroll
     for (int row = 0; row < ROWS; ++row) {
-      halves[row][pair] = sums[row];
+      halves[row][thread % HALF] = sums[row];
     }
   }
   __syncthreads();
