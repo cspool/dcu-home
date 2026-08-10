@@ -4,11 +4,50 @@ from functools import cache
 import torch
 
 _K5120_OUTPUT_FEATURES = {96, 14336, 16384, 34816, 248320}
+_CHUNK_O_SCHEDULES = {
+    16: ({"BK": 32, "BV": 32}, 2, 2),
+    32: ({"BK": 32, "BV": 32}, 2, 3),
+    64: ({"BK": 32, "BV": 64}, 4, 2),
+    4096: ({"BK": 128, "BV": 128}, 4, 1),
+}
+_SINGLE_STAGE_OPTIONS = {
+    "waves_per_eu": 1,
+    "matrix_instr_nonkdim": 16,
+    "kpack": 2,
+}
 
 
 @cache
 def is_gfx936(device: int | torch.device) -> bool:
     return torch.cuda.get_device_properties(device).gcnArchName.startswith("gfx936:")
+
+
+def use_gfx936(tensor: torch.Tensor) -> bool:
+    return tensor.is_cuda and is_gfx936(tensor.device)
+
+
+def gdn_kernel(kernel, tensor: torch.Tensor, schedule, **metadata):
+    shape = tensor.shape
+    target_shape = shape[:1] == (1,) and shape[2:] in {
+        (16, 128),
+        (48, 128),
+        (48, 64),
+    }
+    if schedule is None or not target_shape or not use_gfx936(tensor):
+        return kernel, {}
+
+    config, num_warps, num_stages = schedule
+    options = (
+        config
+        | metadata
+        | {
+            "num_warps": num_warps,
+            "num_stages": num_stages,
+        }
+    )
+    if num_stages == 1:
+        options |= _SINGLE_STAGE_OPTIONS
+    return kernel.fn.fn, options
 
 
 def qwen35_k5120_gemv(
