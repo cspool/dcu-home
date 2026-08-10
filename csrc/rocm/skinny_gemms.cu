@@ -232,6 +232,12 @@ __global__ void LLGemm1_kernel(const scalar_t* in_a, const scalar_t* in_b,
   }
 }
 
+// Call chain: qwen35_k5120_gemv -> torch.ops._rocm_C.LLMM1 -> target shape gate
+// -> qwen35_gemv_k5120; non-target inputs continue to LLGemm1_kernel below.
+// Role: implement fixed-K decode GEMV and optional GateUp+SwiGLU.
+// Work logic: each lane computes eight BF16 products.
+// Paired halves and five wave leaders reduce each output row.
+// Performance: one 128-bit weight load covers eight fixed-K products.
 __device__ __forceinline__ float dot_bfloat16x8(float4 packed_weights,
                                                 const float2* input_values) {
   auto* weight_pairs = reinterpret_cast<__hip_bfloat162*>(&packed_weights);
@@ -246,6 +252,8 @@ __device__ __forceinline__ float dot_bfloat16x8(float4 packed_weights,
   return even_sum + odd_sum;
 }
 
+// ROWS controls output rows per CTA; FUSE_SILU reuses the first GateUp pass as
+// the BF16 gate buffer and writes the final 17408-wide SwiGLU result in place.
 template <int ROWS, bool FUSE_SILU = false>
 __global__ __launch_bounds__(640) void qwen35_gemv_k5120(
     const c10::BFloat16* weight, const c10::BFloat16* input,
@@ -253,6 +261,7 @@ __global__ __launch_bounds__(640) void qwen35_gemv_k5120(
   constexpr int HALF = 320;
   constexpr int WAVES = 5;
   constexpr int CHUNKS = 640;
+  // Performance: 640 threads load one BF16x8 chunk for the fixed K=5120.
   auto* weights = reinterpret_cast<const float4*>(weight);
   auto* inputs = reinterpret_cast<const __hip_bfloat162*>(input);
   auto* outputs = reinterpret_cast<__hip_bfloat16*>(output);
@@ -283,6 +292,7 @@ __global__ __launch_bounds__(640) void qwen35_gemv_k5120(
     sums[row] = dot_bfloat16x8(packed_weights[row], input_values);
   }
 
+  // Performance: merge paired lanes, then reduce only five wave leaders.
   if (thread >= HALF) {
 #pragma unroll
     for (int row = 0; row < ROWS; ++row) {
@@ -321,6 +331,7 @@ __global__ __launch_bounds__(640) void qwen35_gemv_k5120(
     const int row = row_start + thread;
     const __hip_bfloat16 rounded = __float2bfloat16(total);
     if constexpr (FUSE_SILU) {
+      // Correctness: retain the BF16 staging of GateUp followed by SiluAndMul.
       const float gate_value = static_cast<float>(gates[row]);
       const __hip_bfloat16 activated =
           __float2bfloat16(gate_value / (1.0f + expf(-gate_value)));
@@ -341,6 +352,9 @@ torch::Tensor LLMM1(at::Tensor& in_a, at::Tensor& in_b,
   TORCH_CHECK(in_b.dtype() == torch::kFloat16 ||
               in_b.dtype() == torch::kBFloat16);
 
+  // Negative rows_per_block is private to the existing LLMM1 call site and does
+  // not alter the public operator signature or official positive-value
+  // fallback.
   const bool fuse_swiglu = rows_per_block == -2 && M == 34816;
   const bool qwen35_k5120_gemv =
       K == 5120 && in_b.dtype() == torch::kBFloat16 &&
@@ -363,6 +377,7 @@ torch::Tensor LLMM1(at::Tensor& in_a, at::Tensor& in_b,
   const at::cuda::OptionalCUDAGuard device_guard(device_of(in_b));
   const cudaStream_t stream = at::cuda::getCurrentCUDAStream();
 
+  // Correctness: only target BF16 shapes bypass the official dispatch below.
   if (qwen35_k5120_gemv) {
     auto* weight = in_a.data_ptr<c10::BFloat16>();
     auto* input = in_b.data_ptr<c10::BFloat16>();

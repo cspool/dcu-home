@@ -214,6 +214,9 @@ class Qwen3_5GatedDeltaNet(Qwen3NextGatedDeltaNet):
         # ============================================================
         # Part 3: Output Projection
         # ============================================================
+        # Call chain: official GDN core -> fused norm+gate -> official out_proj.
+        # Role: replace only the Qwen3.5 linear-attention Part 3 epilogue.
+        # Work logic: projections, core and recurrent state stay official.
         core_attn_out = qwen35_gdn_rmsnorm(self.norm, core_attn_out, z)
         core_attn_out = rearrange(core_attn_out, "... h d -> ... (h d)")
         output[:num_tokens], _ = self.out_proj(core_attn_out)

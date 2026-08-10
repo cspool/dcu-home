@@ -994,6 +994,9 @@ if _is_cuda() or _is_hip():
     # copying the relevant .py files from the source repository.
     # ext_modules.append(CMakeExtension(name="vllm.triton_kernels", optional=True))
 
+# Call chain: this extension slot -> repository CMake -> _rocm_C -> LLMM1.
+# Role: package the existing ROCm extension that owns the K5120 HIP kernel.
+# Work logic: reuse official sources/bindings without a third-party dependency.
 if _is_hip():
     ext_modules.append(CMakeExtension(name="vllm._rocm_C"))
 

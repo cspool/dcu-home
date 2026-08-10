@@ -8,10 +8,7 @@ from vllm import _custom_ops as ops
 from vllm._aiter_ops import rocm_aiter_ops
 from vllm.logger import init_logger
 from vllm.model_executor.layers.fla.ops.gfx936 import is_gfx936
-from vllm.model_executor.layers.quantization.utils.quant_utils import (
-    QuantKey,
-    kFp8StaticTensorSym,
-)
+from vllm.model_executor.layers.quantization.utils.quant_utils import QuantKey
 from vllm.v1.attention.backend import AttentionLayer, AttentionType, MultipleOf
 from vllm.v1.attention.backends.flash_attn import FlashAttentionMetadata
 from vllm.v1.attention.backends.rocm_attn import (
@@ -20,6 +17,15 @@ from vllm.v1.attention.backends.rocm_attn import (
     RocmAttentionMetadataBuilder,
 )
 from vllm.v1.attention.ops import rocm_aiter_unified_attention_gqa6 as gqa6
+from vllm.v1.attention.ops import rocm_aiter_unified_attention_page784 as page784
+
+# Call chain: Qwen3NextAttention -> Attention -> this forward -> page784, GQA6,
+# or the official AITER unified_attention fallback.
+# Role: own the common Qwen3.5 gate and enforce the mutually exclusive fast paths.
+# Work logic: try page784 first; if it returns False before writing output, launch
+# GQA6; any common-gate miss continues through official AITER.
+# Correctness boundary: specialized paths omit sinks, output quantization, ALiBi
+# and sliding windows, so those features must never pass this narrow gate.
 
 logger = init_logger(__name__)
 
@@ -47,7 +53,7 @@ class RocmAiterUnifiedAttentionBackend(RocmAttentionBackend):
 
     @classmethod
     def supports_sink(cls) -> bool:
-        return True
+        return False
 
     forward_includes_kv_cache_update: bool = False
 
@@ -92,7 +98,7 @@ class RocmAiterUnifiedAttentionBackend(RocmAttentionBackend):
 
 class RocmAiterUnifiedAttentionImpl(RocmAttentionImpl):
     def fused_output_quant_supported(self, quant_key: QuantKey):
-        return quant_key == kFp8StaticTensorSym
+        return False
 
     def __init__(
         self,
@@ -127,6 +133,7 @@ class RocmAiterUnifiedAttentionImpl(RocmAttentionImpl):
         from aiter.ops.triton.unified_attention import unified_attention
 
         self.unified_attention = unified_attention
+        # Cache device/model invariants once instead of checking them on every layer.
         self.supports_gfx936_gqa6 = (
             (num_heads, num_kv_heads, head_size, kv_cache_dtype) == (24, 4, 256, "auto")
             and alibi_slopes is sliding_window is sinks is None
@@ -217,9 +224,8 @@ class RocmAiterUnifiedAttentionImpl(RocmAttentionImpl):
             key.shape[1] if key is not None else self.num_kv_heads,
         )
 
+        # Correctness: keep the specialized route exact; all misses use official AITER.
         target_cache = key_cache.shape[1:] == value_cache.shape[1:] == (784, 4, 256)
-        target_cache &= key_cache.stride() == value_cache.stride()
-        target_cache &= key_cache.is_contiguous()
         target_tensors = query.is_contiguous() and output.is_contiguous()
         target_tensors &= (
             query.dtype
@@ -237,10 +243,20 @@ class RocmAiterUnifiedAttentionImpl(RocmAttentionImpl):
             and output_scale is None
         )
         if use_gqa6:
-            gqa6.prefill(
+            # Performance: page784 handles its profitable range; GQA6 handles the rest.
+            if page784.prefill(
                 query,
                 key,
                 value,
+                key_cache,
+                value_cache,
+                output,
+                attn_metadata,
+                self.scale,
+            ):
+                return output
+            gqa6.prefill(
+                query,
                 key_cache,
                 value_cache,
                 output,
@@ -267,8 +283,6 @@ class RocmAiterUnifiedAttentionImpl(RocmAttentionImpl):
             q_descale=None,  # Not supported
             k_descale=layer._k_scale.expand(descale_shape),
             v_descale=layer._v_scale.expand(descale_shape),
-            sinks=self.sinks,
-            output_scale=output_scale,
         )
 
         return output

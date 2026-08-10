@@ -128,6 +128,9 @@ def rocm_unquantized_gemm_impl(
     m = weight.shape[0]
     k = weight.shape[1]
 
+    # Call chain: linear.forward -> this entry -> gfx936 helper -> LLMM1.
+    # Role: connect ordinary no-bias decode projections to the K5120 fast path.
+    # Work logic: return a target result; None continues every official dispatch.
     if bias is None:
         from vllm.model_executor.layers.fla.ops.gfx936 import qwen35_k5120_gemv
 

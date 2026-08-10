@@ -110,6 +110,9 @@ KVCache = tuple[torch.Tensor, torch.Tensor]
 
 
 class Qwen3NextMLP(Qwen2MoeMLP):
+    # Call chain: dense MLP -> K5120 GateUp/SwiGLU LLMM1 -> official down_proj.
+    # Role: connect all dense Qwen layers to the fused GateUp fast path.
+    # Work logic: None or expert routing runs the complete official Qwen2MoeMLP.
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         if self.expert_gate is None:
             gate_up = gfx936.qwen35_k5120_gemv(
