@@ -43,7 +43,6 @@ class GDNAttentionMetadata:
     num_actual_tokens: int
 
     has_initial_state: torch.Tensor | None = None
-    has_initial_state_uniform: bool | None = None
 
     spec_query_start_loc: torch.Tensor | None = None  # shape: [num_spec_decodes + 1,]
     non_spec_query_start_loc: torch.Tensor | None = (
@@ -302,19 +301,11 @@ class GDNAttentionMetadataBuilder(AttentionMetadataBuilder[GDNAttentionMetadata]
             assert num_accepted_tokens is not None
             num_accepted_tokens = num_accepted_tokens[spec_sequence_masks]
 
-        uniform = None
         if num_prefills > 0:
             has_initial_state = context_lens_tensor > 0
-            context_lens_cpu = m._num_computed_tokens_cpu
             if spec_sequence_masks is not None:
                 has_initial_state = has_initial_state[~spec_sequence_masks]
-                if context_lens_cpu is not None:
-                    assert spec_sequence_masks_cpu is not None
-                    context_lens_cpu = context_lens_cpu[~spec_sequence_masks_cpu]
                 assert non_spec_query_start_loc_cpu is not None
-            if context_lens_cpu is not None:
-                states = (context_lens_cpu > 0).unique()
-                uniform = bool(states.item()) if states.numel() == 1 else None
             nums_dict, batch_ptr, token_chunk_offset_ptr = (
                 compute_causal_conv1d_metadata(
                     non_spec_query_start_loc_cpu,
@@ -410,7 +401,6 @@ class GDNAttentionMetadataBuilder(AttentionMetadataBuilder[GDNAttentionMetadata]
             num_spec_decode_tokens=num_spec_decode_tokens,
             num_actual_tokens=m.num_actual_tokens,
             has_initial_state=has_initial_state,
-            has_initial_state_uniform=uniform,
             spec_query_start_loc=spec_query_start_loc,
             non_spec_query_start_loc=non_spec_query_start_loc,
             spec_state_indices_tensor=spec_state_indices_tensor,

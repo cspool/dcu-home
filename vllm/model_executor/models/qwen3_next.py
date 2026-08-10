@@ -110,9 +110,15 @@ KVCache = tuple[torch.Tensor, torch.Tensor]
 
 
 class Qwen3NextMLP(Qwen2MoeMLP):
-    def forward(self, x):
+    """Qwen3Next MLP with a narrow, fused gfx936 GateUp fast path."""
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
         if self.expert_gate is None:
-            gate_up = gfx936.qwen35_gemv(self.gate_up_proj.weight, x, True)
+            gate_up = gfx936.qwen35_k5120_gemv(
+                self.gate_up_proj.weight,
+                x,
+                fuse_silu=True,
+            )
             if gate_up is not None:
                 return self.down_proj(gate_up)[0]
         return super().forward(x)
@@ -210,7 +216,6 @@ class ChunkGatedDeltaRule(CustomOp):
         self._forward_method = (
             self.forward_cuda if use_flashinfer else self.forward_native
         )
-        self.native_gdn = not use_flashinfer
 
     def forward_cuda(
         self,
@@ -432,7 +437,6 @@ class Qwen3NextGatedDeltaNet(nn.Module, MambaBase):
         self.prefix = prefix
 
         self.config = config
-        self.gfx936_qwen35 = config.model_type.startswith("qwen3_5")
         self.model_config = model_config
         self.cache_config = cache_config
         self.quant_config = quant_config
@@ -736,19 +740,12 @@ class Qwen3NextGatedDeltaNet(nn.Module, MambaBase):
         num_k_heads = self.num_k_heads // self.tp_size
         num_v_heads = self.num_v_heads // self.tp_size
         _, state_dtype = self.get_state_dtype()
-        fixed_gdn = (
-            self.gfx936_qwen35
-            and dtype == torch.bfloat16
-            and (num_k_heads, num_v_heads, self.head_k_dim, self.head_v_dim)
-            == (16, 48, 128, 128)
-            and gfx936.use_gfx936(mixed_qkv)
-        )
 
         # Run warmup for each possible BT value of chunk_fwd_kernel_o:
         #   T=16 → BT=16, T=32 → BT=32, T=64 → BT=64.
         # Other kernels always use BT=chunk_size(64), so their autotune
         # cache is populated on the first pass and reused thereafter.
-        for T in ((16, 32, 64, 4096) if fixed_gdn else (16, 32, 64)):
+        for T in (16, 32, 64):
             q = torch.randn(
                 1, T, num_k_heads, self.head_k_dim, device=device, dtype=dtype
             )
@@ -768,8 +765,7 @@ class Qwen3NextGatedDeltaNet(nn.Module, MambaBase):
                 device=device,
                 dtype=state_dtype,
             )
-            cu_dtype = torch.int32 if fixed_gdn else torch.long
-            cu_seqlens = torch.tensor([0, T], device=device, dtype=cu_dtype)
+            cu_seqlens = torch.tensor([0, T], device=device, dtype=torch.long)
 
             try:
                 self.chunk_gated_delta_rule(
@@ -799,25 +795,9 @@ class Qwen3NextGatedDeltaNet(nn.Module, MambaBase):
                     self.prefix,
                 )
             finally:
-                extras = [state] * (fixed_gdn and T == 4096)
-                extras += [None] * self.chunk_gated_delta_rule.native_gdn
-                extra_args = dict(
-                    q=q, k=k, v=v, g=g, beta=beta,
-                    output_final_state=True, cu_seqlens=cu_seqlens,
-                    use_qk_l2norm_in_kernel=True,
-                )
-                for warmup_state in extras:
-                    try:
-                        self.chunk_gated_delta_rule(initial_state=warmup_state, **extra_args)
-                    except Exception:
-                        logger.warning("Extra GDN warmup failed", exc_info=True)
                 del q, k, v, g, beta, state, cu_seqlens
 
         torch.accelerator.empty_cache()
-
-    def _zero_core_padding(self, output: torch.Tensor, start: int = 0) -> None:
-        if self.gfx936_qwen35 and start < output.shape[0]:
-            output[start:].zero_()
 
     def _forward_core(
         self,
@@ -833,7 +813,6 @@ class Qwen3NextGatedDeltaNet(nn.Module, MambaBase):
             # V1 profile run — warm up prefill kernels so that
             # autotuning completes before KV cache allocation.
             self._warmup_prefill_kernels(mixed_qkv)
-            self._zero_core_padding(core_attn_out)
             return
 
         assert isinstance(attn_metadata, dict)
@@ -982,13 +961,8 @@ class Qwen3NextGatedDeltaNet(nn.Module, MambaBase):
 
         # 2.2: Process the remaining part
         if attn_metadata.num_prefills > 0:
-            uniform = attn_metadata.has_initial_state_uniform
-            if uniform is False and self.chunk_gated_delta_rule.native_gdn:
-                initial_state = None
-            else:
-                initial_state = ssm_state[non_spec_state_indices_tensor].contiguous()
-                if uniform is not True:
-                    initial_state[~has_initial_state, ...] = 0
+            initial_state = ssm_state[non_spec_state_indices_tensor].contiguous()
+            initial_state[~has_initial_state, ...] = 0
             (
                 core_attn_out_non_spec,
                 last_recurrent_state,
@@ -1043,7 +1017,6 @@ class Qwen3NextGatedDeltaNet(nn.Module, MambaBase):
             core_attn_out[:num_actual_tokens] = core_attn_out_spec.squeeze(0)
         else:
             core_attn_out[:num_actual_tokens] = core_attn_out_non_spec.squeeze(0)
-        self._zero_core_padding(core_attn_out, num_actual_tokens)
 
     def _forward_core_decode_non_spec(
         self,
@@ -1091,9 +1064,7 @@ class Qwen3NextGatedDeltaNet(nn.Module, MambaBase):
             out=out_buf,
             ssm_state_indices=non_spec_state_indices_tensor[:num_actual_tokens],
             use_qk_l2norm_in_kernel=True,
-            validate=False,
         )
-        self._zero_core_padding(core_attn_out, num_actual_tokens)
         return
 
 

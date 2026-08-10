@@ -129,9 +129,10 @@ def rocm_unquantized_gemm_impl(
     k = weight.shape[1]
 
     if bias is None:
-        from vllm.model_executor.layers.fla.ops.gfx936 import qwen35_gemv
+        from vllm.model_executor.layers.fla.ops.gfx936 import qwen35_k5120_gemv
 
-        if (output := qwen35_gemv(weight, x)) is not None:
+        output = qwen35_k5120_gemv(weight, x)
+        if output is not None:
             return output
 
     cu_count = num_compute_units()

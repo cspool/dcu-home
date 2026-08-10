@@ -12,7 +12,6 @@ import torch
 
 from vllm.triton_utils import tl, triton
 
-from .gfx936 import gdn_kernel
 from .index import prepare_chunk_indices
 from .op import exp
 
@@ -139,9 +138,7 @@ def chunk_scaled_dot_kkt_fwd(
     NT = triton.cdiv(T, BT) if cu_seqlens is None else len(chunk_indices)
 
     A = torch.empty(B, T, H, BT, device=k.device, dtype=output_dtype)
-    fixed = ({"BK": 128}, 4, 1) if T == 4096 and g is not None and cu_seqlens is not None else None
-    kernel, options = gdn_kernel(chunk_scaled_dot_kkt_fwd_kernel, k, fixed, USE_G=True, IS_VARLEN=True)
-    kernel[(NT, B * H)](
+    chunk_scaled_dot_kkt_fwd_kernel[(NT, B * H)](
         k=k,
         g=g,
         beta=beta,
@@ -153,6 +150,5 @@ def chunk_scaled_dot_kkt_fwd(
         Hg=Hg,
         K=K,
         BT=BT,
-        **options,
     )
     return A

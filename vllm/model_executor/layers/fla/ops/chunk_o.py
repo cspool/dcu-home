@@ -14,7 +14,6 @@ import torch
 
 from vllm.triton_utils import tl, triton
 
-from .gfx936 import _CHUNK_O, gdn_kernel
 from .index import prepare_chunk_indices
 from .op import exp
 from .utils import FLA_GDN_FIX_BT, check_shared_mem, is_nvidia_hopper
@@ -164,9 +163,7 @@ def chunk_fwd_o(
     def grid(meta):
         return (triton.cdiv(V, meta["BV"]), NT, B * H)
 
-    fixed = _CHUNK_O.get(4096 if T == 4096 else BT) if g is not None and cu_seqlens is not None else None
-    kernel, options = gdn_kernel(chunk_fwd_kernel_o, q, fixed, USE_G=True, IS_VARLEN=True)
-    kernel[grid](
+    chunk_fwd_kernel_o[grid](
         q,
         k,
         v,
@@ -182,6 +179,5 @@ def chunk_fwd_o(
         K=K,
         V=V,
         BT=BT,
-        **options,
     )
     return o

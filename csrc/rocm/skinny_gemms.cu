@@ -232,106 +232,114 @@ __global__ void LLGemm1_kernel(const scalar_t* in_a, const scalar_t* in_b,
   }
 }
 
-template <bool NATIVE_FMAC>
-__device__ __forceinline__ float qwen35_dot8(float4 packed,
-                                             const float2* input) {
-  using scalar2_t = __hip_bfloat162;
-  auto* weight = reinterpret_cast<scalar2_t*>(&packed);
-  float low = 0.0f, high = 0.0f;
+using BFloat16x2 = __hip_bfloat162;
+
+template <bool USE_NATIVE_FMAC>
+__device__ __forceinline__ float dot_bfloat16x8(float4 packed_weights,
+                                                const float2* input_values) {
+  auto* weight_pairs = reinterpret_cast<BFloat16x2*>(&packed_weights);
+  float even_sum = 0.0f;
+  float odd_sum = 0.0f;
 #pragma unroll
   for (int i = 0; i < 4; ++i) {
-    const float2 value = __s22float2(weight[i]);
-    if constexpr (NATIVE_FMAC) {
-      asm("v_fmac_f32 %0, %1, %2" : "+v"(low) : "v"(value.x), "v"(input[i].x));
-      asm("v_fmac_f32 %0, %1, %2" : "+v"(high) : "v"(value.y), "v"(input[i].y));
+    const float2 weights = __s22float2(weight_pairs[i]);
+    if constexpr (USE_NATIVE_FMAC) {
+      asm("v_fmac_f32 %0, %1, %2"
+          : "+v"(even_sum)
+          : "v"(weights.x), "v"(input_values[i].x));
+      asm("v_fmac_f32 %0, %1, %2"
+          : "+v"(odd_sum)
+          : "v"(weights.y), "v"(input_values[i].y));
     } else {
-      low = fmaf(value.x, input[i].x, low);
-      high = fmaf(value.y, input[i].y, high);
+      even_sum = fmaf(weights.x, input_values[i].x, even_sum);
+      odd_sum = fmaf(weights.y, input_values[i].y, odd_sum);
     }
   }
-  return low + high;
+  return even_sum + odd_sum;
 }
 
-__global__ __launch_bounds__(1024) void LLGemm1_k17408_kernel(
+template <int ROWS, bool FUSE_SILU = false>
+__global__ __launch_bounds__(640) void qwen35_gemv_k5120(
     const c10::BFloat16* weight, const c10::BFloat16* input,
-    c10::BFloat16* output) {
-  constexpr int CHUNKS = 17408 / 8;
-  using scalar2_t = __hip_bfloat162;
+    const c10::BFloat16* gate, c10::BFloat16* output) {
+  constexpr int HALF = 320;
+  constexpr int WAVES = 5;
+  constexpr int CHUNKS = 640;
   auto* weights = reinterpret_cast<const float4*>(weight);
-  auto* inputs = reinterpret_cast<const scalar2_t*>(input);
-  __shared__ float reductions[16];
-  const int thread = threadIdx.x, lane = thread % 64, row = blockIdx.x;
-  float acc = 0.0f;
-  for (int chunk = thread; chunk < CHUNKS; chunk += 1024) {
-    float2 values[4];
-#pragma unroll
-    for (int i = 0; i < 4; ++i) values[i] = __s22float2(inputs[chunk * 4 + i]);
-    acc += qwen35_dot8<true>(load_ntmprl(&weights[row * CHUNKS + chunk]), values);
-  }
-#pragma unroll
-  for (int mask = 32; mask; mask /= 2) acc += __shfl_xor(acc, mask);
-  if (lane == 0) reductions[thread / 64] = acc;
-  __syncthreads();
-  if (thread == 0) {
-    float total = 0.0f;
-#pragma unroll
-    for (int i = 0; i < 16; ++i) total += reductions[i];
-    reinterpret_cast<__hip_bfloat16*>(output)[row] = __float2bfloat16(total);
-  }
-}
-
-template <int ROWS, bool SILU = false>
-__global__ __launch_bounds__(640) void LLGemm1_k5120_pairreduce640_kernel(
-    const c10::BFloat16* in_a, const c10::BFloat16* in_b,
-    const c10::BFloat16* gate, c10::BFloat16* out_c) {
-  constexpr int HALF = 320, WAVES = 5, CHUNKS = 640;
-  using scalar2_t = __hip_bfloat162;
-  auto* weights = reinterpret_cast<const float4*>(in_a);
-  auto* input = reinterpret_cast<const scalar2_t*>(in_b);
-  auto* output = reinterpret_cast<__hip_bfloat16*>(out_c);
+  auto* inputs = reinterpret_cast<const BFloat16x2*>(input);
+  auto* outputs = reinterpret_cast<__hip_bfloat16*>(output);
   auto* gates = reinterpret_cast<const __hip_bfloat16*>(gate);
-  __shared__ float halves[ROWS][HALF], reductions[ROWS][WAVES];
-  const int thread = threadIdx.x, pair = thread % HALF;
-  const int lane = thread % 64, wave = thread / 64, row_start = blockIdx.x * ROWS;
-  float2 values[4];
-  float4 packed[ROWS];
+  __shared__ float halves[ROWS][HALF];
+  __shared__ float reductions[ROWS][WAVES];
+
+  const int thread = threadIdx.x;
+  const int pair = thread % HALF;
+  const int lane = thread % 64;
+  const int wave = thread / 64;
+  const int row_start = blockIdx.x * ROWS;
+
+  float2 input_values[4];
+  float4 packed_weights[ROWS];
 #pragma unroll
-  for (int i = 0; i < 4; ++i) values[i] = __s22float2(input[thread * 4 + i]);
+  for (int i = 0; i < 4; ++i) {
+    input_values[i] = __s22float2(inputs[thread * 4 + i]);
+  }
 #pragma unroll
-  for (int row = 0; row < ROWS; ++row)
-    packed[row] = load_ntmprl(&weights[(row_start + row) * CHUNKS + thread]);
-  float acc[ROWS];
+  for (int row = 0; row < ROWS; ++row) {
+    packed_weights[row] =
+        load_ntmprl(&weights[(row_start + row) * CHUNKS + thread]);
+  }
+
+  float sums[ROWS];
 #pragma unroll
-  for (int row = 0; row < ROWS; ++row) acc[row] = qwen35_dot8<false>(packed[row], values);
-  if (thread >= HALF)
+  for (int row = 0; row < ROWS; ++row) {
+    sums[row] = dot_bfloat16x8<false>(packed_weights[row], input_values);
+  }
+
+  if (thread >= HALF) {
 #pragma unroll
-    for (int row = 0; row < ROWS; ++row) halves[row][pair] = acc[row];
+    for (int row = 0; row < ROWS; ++row) {
+      halves[row][pair] = sums[row];
+    }
+  }
   __syncthreads();
+
   if (thread < HALF) {
 #pragma unroll
-    for (int row = 0; row < ROWS; ++row) acc[row] += halves[row][thread];
+    for (int row = 0; row < ROWS; ++row) {
+      sums[row] += halves[row][thread];
+    }
 #pragma unroll
-    for (int mask = 32; mask; mask /= 2)
+    for (int mask = 32; mask; mask /= 2) {
 #pragma unroll
-      for (int row = 0; row < ROWS; ++row) acc[row] += __shfl_xor(acc[row], mask);
-    if (lane == 0)
+      for (int row = 0; row < ROWS; ++row) {
+        sums[row] += __shfl_xor(sums[row], mask);
+      }
+    }
+    if (lane == 0) {
 #pragma unroll
-      for (int row = 0; row < ROWS; ++row) reductions[row][wave] = acc[row];
+      for (int row = 0; row < ROWS; ++row) {
+        reductions[row][wave] = sums[row];
+      }
+    }
   }
   __syncthreads();
+
   if (thread < ROWS) {
     float total = 0.0f;
 #pragma unroll
-    for (int source = 0; source < WAVES; ++source) total += reductions[thread][source];
+    for (int source = 0; source < WAVES; ++source) {
+      total += reductions[thread][source];
+    }
     const int row = row_start + thread;
     const __hip_bfloat16 rounded = __float2bfloat16(total);
-    if constexpr (SILU) {
-      const float value = static_cast<float>(gates[row]);
-      const __hip_bfloat16 activated = __float2bfloat16(value / (1.0f + expf(-value)));
-      output[row] = __float2bfloat16(static_cast<float>(activated) * static_cast<float>(rounded));
-    } else {
-      output[row] = rounded;
+    if constexpr (FUSE_SILU) {
+      const float gate_value = static_cast<float>(gates[row]);
+      const __hip_bfloat16 activated =
+          __float2bfloat16(gate_value / (1.0f + expf(-gate_value)));
+      total = static_cast<float>(activated) * static_cast<float>(rounded);
     }
+    outputs[row] = __float2bfloat16(total);
   }
 }
 
@@ -345,15 +353,14 @@ torch::Tensor LLMM1(at::Tensor& in_a, at::Tensor& in_b,
   TORCH_CHECK(in_a.dtype() == in_b.dtype());
   TORCH_CHECK(in_b.dtype() == torch::kFloat16 ||
               in_b.dtype() == torch::kBFloat16);
-  const bool swiglu = rows_per_block == -2 && M == 34816;
-  const bool qwen35 =
+
+  const bool fuse_swiglu = rows_per_block == -2 && M == 34816;
+  const bool qwen35_k5120_gemv =
       K == 5120 && in_b.dtype() == torch::kBFloat16 &&
       (M == 96 || M == 14336 || M == 16384 || M == 34816 || M == 248320);
-  const bool output_gemv = rows_per_block == 1 && M == 5120 && K == 17408 &&
-                           in_b.dtype() == torch::kBFloat16;
 
   auto out_c = torch::empty(
-      {N, swiglu ? M / 2 : M},
+      {N, fuse_swiglu ? M / 2 : M},
       torch::TensorOptions().dtype(in_b.dtype()).device(in_b.device()));
 
   // NUM_TREADS need to be a multiple of WARP_SIZE, as we are using warp shuffle
@@ -369,28 +376,20 @@ torch::Tensor LLMM1(at::Tensor& in_a, at::Tensor& in_b,
   const at::cuda::OptionalCUDAGuard device_guard(device_of(in_b));
   const cudaStream_t stream = at::cuda::getCurrentCUDAStream();
 
-  if (output_gemv) {
-    LLGemm1_k17408_kernel<<<M, 1024, 0, stream>>>(
-        in_a.data_ptr<c10::BFloat16>(), in_b.data_ptr<c10::BFloat16>(),
-        out_c.data_ptr<c10::BFloat16>());
-    return out_c;
-  }
-  if (qwen35) {
+  if (qwen35_k5120_gemv) {
     auto* weight = in_a.data_ptr<c10::BFloat16>();
     auto* input = in_b.data_ptr<c10::BFloat16>();
     auto* output = out_c.data_ptr<c10::BFloat16>();
-    if (swiglu) {
-      auto gate = torch::empty_like(out_c);
-      auto* gate_ptr = gate.data_ptr<c10::BFloat16>();
-      LLGemm1_k5120_pairreduce640_kernel<2><<<M / 4, 640, 0, stream>>>(
-          weight, input, nullptr, gate_ptr);
-      LLGemm1_k5120_pairreduce640_kernel<2, true><<<M / 4, 640, 0, stream>>>(
-          weight + M / 2 * K, input, gate_ptr, output);
+    if (fuse_swiglu) {
+      qwen35_gemv_k5120<2>
+          <<<M / 4, 640, 0, stream>>>(weight, input, nullptr, output);
+      qwen35_gemv_k5120<2, true><<<M / 4, 640, 0, stream>>>(
+          weight + M / 2 * K, input, output, output);
     } else if (M == 96) {
-      LLGemm1_k5120_pairreduce640_kernel<4>
+      qwen35_gemv_k5120<4>
           <<<M / 4, 640, 0, stream>>>(weight, input, nullptr, output);
     } else {
-      LLGemm1_k5120_pairreduce640_kernel<2>
+      qwen35_gemv_k5120<2>
           <<<M / 2, 640, 0, stream>>>(weight, input, nullptr, output);
     }
     return out_c;

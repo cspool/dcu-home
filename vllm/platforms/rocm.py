@@ -347,8 +347,6 @@ def _get_backend_priorities(
     ):
         backends.append(AttentionBackendEnum.ROCM_ATTN)
 
-    backends.append(AttentionBackendEnum.ROCM_AITER_UNIFIED_ATTN)
-
     # Default: Triton Unified Attention
     backends.append(AttentionBackendEnum.TRITON_ATTN)
     return backends
@@ -564,16 +562,6 @@ class RocmPlatform(Platform):
         Set the device for the current platform.
         """
         torch.cuda.set_device(device)
-        if profile := os.getenv("VLLM_ROCM_TUNABLEOP_PROFILE"):
-            torch.empty(0, device=device)
-            filename = os.path.join(os.path.dirname(__file__), "tunable_profiles", f"{profile}.csv")
-            tunable = torch.cuda.tunable
-            tunable.tuning_enable(False)
-            tunable.record_untuned_enable(False)
-            tunable.set_filename(filename, insert_device_ordinal=False)
-            if len(tunable.get_results()) != 5:
-                raise RuntimeError(f"invalid TunableOp profile: {filename}")
-            tunable.enable(True)
 
     @classmethod
     @lru_cache(maxsize=8)
@@ -633,18 +621,6 @@ class RocmPlatform(Platform):
         from vllm.config.compilation import CUDAGraphMode
 
         compilation_config = vllm_config.compilation_config
-        model = vllm_config.model_config
-        parallel = vllm_config.parallel_config
-        if (
-            "gfx936" in _GCN_ARCH
-            and model.architecture == "Qwen3_5ForConditionalGeneration"
-            and model.dtype == torch.bfloat16
-            and vllm_config.scheduler_config.max_num_batched_tokens == 4096
-            and parallel.world_size == parallel.data_parallel_size == 1
-            and vllm_config.speculative_config is None
-            and compilation_config.compile_sizes is None
-        ):
-            compilation_config.compile_sizes = [4096]
         is_eager_execution = compilation_config.cudagraph_mode == CUDAGraphMode.NONE
         use_aiter_fused_moe = rocm_aiter_ops.is_fused_moe_enabled()
         use_aiter_rms_norm = rocm_aiter_ops.is_rmsnorm_enabled()

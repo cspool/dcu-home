@@ -50,8 +50,7 @@ lora_hf_hub_resolver = "vllm.plugins.lora_resolvers.hf_hub_resolver:register_hf_
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["vllm*", "qwen35_rocm_opt*"]
-exclude = ["qwen35_rocm_opt.build*"]
+include = ["vllm*"]
 
 [tool.ruff.lint.per-file-ignores]
 "vllm/third_party/**" = ["ALL"]

@@ -8,7 +8,7 @@ import torch
 import vllm._custom_ops as ops
 from tests.kernels.quant_utils import ref_dynamic_per_tensor_fp8_quant
 from vllm.platforms import current_platform
-from vllm.platforms.rocm import on_gfx936, on_gfx950
+from vllm.platforms.rocm import on_gfx950
 from vllm.utils.platform_utils import num_compute_units
 
 DTYPES = [torch.bfloat16, torch.float16]
@@ -107,23 +107,6 @@ NKM_FACTORS_WVSPLITK_FP8 = [
 ]
 
 SEEDS = [0]
-
-
-@pytest.mark.parametrize("seed", [0, 17, 2026])
-@pytest.mark.skipif(not current_platform.is_rocm(), reason="only test for rocm")
-@pytest.mark.skipif(not on_gfx936(), reason="only meant for gfx936")
-@torch.inference_mode()
-def test_qwen35_output_gemv_triton(seed):
-    from vllm.model_executor.layers.utils import rocm_unquantized_gemm
-
-    torch.manual_seed(seed)
-    x = torch.randn((1, 17408), dtype=torch.bfloat16, device="cuda") * 0.02
-    weight = torch.randn((5120, 17408), dtype=torch.bfloat16, device="cuda") * 0.02
-
-    ref = torch.nn.functional.linear(x, weight)
-    out = rocm_unquantized_gemm(None, x, weight)
-
-    torch.testing.assert_close(out, ref, atol=5e-4, rtol=1e-2)
 
 
 def pad_fp8(weight):

@@ -693,10 +693,6 @@ class GPUModelRunner(
 
         # Only relevant for models using M-RoPE (e.g, Qwen2-VL)
         if self.uses_mrope:
-            width = self.max_num_tokens + (
-                not current_platform.is_rocm()
-                or self.compilation_config.compile_sizes != [self.max_num_tokens]
-            )
             # NOTE: `mrope_positions` is implemented with one additional dummy
             # position on purpose to make it non-contiguous so that it can work
             # with torch compile.
@@ -707,8 +703,9 @@ class GPUModelRunner(
             # identical position IDs, making M-RoPE functionally equivalent to
             # 1D-RoPE.
             # See page 5 of https://arxiv.org/abs/2409.12191
-            self.mrope_positions = self._make_buffer((3, width), dtype=torch.int64)
-            self._mrope_scratch = torch.empty_like(self.mrope_positions.gpu).flatten()
+            self.mrope_positions = self._make_buffer(
+                (3, self.max_num_tokens + 1), dtype=torch.int64
+            )
 
         # Only relevant for models using XD-RoPE (e.g, HunYuan-VL)
         if self.uses_xdrope_dim > 0:
@@ -898,11 +895,7 @@ class GPUModelRunner(
     def _get_positions(self, num_tokens: Any):
         if isinstance(num_tokens, int):
             if self.uses_mrope:
-                source = self.mrope_positions.gpu[:, :num_tokens]
-                if source.stride(0) == self.max_num_tokens and not source.is_contiguous():
-                    target = self._mrope_scratch[: source.numel()].view_as(source)
-                    return target.copy_(source)
-                return source
+                return self.mrope_positions.gpu[:, :num_tokens]
             if self.uses_xdrope_dim > 0:
                 return self.xdrope_positions.gpu[:, :num_tokens]
             return self.positions.gpu[:num_tokens]
@@ -1822,13 +1815,8 @@ class GPUModelRunner(
 
         if self.uses_mrope:
             # Only relevant for models using M-RoPE (e.g, Qwen2-VL)
-            mrope_tokens = (
-                self.max_num_tokens
-                if self.mrope_positions.gpu.shape[1] == self.max_num_tokens
-                else total_num_scheduled_tokens
-            )
-            self.mrope_positions.gpu[:, :mrope_tokens].copy_(
-                self.mrope_positions.cpu[:, :mrope_tokens],
+            self.mrope_positions.gpu[:, :total_num_scheduled_tokens].copy_(
+                self.mrope_positions.cpu[:, :total_num_scheduled_tokens],
                 non_blocking=True,
             )
         elif self.uses_xdrope_dim > 0:
@@ -3063,7 +3051,7 @@ class GPUModelRunner(
             model_kwargs = self._init_model_kwargs()
 
         if self.uses_mrope:
-            positions = self._get_positions(num_input_tokens)
+            positions = self.mrope_positions.gpu[:, :num_input_tokens]
         elif self.uses_xdrope_dim > 0:
             positions = self.xdrope_positions.gpu[:, :num_input_tokens]
         else:
@@ -5176,7 +5164,7 @@ class GPUModelRunner(
                 inputs_embeds = None
 
             if self.uses_mrope:
-                positions = self._get_positions(num_tokens_padded)
+                positions = self.mrope_positions.gpu[:, :num_tokens_padded]
             elif self.uses_xdrope_dim > 0:
                 positions = self.xdrope_positions.gpu[:, :num_tokens_padded]
             else:

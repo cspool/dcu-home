@@ -994,8 +994,6 @@ if _is_cuda() or _is_hip():
     # copying the relevant .py files from the source repository.
     # ext_modules.append(CMakeExtension(name="vllm.triton_kernels", optional=True))
 
-# if _is_hip():
-#     ext_modules.append(CMakeExtension(name="vllm._rocm_C"))
 if _is_hip():
     ext_modules.append(CMakeExtension(name="vllm._rocm_C"))
 
@@ -1038,7 +1036,6 @@ if _build_custom_ops():
 package_data = {
     "vllm": [
         "py.typed",
-        "platforms/tunable_profiles/*.csv",
         "model_executor/layers/fused_moe/configs/*.json",
         "model_executor/layers/quantization/utils/configs/*.json",
         "entrypoints/serve/instrumentator/static/*.js",

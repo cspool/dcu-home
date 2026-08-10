@@ -14,7 +14,6 @@ import torch
 
 from vllm.triton_utils import tl, triton
 
-from .gfx936 import gdn_kernel
 from .index import prepare_chunk_indices
 from .op import make_tensor_descriptor
 from .utils import input_guard, is_amd, is_tma_supported
@@ -543,8 +542,6 @@ def solve_tril(
     elif BT == 64:
         merge_fn = merge_16x16_to_64x64_inverse_kernel
 
-    fixed = ({}, 2, 1) if T == 4096 and BT == 64 and cu_seqlens is not None else None
-    merge_fn, options = gdn_kernel(merge_fn, A, fixed, IS_VARLEN=True)
     merge_fn[NT, B * H](
         A=A,
         Ai=Ai,
@@ -555,6 +552,5 @@ def solve_tril(
         BT=BT,
         USE_TMA=is_tma_supported,
         DOT_PRECISION=FLA_TRIL_PRECISION,
-        **options,
     )
     return Ai

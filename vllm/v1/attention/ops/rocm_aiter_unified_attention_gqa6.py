@@ -1,181 +1,444 @@
 # SPDX-License-Identifier: Apache-2.0
-import flash_attn_2_cuda, torch
+"""gfx936 GQA6 prefill kernels, including the 784-token page fast path."""
+
+import torch
+import flash_attn_2_cuda
 from flash_attn.flash_attn_interface import varlen_fwd_unified
 
 from vllm.triton_utils import tl, triton
 
-_PAGE_WORKSPACE, _PAGE_META = {}, {}
+_PAGE_WORKSPACE: dict[tuple[torch.device, torch.dtype], tuple[torch.Tensor, ...]] = {}
+_PAGE_METADATA: dict[tuple, tuple[torch.Tensor, ...]] = {}
 
 
 @triton.jit
-def _pack_page784(k, v, table, packed_k, packed_v, tails, s0, s1, s2, s3):
-    token, head = tl.program_id(0), tl.program_id(1)
-    dims = tl.arange(0, 256)
-    is_tail = token < tails
-    logical_page = tl.where(is_tail, token // 16, tails // 16)
-    position = tl.where(is_tail, 768 + token % 16, token - tails)
-    source = tl.load(table + logical_page) * s0 + position * s1 + head * s2 + dims * s3
-    target = token * 1024 + head * 256 + dims
-    tl.store(packed_k + target, tl.load(k + source))
-    tl.store(packed_v + target, tl.load(v + source))
+def _pack_page784(
+    key_cache,
+    value_cache,
+    block_table,
+    packed_key,
+    packed_value,
+    tail_tokens,
+    page_stride,
+    token_stride,
+    head_stride,
+    dim_stride,
+):
+    """Pack each 16-token page tail plus the final partial page."""
+    token = tl.program_id(0)
+    head = tl.program_id(1)
+    dimensions = tl.arange(0, 256)
+
+    from_tail = token < tail_tokens
+    logical_page = tl.where(from_tail, token // 16, tail_tokens // 16)
+    position = tl.where(from_tail, 768 + token % 16, token - tail_tokens)
+
+    source = tl.load(block_table + logical_page) * page_stride
+    source += position * token_stride + head * head_stride
+    source += dimensions * dim_stride
+    target = token * 1024 + head * 256 + dimensions
+    tl.store(packed_key + target, tl.load(key_cache + source))
+    tl.store(packed_value + target, tl.load(value_cache + source))
 
 
 @triton.jit
-def _merge_page784(out, a, la, b, lb, c, lc, rows, query_len):
+def _merge_page784(
+    output,
+    main,
+    main_lse,
+    residual,
+    residual_lse,
+    current,
+    current_lse,
+    row_count,
+    query_len,
+):
+    """Merge main-page, residual, and causal-current attention using FP32 LSE."""
     row = tl.program_id(0) * 4 + tl.arange(0, 4)
-    mask = row < rows
-    token, head = row // 24, row % 24
-    offset = row[:, None] * 256 + tl.arange(0, 256)[None, :]
-    x = tl.load(la + head * query_len + token, mask=mask, other=-float("inf"))
-    y = tl.load(lb + head * query_len + token, mask=mask, other=-float("inf"))
-    z = tl.load(lc + head * query_len + token, mask=mask, other=-float("inf"))
-    maximum = tl.maximum(x, tl.maximum(y, z))
-    wx, wy, wz = tl.exp(x - maximum), tl.exp(y - maximum), tl.exp(z - maximum)
-    denominator = wx + wy + wz
-    wx, wy, wz = wx / denominator, wy / denominator, wz / denominator
-    va = tl.load(a + offset, mask=mask[:, None]).to(tl.float32)
-    vb = tl.load(b + offset, mask=mask[:, None]).to(tl.float32)
-    vc = tl.load(c + offset, mask=mask[:, None]).to(tl.float32)
-    tl.store(out + offset, va * wx[:, None] + vb * wy[:, None] + vc * wz[:, None], mask=mask[:, None])
+    valid = row < row_count
+    token = row // 24
+    head = row % 24
+    output_offset = row[:, None] * 256 + tl.arange(0, 256)[None, :]
+    lse_offset = head * query_len + token
+
+    main_score = tl.load(main_lse + lse_offset, mask=valid, other=-float("inf"))
+    residual_score = tl.load(
+        residual_lse + lse_offset,
+        mask=valid,
+        other=-float("inf"),
+    )
+    current_score = tl.load(
+        current_lse + lse_offset,
+        mask=valid,
+        other=-float("inf"),
+    )
+    max_score = tl.maximum(main_score, tl.maximum(residual_score, current_score))
+    main_weight = tl.exp(main_score - max_score)
+    residual_weight = tl.exp(residual_score - max_score)
+    current_weight = tl.exp(current_score - max_score)
+    normalizer = main_weight + residual_weight + current_weight
+    main_weight /= normalizer
+    residual_weight /= normalizer
+    current_weight /= normalizer
+
+    mask = valid[:, None]
+    main_value = tl.load(main + output_offset, mask=mask).to(tl.float32)
+    residual_value = tl.load(residual + output_offset, mask=mask).to(tl.float32)
+    current_value = tl.load(current + output_offset, mask=mask).to(tl.float32)
+    result = main_value * main_weight[:, None]
+    result += residual_value * residual_weight[:, None]
+    result += current_value * current_weight[:, None]
+    tl.store(output + output_offset, result, mask=mask)
 
 
-def _page_workspace(query, pages):
+def _page_workspace(
+    query: torch.Tensor,
+    page_count: int,
+) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
     key = (query.device, query.dtype)
     if key not in _PAGE_WORKSPACE:
-        options = dict(device=query.device, dtype=query.dtype)
-        _PAGE_WORKSPACE[key] = (
-            *(torch.empty((4096, 24, 256), **options) for _ in range(2)),
-            *(torch.empty((96, 64, 4, 256), **options) for _ in range(2)),
-        )
-    a, b, k, v = _PAGE_WORKSPACE[key]
-    return a[: len(query)], b[: len(query)], k[:pages], v[:pages]
+        options = {"device": query.device, "dtype": query.dtype}
+        main = torch.empty((4096, 24, 256), **options)
+        residual = torch.empty_like(main)
+        packed_key = torch.empty((96, 64, 4, 256), **options)
+        packed_value = torch.empty_like(packed_key)
+        _PAGE_WORKSPACE[key] = (main, residual, packed_key, packed_value)
 
-
-def page784_prefill(query, current_k, current_v, key_cache, value_cache, output, meta, scale):
-    query_len = meta.max_query_len
-    context = meta.max_seq_len - query_len
-    if current_k is None or query_len < 128 or context < 784 or meta.query_start_loc.numel() != 2:
-        return False
-    full, boundary = divmod(context, 784)
-    tails, residual = full * 16, full * 16 + boundary
-    pages = (residual + 63) // 64
-    if query_len > 4096 or pages > 96 or meta.num_actual_tokens != query_len:
-        return False
-    query, current_k, current_v, output = (
-        tensor[:query_len] for tensor in (query, current_k, current_v, output)
+    main, residual, packed_key, packed_value = _PAGE_WORKSPACE[key]
+    return (
+        main[: len(query)],
+        residual[: len(query)],
+        packed_key[:page_count],
+        packed_value[:page_count],
     )
-    main_out, residual_out, packed_k, packed_v = _page_workspace(query, pages)
-    flat_k, flat_v = packed_k.view(-1, 4, 256), packed_v.view(-1, 4, 256)
-    table, cu = meta.block_table, meta.query_start_loc
-    _pack_page784[(residual, 4)](key_cache, value_cache, table, flat_k, flat_v, tails, *key_cache.stride(), num_warps=4)
-    meta_key = (query.device, full, residual, pages)
-    if meta_key not in _PAGE_META:
-        _PAGE_META[meta_key] = (torch.tensor([full * 768], dtype=torch.int32, device=query.device), torch.tensor([residual], dtype=torch.int32, device=query.device), torch.arange(pages, dtype=torch.int32, device=query.device)[None])
-    main_len, residual_len, residual_table = _PAGE_META[meta_key]
-    common = dict(softmax_scale=scale, window_size=(-1, -1), return_softmax_lse=True)
-    a, la = varlen_fwd_unified(query, key_cache[:, :768], value_cache[:, :768], cu, main_len, table[:, :full], query_len, full * 768, causal=False, out=main_out, **common)
-    b, lb = varlen_fwd_unified(query, packed_k, packed_v, cu, residual_len, residual_table, query_len, residual, causal=False, out=residual_out, **common)
-    current = flash_attn_2_cuda.varlen_fwd(
-        query, current_k, current_v, output, cu, cu, None, None, None, None, query_len, query_len,
-        0.0, scale, False, True, -1, -1, 0.0, False, None, None, None, None, None)
-    c, lc = current[0], current[5]
-    la, lb, lc = (state[0] if state.ndim == 3 else state for state in (la, lb, lc))
-    _merge_page784[(triton.cdiv(query_len * 24, 4),)](output, a, la, b, lb, c, lc, query_len * 24, query_len, num_warps=4)
+
+
+def _current_attention(
+    query: torch.Tensor,
+    key: torch.Tensor,
+    value: torch.Tensor,
+    output: torch.Tensor,
+    query_starts: torch.Tensor,
+    query_len: int,
+    scale: float,
+) -> tuple[torch.Tensor, torch.Tensor]:
+    # The direct ABI keeps the caller-provided output buffer. Output and LSE
+    # are elements zero and five of the result tuple.
+    result = flash_attn_2_cuda.varlen_fwd(
+        query,
+        key,
+        value,
+        output,
+        query_starts,
+        query_starts,
+        None,
+        None,
+        None,
+        None,
+        query_len,
+        query_len,
+        0.0,
+        scale,
+        False,
+        True,
+        -1,
+        -1,
+        0.0,
+        False,
+        None,
+        None,
+        None,
+        None,
+        None,
+    )
+    return result[0], result[5]
+
+
+def page784_prefill(
+    query: torch.Tensor,
+    current_key: torch.Tensor | None,
+    current_value: torch.Tensor | None,
+    key_cache: torch.Tensor,
+    value_cache: torch.Tensor,
+    output: torch.Tensor,
+    metadata,
+    scale: float,
+) -> bool:
+    """Run the page784 split-and-merge path, returning whether it took over."""
+    query_len = metadata.max_query_len
+    context_len = metadata.max_seq_len - query_len
+    supported = (
+        current_key is not None
+        and current_value is not None
+        and query_len >= 128
+        and context_len >= 784
+        and metadata.query_start_loc.numel() == 2
+    )
+    if not supported:
+        return False
+
+    full_pages, boundary_tokens = divmod(context_len, 784)
+    tail_tokens = full_pages * 16
+    residual_tokens = tail_tokens + boundary_tokens
+    packed_pages = (residual_tokens + 63) // 64
+    if (
+        query_len > 4096
+        or packed_pages > 96
+        or metadata.num_actual_tokens != query_len
+    ):
+        return False
+
+    query = query[:query_len]
+    current_key = current_key[:query_len]
+    current_value = current_value[:query_len]
+    output = output[:query_len]
+    main, residual, packed_key, packed_value = _page_workspace(query, packed_pages)
+    packed_key_tokens = packed_key.view(-1, 4, 256)
+    packed_value_tokens = packed_value.view(-1, 4, 256)
+    block_table = metadata.block_table
+    query_starts = metadata.query_start_loc
+
+    _pack_page784[(residual_tokens, 4)](
+        key_cache,
+        value_cache,
+        block_table,
+        packed_key_tokens,
+        packed_value_tokens,
+        tail_tokens,
+        *key_cache.stride(),
+        num_warps=4,
+    )
+
+    metadata_key = (query.device, full_pages, residual_tokens, packed_pages)
+    if metadata_key not in _PAGE_METADATA:
+        options = {"dtype": torch.int32, "device": query.device}
+        main_len = torch.tensor([full_pages * 768], **options)
+        residual_len = torch.tensor([residual_tokens], **options)
+        residual_table = torch.arange(packed_pages, **options)[None]
+        _PAGE_METADATA[metadata_key] = (main_len, residual_len, residual_table)
+    main_len, residual_len, residual_table = _PAGE_METADATA[metadata_key]
+
+    attention_options = {
+        "softmax_scale": scale,
+        "window_size": (-1, -1),
+        "return_softmax_lse": True,
+    }
+    main, main_lse = varlen_fwd_unified(
+        query,
+        key_cache[:, :768],
+        value_cache[:, :768],
+        query_starts,
+        main_len,
+        block_table[:, :full_pages],
+        query_len,
+        full_pages * 768,
+        causal=False,
+        out=main,
+        **attention_options,
+    )
+    residual, residual_lse = varlen_fwd_unified(
+        query,
+        packed_key,
+        packed_value,
+        query_starts,
+        residual_len,
+        residual_table,
+        query_len,
+        residual_tokens,
+        causal=False,
+        out=residual,
+        **attention_options,
+    )
+    current, current_lse = _current_attention(
+        query,
+        current_key,
+        current_value,
+        output,
+        query_starts,
+        query_len,
+        scale,
+    )
+    main_lse, residual_lse, current_lse = (
+        lse[0] if lse.ndim == 3 else lse
+        for lse in (main_lse, residual_lse, current_lse)
+    )
+
+    row_count = query_len * 24
+    _merge_page784[(triton.cdiv(row_count, 4),)](
+        output,
+        main,
+        main_lse,
+        residual,
+        residual_lse,
+        current,
+        current_lse,
+        row_count,
+        query_len,
+        num_warps=4,
+    )
     return True
 
 
 @triton.jit
-def _gqa6(
+def _gqa6_prefill(
     output,
     query,
     key_cache,
     value_cache,
-    table,
-    seq_lens,
+    block_table,
+    sequence_lengths,
     query_starts,
-    scale, s0: tl.constexpr, s1: tl.constexpr, s2: tl.constexpr, s3: tl.constexpr,
-    BLOCK_M: tl.constexpr,
+    scale,
+    page_stride: tl.constexpr,
+    token_stride: tl.constexpr,
+    head_stride: tl.constexpr,
+    dim_stride: tl.constexpr,
+    BLOCK_ROWS: tl.constexpr,
 ):
     query_block = tl.program_id(0)
-    head = tl.program_id(1)
-    kv_head = head // 3
-    head_group = head % 3
-    rows = tl.arange(0, BLOCK_M)
-    dims = tl.arange(0, 256)
-    block_q: tl.constexpr = BLOCK_M // 2
-    block_size: tl.constexpr = BLOCK_M
+    query_group = tl.program_id(1)
+    kv_head = query_group // 3
+    head_pair = query_group % 3
+    rows = tl.arange(0, BLOCK_ROWS)
+    dimensions = tl.arange(0, 256)
+    tokens_per_block: tl.constexpr = BLOCK_ROWS // 2
+
     query_start = tl.load(query_starts)
     query_len = tl.load(query_starts + 1) - query_start
-    if query_block * block_q >= query_len:
+    if query_block * tokens_per_block >= query_len:
         return
-    local_query_pos = query_block * block_q + rows // 2
-    query_pos = query_start + local_query_pos
-    query_head = kv_head * 6 + head_group * 2 + rows % 2
-    query_offset = query_pos[:, None] * 6144
-    query_offset += query_head[:, None] * 256 + dims[None, :]
-    query_mask = local_query_pos < query_len
-    q = tl.load(query + query_offset, mask=query_mask[:, None], other=0.0)
-    maximum = tl.full([BLOCK_M], float("-inf"), dtype=tl.float32)
-    denominator = tl.full([BLOCK_M], 1.0, dtype=tl.float32)
-    accumulator = tl.zeros([BLOCK_M, 256], dtype=tl.float32)
-    context_len = tl.load(seq_lens) - query_len
-    query_stop = tl.minimum((query_block + 1) * block_q, query_len)
-    num_blocks = (context_len + query_stop + block_size - 1) // block_size
-    width: tl.constexpr = 32 if block_size == 64 else block_size
-    for block in range(0, num_blocks):
-        for subtile in tl.static_range(0, block_size // width):
-            columns = tl.arange(0, width)
-            start = block * block_size + subtile * width
+
+    local_token = query_block * tokens_per_block + rows // 2
+    query_token = query_start + local_token
+    query_head = kv_head * 6 + head_pair * 2 + rows % 2
+    query_offset = (
+        query_token[:, None] * 6144
+        + query_head[:, None] * 256
+        + dimensions[None, :]
+    )
+    valid_query = local_token < query_len
+    query_values = tl.load(
+        query + query_offset,
+        mask=valid_query[:, None],
+        other=0.0,
+    )
+
+    max_score = tl.full([BLOCK_ROWS], float("-inf"), dtype=tl.float32)
+    normalizer = tl.full([BLOCK_ROWS], 1.0, dtype=tl.float32)
+    weighted_values = tl.zeros([BLOCK_ROWS, 256], dtype=tl.float32)
+    context_len = tl.load(sequence_lengths) - query_len
+    query_stop = tl.minimum((query_block + 1) * tokens_per_block, query_len)
+    cache_blocks = (context_len + query_stop + BLOCK_ROWS - 1) // BLOCK_ROWS
+    tile_width: tl.constexpr = 32 if BLOCK_ROWS == 64 else BLOCK_ROWS
+
+    for cache_block in range(0, cache_blocks):
+        for subtile in tl.static_range(0, BLOCK_ROWS // tile_width):
+            columns = tl.arange(0, tile_width)
+            start = cache_block * BLOCK_ROWS + subtile * tile_width
             logical_page = start // 784
-            first_page = tl.load(table + logical_page)
-            first_offset = start % 784
-            boundary = 784 - first_offset
+            first_page = tl.load(block_table + logical_page)
+            first_position = start % 784
+            first_page_tokens = 784 - first_position
             second_page = tl.load(
-                table + logical_page + 1,
-                mask=boundary < width,
+                block_table + logical_page + 1,
+                mask=first_page_tokens < tile_width,
                 other=first_page,
             )
-            on_first_page = columns < boundary
-            page = tl.where(on_first_page, first_page, second_page)
-            offset = tl.where(
-                on_first_page, first_offset + columns, columns - boundary
+            use_first_page = columns < first_page_tokens
+            page = tl.where(use_first_page, first_page, second_page)
+            position = tl.where(
+                use_first_page,
+                first_position + columns,
+                columns - first_page_tokens,
             )
-            k_base = page * s0 + offset * s1 + kv_head * s2
-            v_base = k_base
-            k = tl.load(key_cache + k_base[None, :] + dims[:, None] * s3)
-            v = tl.load(value_cache + v_base[:, None] + dims[None, :] * s3)
+            cache_offset = (
+                page * page_stride
+                + position * token_stride
+                + kv_head * head_stride
+            )
+            keys = tl.load(
+                key_cache
+                + cache_offset[None, :]
+                + dimensions[:, None] * dim_stride
+            )
+            values = tl.load(
+                value_cache
+                + cache_offset[:, None]
+                + dimensions[None, :] * dim_stride
+            )
             causal = (
                 start + columns[None, :]
-                < context_len + local_query_pos[:, None] + 1
+                < context_len + local_token[:, None] + 1
             )
-            scores = scale * tl.dot(q, k)
-            scores = tl.where(query_mask[:, None] & causal, scores, float("-inf"))
-            block_max = tl.maximum(maximum, tl.max(scores, axis=1))
-            block_max = tl.where(block_max > float("-inf"), block_max, 0.0)
-            probabilities = tl.exp(scores - block_max[:, None])
-            correction = tl.exp(maximum - block_max)
-            accumulator *= correction[:, None]
-            denominator = denominator * correction + tl.sum(probabilities, axis=1)
-            maximum = block_max
-            accumulator += tl.dot(probabilities.to(v.dtype), v)
-    result = accumulator / denominator[:, None]
-    output_offset = query_pos[:, None] * 6144
-    output_offset += query_head[:, None] * 256 + dims[None, :]
-    tl.store(output + output_offset, result, mask=query_mask[:, None])
+            scores = scale * tl.dot(query_values, keys)
+            scores = tl.where(
+                valid_query[:, None] & causal,
+                scores,
+                float("-inf"),
+            )
+            next_max = tl.maximum(max_score, tl.max(scores, axis=1))
+            next_max = tl.where(next_max > float("-inf"), next_max, 0.0)
+            probabilities = tl.exp(scores - next_max[:, None])
+            correction = tl.exp(max_score - next_max)
+            weighted_values *= correction[:, None]
+            normalizer = normalizer * correction + tl.sum(probabilities, axis=1)
+            max_score = next_max
+            weighted_values += tl.dot(probabilities.to(values.dtype), values)
+
+    result = weighted_values / normalizer[:, None]
+    output_offset = (
+        query_token[:, None] * 6144
+        + query_head[:, None] * 256
+        + dimensions[None, :]
+    )
+    tl.store(output + output_offset, result, mask=valid_query[:, None])
 
 
-def prefill(**kwargs):
-    query = kwargs["q"]
-    block_m = 64 if query.shape[0] >= 128 else 16
-    config = {
-        "num_warps": 4 if block_m == 64 or query.shape[0] < 128 else 2,
+def prefill(
+    query: torch.Tensor,
+    current_key: torch.Tensor | None,
+    current_value: torch.Tensor | None,
+    key_cache: torch.Tensor,
+    value_cache: torch.Tensor,
+    output: torch.Tensor,
+    metadata,
+    scale: float,
+) -> None:
+    """Run page784 when eligible, otherwise the general single-sequence GQA6 path."""
+    if page784_prefill(
+        query,
+        current_key,
+        current_value,
+        key_cache,
+        value_cache,
+        output,
+        metadata,
+        scale,
+    ):
+        return
+
+    query = query[: metadata.num_actual_tokens]
+    output = output[: metadata.num_actual_tokens]
+    block_rows = 64 if query.shape[0] >= 128 else 16
+    options = {
+        "num_warps": 4,
         "num_stages": 2 if query.shape[0] < 128 else 1,
         "waves_per_eu": 1,
     }
     if query.shape[0] >= 128:
-        config |= {"matrix_instr_nonkdim": 16, "kpack": 2}
-    _gqa6[(triton.cdiv(kwargs["max_seqlen_q"], block_m // 2), 12, 1)](
-        kwargs["out"], kwargs["q"], kwargs["k"], kwargs["v"], kwargs["block_table"], kwargs["seqused_k"], kwargs["cu_seqlens_q"], kwargs["softmax_scale"], *kwargs["k"].stride(),
-        BLOCK_M=block_m,
-        **config,
+        options |= {"matrix_instr_nonkdim": 16, "kpack": 2}
+
+    grid = (triton.cdiv(metadata.max_query_len, block_rows // 2), 12, 1)
+    _gqa6_prefill[grid](
+        output,
+        query,
+        key_cache,
+        value_cache,
+        metadata.block_table,
+        metadata.seq_lens,
+        metadata.query_start_loc,
+        scale,
+        *key_cache.stride(),
+        BLOCK_ROWS=block_rows,
+        **options,
     )

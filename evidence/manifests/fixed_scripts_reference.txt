@@ -1,7 +1,0 @@
-External evaluation script hash references used for the final repro-minimal gate.
-The scripts are supplied outside this source repository; this file is
-provenance only and is not a sha256sum -c manifest for the checkout.
-
-91b72cfca61994c38f302d3735b3ab7f85481939364876bc1ce2b6496820749e  run_throughput.sh
-2e641672a45ac96318c2118df8df4dae2babf87c16afd49cbe4b037ff9beed4e  run_accuracy.sh
-6f794f30e5c031a4d62ff8cc2ecaaa35162e79c23de897a023180ae70cc17f97  start_vllm.sh

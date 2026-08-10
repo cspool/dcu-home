@@ -47,7 +47,7 @@ class RocmAiterUnifiedAttentionBackend(RocmAttentionBackend):
 
     @classmethod
     def supports_sink(cls) -> bool:
-        return False
+        return True
 
     forward_includes_kv_cache_update: bool = False
 
@@ -127,9 +127,9 @@ class RocmAiterUnifiedAttentionImpl(RocmAttentionImpl):
         from aiter.ops.triton.unified_attention import unified_attention
 
         self.unified_attention = unified_attention
-        shape = (num_heads, num_kv_heads, head_size, kv_cache_dtype)
-        self.gfx936_gqa6 = (
-            shape == (24, 4, 256, "auto")
+        self.supports_gfx936_gqa6 = (
+            (num_heads, num_kv_heads, head_size, kv_cache_dtype)
+            == (24, 4, 256, "auto")
             and alibi_slopes is sliding_window is sinks is None
             and not logits_soft_cap
             and attn_type == AttentionType.DECODER
@@ -218,20 +218,41 @@ class RocmAiterUnifiedAttentionImpl(RocmAttentionImpl):
             key.shape[1] if key is not None else self.num_kv_heads,
         )
 
+        target_cache = (
+            key_cache.shape[1:] == value_cache.shape[1:] == (784, 4, 256)
+            and key_cache.stride() == value_cache.stride()
+        )
+        target_tensors = (
+            query.is_contiguous()
+            and output.is_contiguous()
+            and query.dtype
+            == key_cache.dtype
+            == value_cache.dtype
+            == output.dtype
+            == torch.bfloat16
+        )
         use_gqa6 = (
-            self.gfx936_gqa6
+            self.supports_gfx936_gqa6
             and max_seqlen_q > 1
             and cu_seqlens_q.numel() == 2
-            and key_cache.shape[1:] == value_cache.shape[1:] == (784, 4, 256)
-            and query.is_contiguous() and output.is_contiguous() and key_cache.stride() == value_cache.stride()
-            and query.dtype == key_cache.dtype == value_cache.dtype
-            == output.dtype == torch.bfloat16
+            and target_cache
+            and target_tensors
+            and output_scale is None
         )
-        if use_gqa6 and gqa6.page784_prefill(
-            query, key, value, key_cache, value_cache, output, attn_metadata, self.scale
-        ):
+        if use_gqa6:
+            gqa6.prefill(
+                query,
+                key,
+                value,
+                key_cache,
+                value_cache,
+                output,
+                attn_metadata,
+                self.scale,
+            )
             return output
-        (gqa6.prefill if use_gqa6 else self.unified_attention)(
+
+        self.unified_attention(
             q=query[:num_actual_tokens],
             k=key_cache,
             v=value_cache,
@@ -249,6 +270,8 @@ class RocmAiterUnifiedAttentionImpl(RocmAttentionImpl):
             q_descale=None,  # Not supported
             k_descale=layer._k_scale.expand(descale_shape),
             v_descale=layer._v_scale.expand(descale_shape),
+            sinks=self.sinks,
+            output_scale=output_scale,
         )
 
         return output
