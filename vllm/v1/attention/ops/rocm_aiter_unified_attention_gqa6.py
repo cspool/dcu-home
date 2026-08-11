@@ -94,14 +94,16 @@ def prefill(**kwargs):
     query = kwargs["q"]
     cache_size = kwargs["k"].shape[1]
     num_sequences = kwargs["seqused_k"].shape[0]
+    batch4 = cache_size == 784 and num_sequences == 4
     wide = (cache_size, num_sequences, query.shape[0] >= 128) == (784, 1, True)
-    block_m = 64 if wide else 16
+    block_m = 32 if batch4 else (64 if wide else 16)
+    short = block_m == 16 and query.shape[0] < 128
     config = {
-        "num_warps": 4 if block_m == 64 or query.shape[0] < 128 else 2,
-        "num_stages": 2 if query.shape[0] < 128 else 1,
+        "num_warps": 4 if block_m == 64 or short else 2,
+        "num_stages": 2 if short else 1,
         "waves_per_eu": 1,
     }
-    if query.shape[0] >= 128:
+    if batch4 or query.shape[0] >= 128:
         config |= {"matrix_instr_nonkdim": 16, "kpack": 2}
     strides = (
         kwargs["block_table"].stride(0),
