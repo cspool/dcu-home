@@ -11,6 +11,7 @@ from vllm._aiter_ops import rocm_aiter_ops
 from vllm.config import CUDAGraphMode, VllmConfig
 from vllm.config.cache import CacheDType
 from vllm.logger import init_logger
+from vllm.model_executor.layers.fla.ops.gfx936 import is_gfx936
 from vllm.model_executor.layers.quantization.utils.quant_utils import (
     QuantKey,
     kFp8StaticTensorSym,
@@ -28,6 +29,8 @@ from vllm.v1.attention.backend import (
     CommonAttentionMetadata,
     MultipleOf,
 )
+from vllm.v1.attention.ops import rocm_aiter_unified_attention_gqa6 as gqa6
+from vllm.v1.attention.ops import rocm_aiter_unified_attention_page784 as page784
 from vllm.v1.attention.ops.triton_prefill_attention import context_attention_fwd
 from vllm.v1.attention.ops.triton_reshape_and_cache_flash import (
     triton_reshape_and_cache_flash,
@@ -407,6 +410,14 @@ class TritonAttentionImpl(AttentionImpl):
             )
         self.use_alibi_sqrt = use_alibi_sqrt
         self.supports_quant_query_input = current_platform.is_cuda()
+        self.supports_gfx936_gqa6 = (
+            (num_heads, num_kv_heads, head_size, kv_cache_dtype)
+            == (12, 2, 256, "auto")
+            and alibi_slopes is sliding_window is sinks is None
+            and not logits_soft_cap
+            and attn_type == AttentionType.DECODER
+            and is_gfx936(torch.cuda.current_device())
+        )
 
     def forward(
         self,
@@ -485,6 +496,50 @@ class TritonAttentionImpl(AttentionImpl):
         max_seqlen_q = attn_metadata.max_query_len
         max_seqlen_k = attn_metadata.max_seq_len
         block_table = attn_metadata.block_table
+
+        target_cache = (
+            key_cache.shape[1:]
+            == value_cache.shape[1:]
+            == (784, self.num_kv_heads, 256)
+        )
+        target_tensors = query.is_contiguous() and output.is_contiguous()
+        target_tensors &= (
+            query.dtype
+            == key_cache.dtype
+            == value_cache.dtype
+            == output.dtype
+            == torch.bfloat16
+        )
+        use_gqa6 = (
+            self.supports_gfx936_gqa6
+            and max_seqlen_q > 1
+            and cu_seqlens_q.numel() == 2
+            and attn_metadata.mm_prefix_range is None
+            and target_cache
+            and target_tensors
+            and output_scale is None
+        )
+        if use_gqa6:
+            if page784.prefill(
+                query,
+                key,
+                value,
+                key_cache,
+                value_cache,
+                output,
+                attn_metadata,
+                self.scale,
+            ):
+                return output
+            gqa6.prefill(
+                query,
+                key_cache,
+                value_cache,
+                output,
+                attn_metadata,
+                self.scale,
+            )
+            return output
 
         seq_threshold_3D = attn_metadata.seq_threshold_3D
         num_par_softmax_segments = attn_metadata.num_par_softmax_segments

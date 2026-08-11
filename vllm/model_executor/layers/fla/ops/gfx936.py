@@ -5,6 +5,7 @@ from functools import cache
 import torch
 
 from vllm.triton_utils import tl, triton
+from vllm.utils.torch_utils import direct_register_custom_op
 
 # GDN call chain: Qwen3_5GatedDeltaNet -> qwen35_gdn_rmsnorm -> Triton norm+SiLU.
 # Decode call chain: ROCm linear/Qwen3NextMLP -> qwen35_k5120_gemv -> LLMM1.
@@ -62,6 +63,41 @@ def _gdn_rmsnorm_silu_gate(
     tl.store(output + offsets, result, mask=valid[:, None])
 
 
+def _qwen35_gdn_rmsnorm_impl(
+    x: torch.Tensor, gate: torch.Tensor, weight: torch.Tensor, eps: float
+) -> torch.Tensor:
+    heads = x.shape[1]
+    gate_token_stride = gate.stride(0)
+    output = torch.empty_like(x)
+    total_rows = x.shape[0] * heads
+    _gdn_rmsnorm_silu_gate[(triton.cdiv(total_rows, 8),)](
+        x,
+        gate,
+        weight,
+        output,
+        eps,
+        TOTAL_ROWS=total_rows,
+        HEADS=heads,
+        GATE_TOKEN_STRIDE=gate_token_stride,
+        num_warps=1 if x.shape[0] < 128 else 2,
+        num_stages=1,
+    )
+    return output
+
+
+def _qwen35_gdn_rmsnorm_fake(
+    x: torch.Tensor, gate: torch.Tensor, weight: torch.Tensor, eps: float
+) -> torch.Tensor:
+    return torch.empty_like(x)
+
+
+direct_register_custom_op(
+    op_name="qwen35_gdn_rmsnorm",
+    op_func=_qwen35_gdn_rmsnorm_impl,
+    fake_impl=_qwen35_gdn_rmsnorm_fake,
+)
+
+
 def qwen35_gdn_rmsnorm(norm, x: torch.Tensor, gate: torch.Tensor) -> torch.Tensor:
     # Correctness: only the exact model layout enters the fused Triton formula.
     heads = x.shape[1] if x.ndim == 3 else 0
@@ -71,21 +107,8 @@ def qwen35_gdn_rmsnorm(norm, x: torch.Tensor, gate: torch.Tensor) -> torch.Tenso
     target_layout &= gate.stride() == (gate_token_stride, 128, 1)
     if not (target_layout and x.is_cuda and is_gfx936(x.device)):
         return norm(x.reshape(-1, 128), gate.reshape(-1, 128)).reshape_as(x)
-    output = torch.empty_like(x)
-    total_rows = x.shape[0] * heads
-    _gdn_rmsnorm_silu_gate[(triton.cdiv(total_rows, 8),)](
-        x,
-        gate,
-        norm.weight,
-        output,
-        norm.eps,
-        TOTAL_ROWS=total_rows,
-        HEADS=heads,
-        GATE_TOKEN_STRIDE=gate_token_stride,
-        num_warps=1 if x.shape[0] < 128 else 2,
-        num_stages=1,
-    )
-    return output
+    # Keep dynamic token counts opaque to the model's full-graph compilation.
+    return torch.ops.vllm.qwen35_gdn_rmsnorm(x, gate, norm.weight, norm.eps)
 
 
 def qwen35_gemv(
