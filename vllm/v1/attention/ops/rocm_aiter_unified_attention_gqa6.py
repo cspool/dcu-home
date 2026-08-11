@@ -20,6 +20,8 @@ def _gqa6_prefill(
     query_len,
     context_len,
     scale,
+    QUERY_STRIDE: tl.constexpr,
+    OUTPUT_STRIDE: tl.constexpr,
     CACHE_STRIDES: tl.constexpr,
     BLOCK_ROWS: tl.constexpr,
 ):
@@ -30,7 +32,7 @@ def _gqa6_prefill(
 
     local_token = query_block * tokens_per_block + rows // 2
     query_head = kv_head * 6 + head_pair * 2 + rows % 2
-    query_offset = local_token[:, None] * 6144
+    query_offset = local_token[:, None] * QUERY_STRIDE
     query_offset += query_head[:, None] * 256 + dimensions[None, :]
     valid_query = local_token < query_len
     query_values = tl.load(query + query_offset, mask=valid_query[:, None], other=0.0)
@@ -92,7 +94,7 @@ def _gqa6_prefill(
             weighted_values += tl.dot(probabilities.to(values.dtype), values)
 
     result = weighted_values / normalizer[:, None]
-    output_offset = local_token[:, None] * 6144
+    output_offset = local_token[:, None] * OUTPUT_STRIDE
     output_offset += query_head[:, None] * 256 + dimensions[None, :]
     tl.store(output + output_offset, result, mask=valid_query[:, None])
 
@@ -108,17 +110,21 @@ def prefill(
     # This host launcher runs only after the backend proves the exact target shape.
     query = query[: metadata.num_actual_tokens]
     output = output[: metadata.num_actual_tokens]
-    # Performance: short tails avoid a 64-row CTA; long queries amortize it.
-    block_rows = 64 if query.shape[0] >= 128 else 16
+    # TP2 gfx936 sweep: 32 rows and two waves win from short tails through 4K.
+    block_rows = 32
     options = {
-        "num_warps": 4,
-        "num_stages": 2 if query.shape[0] < 128 else 1,
+        "num_warps": 2,
+        "num_stages": 1,
         "waves_per_eu": 1,
+        "matrix_instr_nonkdim": 16,
+        "kpack": 2,
     }
-    if query.shape[0] >= 128:
-        options |= {"matrix_instr_nonkdim": 16, "kpack": 2}
 
-    grid = (triton.cdiv(metadata.max_query_len, block_rows // 2), 12, 1)
+    grid = (
+        triton.cdiv(metadata.max_query_len, block_rows // 2),
+        query.shape[1] // 2,
+        1,
+    )
     _gqa6_prefill[grid](
         output,
         query,
@@ -128,6 +134,8 @@ def prefill(
         metadata.max_query_len,
         metadata.max_seq_len - metadata.max_query_len,
         scale,
+        QUERY_STRIDE=query.stride(0),
+        OUTPUT_STRIDE=output.stride(0),
         CACHE_STRIDES=(*key_cache.stride(), *value_cache.stride()),
         BLOCK_ROWS=block_rows,
         **options,

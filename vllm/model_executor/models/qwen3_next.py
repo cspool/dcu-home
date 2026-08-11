@@ -115,7 +115,7 @@ class Qwen3NextMLP(Qwen2MoeMLP):
     # Work logic: None or expert routing runs the complete official Qwen2MoeMLP.
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         if self.expert_gate is None:
-            gate_up = gfx936.qwen35_k5120_gemv(
+            gate_up = gfx936.qwen35_gemv(
                 self.gate_up_proj.weight,
                 x,
                 fuse_silu=True,

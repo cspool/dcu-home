@@ -341,6 +341,61 @@ __global__ __launch_bounds__(640) void qwen35_gemv_k5120(
   }
 }
 
+// TP2 row-parallel decode projections.  Multiple output rows share each input
+// chunk; the winning gfx936 layouts are K3072/R4/T256 and K8704/R2/T640.
+template <int K, int THREADS, int ROWS>
+__global__ __launch_bounds__(THREADS) void qwen35_row_gemv(
+    const c10::BFloat16* weight, const c10::BFloat16* input,
+    c10::BFloat16* output) {
+  constexpr int WAVES = THREADS / WARP_SIZE;
+  constexpr int CHUNKS = K / 8;
+  auto* weights = reinterpret_cast<const float4*>(weight);
+  auto* inputs = reinterpret_cast<const __hip_bfloat162*>(input);
+  auto* outputs = reinterpret_cast<__hip_bfloat16*>(output);
+  __shared__ float reductions[ROWS][WAVES];
+  const int thread = threadIdx.x;
+  const int lane = thread % WARP_SIZE;
+  const int wave = thread / WARP_SIZE;
+  const int row_start = blockIdx.x * ROWS;
+  float sums[ROWS] = {};
+
+  for (int chunk = thread; chunk < CHUNKS; chunk += THREADS) {
+    float2 input_values[4];
+#pragma unroll
+    for (int i = 0; i < 4; ++i) {
+      input_values[i] = __s22float2(inputs[chunk * 4 + i]);
+    }
+#pragma unroll
+    for (int row = 0; row < ROWS; ++row) {
+      sums[row] += dot_bfloat16x8(
+          load_ntmprl(&weights[(row_start + row) * CHUNKS + chunk]),
+          input_values);
+    }
+  }
+#pragma unroll
+  for (int mask = WARP_SIZE / 2; mask; mask /= 2) {
+#pragma unroll
+    for (int row = 0; row < ROWS; ++row) {
+      sums[row] += __shfl_xor(sums[row], mask);
+    }
+  }
+  if (lane == 0) {
+#pragma unroll
+    for (int row = 0; row < ROWS; ++row) {
+      reductions[row][wave] = sums[row];
+    }
+  }
+  __syncthreads();
+  if (thread < ROWS) {
+    float total = 0.0f;
+#pragma unroll
+    for (int source = 0; source < WAVES; ++source) {
+      total += reductions[thread][source];
+    }
+    outputs[row_start + thread] = __float2bfloat16(total);
+  }
+}
+
 torch::Tensor LLMM1(at::Tensor& in_a, at::Tensor& in_b,
                     const int64_t rows_per_block) {
   auto M = in_a.size(0);
@@ -355,10 +410,15 @@ torch::Tensor LLMM1(at::Tensor& in_a, at::Tensor& in_b,
   // Negative rows_per_block is private to the existing LLMM1 call site and does
   // not alter the public operator signature or official positive-value
   // fallback.
-  const bool fuse_swiglu = rows_per_block == -2 && M == 34816;
+  const bool fuse_swiglu = rows_per_block == -2 && (M == 17408 || M == 34816);
   const bool qwen35_k5120_gemv =
       K == 5120 && in_b.dtype() == torch::kBFloat16 &&
-      (M == 96 || M == 14336 || M == 16384 || M == 34816 || M == 248320);
+      (M == 48 || M == 96 || M == 7168 || M == 8192 || M == 14336 ||
+       M == 16384 || M == 17408 || M == 34816 || M == 124160 || M == 248320);
+  const bool qwen35_row_projection = M == 5120 &&
+                                     in_b.dtype() == torch::kBFloat16 &&
+                                     ((K == 3072 && rows_per_block == 4) ||
+                                      (K == 8704 && rows_per_block == 2));
 
   auto out_c = torch::empty(
       {N, fuse_swiglu ? M / 2 : M},
@@ -387,12 +447,25 @@ torch::Tensor LLMM1(at::Tensor& in_a, at::Tensor& in_b,
           <<<M / 4, 640, 0, stream>>>(weight, input, nullptr, output);
       qwen35_gemv_k5120<2, true><<<M / 4, 640, 0, stream>>>(
           weight + M / 2 * K, input, output, output);
-    } else if (M == 96) {
+    } else if (M <= 96) {
       qwen35_gemv_k5120<4>
           <<<M / 4, 640, 0, stream>>>(weight, input, nullptr, output);
     } else {
       qwen35_gemv_k5120<2>
           <<<M / 2, 640, 0, stream>>>(weight, input, nullptr, output);
+    }
+    return out_c;
+  }
+  if (qwen35_row_projection) {
+    auto* weight = in_a.data_ptr<c10::BFloat16>();
+    auto* input = in_b.data_ptr<c10::BFloat16>();
+    auto* output = out_c.data_ptr<c10::BFloat16>();
+    if (K == 3072) {
+      qwen35_row_gemv<3072, 256, 4>
+          <<<M / 4, 256, 0, stream>>>(weight, input, output);
+    } else {
+      qwen35_row_gemv<8704, 640, 2>
+          <<<M / 2, 640, 0, stream>>>(weight, input, output);
     }
     return out_c;
   }

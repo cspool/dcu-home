@@ -132,9 +132,9 @@ def rocm_unquantized_gemm_impl(
     # Role: connect ordinary no-bias decode projections to the K5120 fast path.
     # Work logic: return a target result; None continues every official dispatch.
     if bias is None:
-        from vllm.model_executor.layers.fla.ops.gfx936 import qwen35_k5120_gemv
+        from vllm.model_executor.layers.fla.ops.gfx936 import qwen35_gemv
 
-        output = qwen35_k5120_gemv(weight, x)
+        output = qwen35_gemv(weight, x)
         if output is not None:
             return output
 

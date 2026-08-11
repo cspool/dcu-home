@@ -11,7 +11,7 @@ from vllm.triton_utils import tl, triton
 # Work logic: custom Triton packs the residual, official FA computes main/residual
 # attention, and a custom LSE-weighted merge produces the complete output.
 
-_PAGE_WORKSPACE: dict[tuple[torch.device, torch.dtype], tuple[torch.Tensor, ...]] = {}
+_PAGE_WORKSPACE: dict[tuple, tuple[torch.Tensor, ...]] = {}
 _PAGE_METADATA: dict[tuple, tuple[torch.Tensor, ...]] = {}
 
 
@@ -29,6 +29,7 @@ def _pack_page784(
     full_pages,
     CACHE_STRIDES: tl.constexpr,
     CURRENT_STRIDES: tl.constexpr,
+    PACKED_TOKEN_STRIDE: tl.constexpr,
 ):
     token = tl.program_id(0)
     head = tl.program_id(1)
@@ -65,7 +66,7 @@ def _pack_page784(
         value,
         tl.load(current_value + current_value_offset, mask=~from_cache, other=0.0),
     )
-    target = token * 1024 + head * 256 + dimensions
+    target = token * PACKED_TOKEN_STRIDE + head * 256 + dimensions
     tl.store(packed_key + target, key)
     tl.store(packed_value + target, value)
 
@@ -78,10 +79,11 @@ def _merge_page784(
     residual,
     residual_lse,
     query_len,
+    QUERY_HEADS: tl.constexpr,
 ):
     row = tl.program_id(0) * 4 + tl.arange(0, 4)
-    token = row // 24
-    head = row % 24
+    token = row // QUERY_HEADS
+    head = row % QUERY_HEADS
     output_offset = row[:, None] * 256 + tl.arange(0, 256)[None, :]
     lse_offset = head * query_len + token
     main_score = tl.load(main_lse + lse_offset)
@@ -98,14 +100,18 @@ def _merge_page784(
 
 
 def _page_workspace(
-    query: torch.Tensor, page_count: int
+    query: torch.Tensor, page_count: int, query_heads: int, kv_heads: int
 ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
-    key = (query.device, query.dtype)
+    key = (query.device, query.dtype, query_heads, kv_heads)
     if key not in _PAGE_WORKSPACE:
         # Performance: allocate fixed workspaces once; returned slices are views.
         options = {"device": query.device, "dtype": query.dtype}
-        token_buffers = (torch.empty((4096, 24, 256), **options) for _ in range(2))
-        page_buffers = (torch.empty((160, 64, 4, 256), **options) for _ in range(2))
+        token_buffers = (
+            torch.empty((4096, query_heads, 256), **options) for _ in range(2)
+        )
+        page_buffers = (
+            torch.empty((160, 64, kv_heads, 256), **options) for _ in range(2)
+        )
         _PAGE_WORKSPACE[key] = (*token_buffers, *page_buffers)
 
     main, residual, packed_key, packed_value = _PAGE_WORKSPACE[key]
@@ -150,13 +156,16 @@ def prefill(
         return False
 
     query, output = (tensor[:query_len] for tensor in (query, output))
-    main, residual, packed_key, packed_value = _page_workspace(query, packed_pages)
-    packed_key_tokens = packed_key.view(-1, 4, 256)
-    packed_value_tokens = packed_value.view(-1, 4, 256)
+    query_heads, kv_heads = query.shape[1], current_key.shape[1]
+    main, residual, packed_key, packed_value = _page_workspace(
+        query, packed_pages, query_heads, kv_heads
+    )
+    packed_key_tokens = packed_key.view(-1, kv_heads, 256)
+    packed_value_tokens = packed_value.view(-1, kv_heads, 256)
     block_table = metadata.block_table
     query_starts = metadata.query_start_loc
 
-    _pack_page784[(combined_tokens, 4)](
+    _pack_page784[(combined_tokens, kv_heads)](
         key_cache,
         value_cache,
         current_key,
@@ -169,6 +178,7 @@ def prefill(
         full_pages,
         CACHE_STRIDES=(*key_cache.stride(), *value_cache.stride()),
         CURRENT_STRIDES=(*current_key.stride(), *current_value.stride()),
+        PACKED_TOKEN_STRIDE=packed_key_tokens.stride(0),
         num_warps=4,
     )
 
@@ -218,13 +228,14 @@ def prefill(
         lse[0] if lse.ndim == 3 else lse for lse in (main_lse, residual_lse)
     )
     # Correctness: combine partial attention with LSE weights, not a plain average.
-    _merge_page784[(query_len * 6,)](
+    _merge_page784[(query_len * query_heads // 4,)](
         output,
         main,
         main_lse,
         residual,
         residual_lse,
         query_len,
+        QUERY_HEADS=query_heads,
         num_warps=4,
     )
     return True

@@ -135,7 +135,8 @@ class RocmAiterUnifiedAttentionImpl(RocmAttentionImpl):
         self.unified_attention = unified_attention
         # Cache device/model invariants once instead of checking them on every layer.
         self.supports_gfx936_gqa6 = (
-            (num_heads, num_kv_heads, head_size, kv_cache_dtype) == (24, 4, 256, "auto")
+            (num_heads, num_kv_heads, head_size, kv_cache_dtype)
+            in ((24, 4, 256, "auto"), (12, 2, 256, "auto"))
             and alibi_slopes is sliding_window is sinks is None
             and not logits_soft_cap
             and attn_type == AttentionType.DECODER
@@ -225,7 +226,11 @@ class RocmAiterUnifiedAttentionImpl(RocmAttentionImpl):
         )
 
         # Correctness: keep the specialized route exact; all misses use official AITER.
-        target_cache = key_cache.shape[1:] == value_cache.shape[1:] == (784, 4, 256)
+        target_cache = (
+            key_cache.shape[1:]
+            == value_cache.shape[1:]
+            == (784, self.num_kv_heads, 256)
+        )
         target_tensors = query.is_contiguous() and output.is_contiguous()
         target_tensors &= (
             query.dtype

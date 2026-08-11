@@ -434,8 +434,9 @@ def fused_recurrent_gated_delta_rule_packed_decode(
             f"Packed decode kernel only supports NK=1 (got K={K}, BK={BK})."
         )
     BV = min(triton.next_power_of_2(V), 32)
-    num_stages = 3
-    num_warps = 1
+    # gfx936 TP2 H8/HV24 decode sweep: four waves cut the recurrent update.
+    num_stages = 1
+    num_warps = 4
 
     stride_mixed_qkv_tok = mixed_qkv.stride(0)
     stride_a_tok = a.stride(0)
