@@ -108,6 +108,15 @@ class Scheduler(SchedulerInterface):
             if self.scheduler_config.max_num_scheduled_tokens
             else self.scheduler_config.max_num_batched_tokens
         )
+        text_config = vllm_config.model_config.hf_text_config
+        self.limit_prefill_working_set = (
+            getattr(text_config, "model_type", None) == "qwen3_5_text"
+            and getattr(text_config, "hidden_size", None) == 5120
+            and getattr(text_config, "intermediate_size", None) == 17408
+            and self.max_num_scheduled_tokens == 4096
+            and self.max_num_running_reqs == 128
+            and vllm_config.compilation_config.max_cudagraph_capture_size == 16
+        )
         self.max_model_len = vllm_config.model_config.max_model_len
         self.enable_kv_cache_events = (
             self.kv_events_config is not None
@@ -355,6 +364,22 @@ class Scheduler(SchedulerInterface):
         req_to_new_blocks: dict[str, KVCacheBlocks] = {}
         num_scheduled_tokens: dict[str, int] = {}
         token_budget = self.max_num_scheduled_tokens
+        if self.limit_prefill_working_set:
+            requests = list(
+                itertools.chain(self.running, self.waiting, self.skipped_waiting)
+            )
+            prefill_requests = [
+                r for r in requests if r.num_computed_tokens < r.num_prompt_tokens
+            ]
+            if prefill_requests:
+                max_prompt_tokens = max(r.num_prompt_tokens for r in prefill_requests)
+                if max_prompt_tokens > 16384:
+                    prefill_budget = 512
+                elif max_prompt_tokens > 8192:
+                    prefill_budget = 1024
+                else:
+                    prefill_budget = 2048
+                token_budget = min(token_budget, prefill_budget)
         if self._pause_state == PauseState.PAUSED_ALL:
             # Do not schedule any requests when paused.
             token_budget = 0

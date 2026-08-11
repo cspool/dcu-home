@@ -76,7 +76,7 @@ from vllm.model_executor.model_loader.weight_utils import (
     maybe_remap_kv_scale_name,
     sharded_weight_loader,
 )
-from vllm.model_executor.models.qwen2_moe import Qwen2MoeMLP
+from vllm.model_executor.models.qwen2_moe import Qwen2MoeMLP as Qwen3NextMLP
 from vllm.model_executor.models.utils import sequence_parallel_chunk
 from vllm.model_executor.utils import set_weight_attrs
 from vllm.platforms import current_platform
@@ -107,15 +107,6 @@ from .utils import (
 logger = init_logger(__name__)
 
 KVCache = tuple[torch.Tensor, torch.Tensor]
-
-
-class Qwen3NextMLP(Qwen2MoeMLP):
-    def forward(self, x):
-        if self.expert_gate is None:
-            gate_up = gfx936.qwen35_gemv(self.gate_up_proj.weight, x)
-            if gate_up is not None:
-                return self.down_proj(self.act_fn(gate_up))[0]
-        return super().forward(x)
 
 
 def fi_chunk_gated_delta_rule(
@@ -1088,11 +1079,15 @@ class Qwen3NextGatedDeltaNet(nn.Module, MambaBase):
             validate_data=False,
         )
         out_buf = core_attn_out[:num_actual_tokens].unsqueeze(1)
-        (
+        use_gfx936_decode = (
+            self.gfx936_qwen35 and gfx936.use_packed_decode(mixed_qkv_non_spec)
+        )
+        decode = (
             gfx936.qwen35_packed_decode
-            if self.gfx936_qwen35 and gfx936.use_gfx936(mixed_qkv_non_spec)
+            if use_gfx936_decode
             else fused_recurrent_gated_delta_rule_packed_decode
-        )(
+        )
+        decode(
             mixed_qkv=mixed_qkv_non_spec,
             a=a,
             b=b,

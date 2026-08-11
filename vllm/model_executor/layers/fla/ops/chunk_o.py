@@ -14,7 +14,6 @@ import torch
 
 from vllm.triton_utils import tl, triton
 
-from .gfx936 import gdn_pruner
 from .index import prepare_chunk_indices
 from .op import exp
 from .utils import FLA_GDN_FIX_BT, check_shared_mem, is_nvidia_hopper
@@ -37,8 +36,7 @@ NUM_WARPS = [2, 4] if is_nvidia_hopper else [2, 4, 8]
         for num_warps in NUM_WARPS
         for num_stages in [2, 3, 4]
     ],
-    key=["T", "H", "K", "V", "BT"],
-    prune_configs_by={"early_config_prune": gdn_pruner},
+    key=["H", "K", "V", "BT"],
 )
 @triton.jit(do_not_specialize=["T"])
 def chunk_fwd_kernel_o(

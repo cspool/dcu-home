@@ -8,7 +8,7 @@
 
 #include <stdexcept>
 #include <algorithm>
-#include "../cub_helpers.h"
+
 #include "../cuda_compat.h"
 #include "dispatch_utils.h"
 #include "quantization/w8a8/fp8/common.cuh"
@@ -232,60 +232,6 @@ __global__ void LLGemm1_kernel(const scalar_t* in_a, const scalar_t* in_b,
   }
 }
 
-template <int NUM_A_ROWS_PER_BLOCK>
-__global__ __launch_bounds__(640) void LLGemm1_k5120_pairreduce640_kernel(
-    const c10::BFloat16* __restrict__ in_a,
-    const c10::BFloat16* __restrict__ in_b,
-    c10::BFloat16* __restrict__ out_c) {
-  constexpr int NUM_K_CHUNKS = 640;
-  using scalar2_t = __hip_bfloat162;
-  using BlockReduce = cub::BlockReduce<float, NUM_K_CHUNKS>;
-
-  const auto* weights = reinterpret_cast<const float4*>(in_a);
-  const auto* input = reinterpret_cast<const scalar2_t*>(in_b);
-  auto* output = reinterpret_cast<__hip_bfloat16*>(out_c);
-  __shared__ typename BlockReduce::TempStorage reductions[NUM_A_ROWS_PER_BLOCK];
-
-  const int thread_id = threadIdx.x;
-  const int row_start = blockIdx.x * NUM_A_ROWS_PER_BLOCK;
-  float2 inputs[4];
-  float4 weight4[NUM_A_ROWS_PER_BLOCK];
-
-#pragma unroll
-  for (int i = 0; i < 4; ++i) {
-    inputs[i] = __s22float2(input[thread_id * 4 + i]);
-  }
-#pragma unroll
-  for (int row = 0; row < NUM_A_ROWS_PER_BLOCK; ++row) {
-    weight4[row] =
-        load_ntmprl(&weights[(row_start + row) * NUM_K_CHUNKS + thread_id]);
-  }
-
-  float accumulators[NUM_A_ROWS_PER_BLOCK] = {};
-#pragma unroll
-  for (int row = 0; row < NUM_A_ROWS_PER_BLOCK; ++row) {
-    auto* weight2 = reinterpret_cast<scalar2_t*>(&weight4[row]);
-    float low = 0.0f;
-    float high = 0.0f;
-#pragma unroll
-    for (int i = 0; i < 4; ++i) {
-      const float2 value = __s22float2(weight2[i]);
-      low = fmaf(value.x, inputs[i].x, low);
-      high = fmaf(value.y, inputs[i].y, high);
-    }
-    accumulators[row] = low + high;
-  }
-
-#pragma unroll
-  for (int local_row = 0; local_row < NUM_A_ROWS_PER_BLOCK; ++local_row) {
-    const float total = BlockReduce(reductions[local_row])
-                            .Reduce(accumulators[local_row], CubAddOp{});
-    if (thread_id != 0) continue;
-    const int row = row_start + local_row;
-    output[row] = __float2bfloat16(total);
-  }
-}
-
 torch::Tensor LLMM1(at::Tensor& in_a, at::Tensor& in_b,
                     const int64_t rows_per_block) {
   auto M = in_a.size(0);
@@ -296,9 +242,6 @@ torch::Tensor LLMM1(at::Tensor& in_a, at::Tensor& in_b,
   TORCH_CHECK(in_a.dtype() == in_b.dtype());
   TORCH_CHECK(in_b.dtype() == torch::kFloat16 ||
               in_b.dtype() == torch::kBFloat16);
-  const bool qwen35 =
-      K == 5120 && in_b.dtype() == torch::kBFloat16 &&
-      (M == 96 || M == 14336 || M == 16384 || M == 34816 || M == 248320);
 
   auto out_c = torch::empty(
       {N, M}, torch::TensorOptions().dtype(in_b.dtype()).device(in_b.device()));
@@ -315,20 +258,6 @@ torch::Tensor LLMM1(at::Tensor& in_a, at::Tensor& in_b,
 
   const at::cuda::OptionalCUDAGuard device_guard(device_of(in_b));
   const cudaStream_t stream = at::cuda::getCurrentCUDAStream();
-
-  if (qwen35) {
-    auto* weight = in_a.data_ptr<c10::BFloat16>();
-    auto* input = in_b.data_ptr<c10::BFloat16>();
-    auto* output = out_c.data_ptr<c10::BFloat16>();
-    if (M == 96) {
-      LLGemm1_k5120_pairreduce640_kernel<4>
-          <<<M / 4, 640, 0, stream>>>(weight, input, output);
-    } else {
-      LLGemm1_k5120_pairreduce640_kernel<2>
-          <<<M / 2, 640, 0, stream>>>(weight, input, output);
-    }
-    return out_c;
-  }
 
   // call the kernel function...
   AT_DISPATCH_REDUCED_FLOATING_TYPES(in_b.scalar_type(), "LLGemm1", [&] {

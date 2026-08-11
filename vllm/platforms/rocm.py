@@ -569,9 +569,13 @@ class RocmPlatform(Platform):
         torch.cuda.set_device(device)
         if profile := os.getenv("VLLM_ROCM_TUNABLEOP_PROFILE"):
             torch.empty(0, device=device)
-            filename = os.path.join(os.path.dirname(__file__), "tunable_profiles", f"{profile}.csv")
+            filename = os.path.join(
+                os.path.dirname(__file__), "tunable_profiles", f"{profile}.csv"
+            )
             torch.cuda.tunable.set_filename(filename)
-            assert torch.cuda.tunable.get_results(), f"empty TunableOp profile: {filename}"
+            assert torch.cuda.tunable.get_results(), (
+                f"empty TunableOp profile: {filename}"
+            )
 
     @classmethod
     @lru_cache(maxsize=8)
@@ -631,6 +635,31 @@ class RocmPlatform(Platform):
         from vllm.config.compilation import CUDAGraphMode
 
         compilation_config = vllm_config.compilation_config
+        model_config = vllm_config.model_config
+        scheduler_config = vllm_config.scheduler_config
+        parallel_config = vllm_config.parallel_config
+        text_config = model_config.hf_text_config if model_config is not None else None
+        is_qwen35_27b_dp2 = (
+            "gfx936" in _GCN_ARCH
+            and model_config is not None
+            and model_config.dtype == torch.bfloat16
+            and getattr(text_config, "model_type", None) == "qwen3_5_text"
+            and getattr(text_config, "hidden_size", None) == 5120
+            and getattr(text_config, "intermediate_size", None) == 17408
+            and parallel_config.tensor_parallel_size == 1
+            and parallel_config.data_parallel_size == 2
+            and scheduler_config.max_num_seqs == 128
+            and scheduler_config.max_num_batched_tokens == 4096
+            and vllm_config.speculative_config is None
+        )
+        if (
+            is_qwen35_27b_dp2
+            and compilation_config.max_cudagraph_capture_size is None
+            and compilation_config.cudagraph_capture_sizes is None
+        ):
+            compilation_config.max_cudagraph_capture_size = 16
+            logger.info_once("Capping Qwen3.5-27B DP2 CUDA Graph capture size at 16")
+
         is_eager_execution = compilation_config.cudagraph_mode == CUDAGraphMode.NONE
         use_aiter_fused_moe = rocm_aiter_ops.is_fused_moe_enabled()
         use_aiter_rms_norm = rocm_aiter_ops.is_rmsnorm_enabled()

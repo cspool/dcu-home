@@ -13,7 +13,6 @@ import torch
 
 from vllm.triton_utils import tl, triton
 
-from .gfx936 import gdn_pruner
 from .index import prepare_chunk_indices
 
 
@@ -25,7 +24,6 @@ from .index import prepare_chunk_indices
         for num_stages in [2, 3, 4]
     ],
     key=["H", "K", "V", "BT", "BK", "BV", "IS_VARLEN"],
-    prune_configs_by={"early_config_prune": gdn_pruner},
 )
 @triton.jit(do_not_specialize=["T"])
 def recompute_w_u_fwd_kernel(

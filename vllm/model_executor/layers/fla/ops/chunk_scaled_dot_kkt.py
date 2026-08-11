@@ -12,7 +12,6 @@ import torch
 
 from vllm.triton_utils import tl, triton
 
-from .gfx936 import gdn_pruner
 from .index import prepare_chunk_indices
 from .op import exp
 
@@ -31,7 +30,6 @@ from .op import exp
         for num_stages in [2, 3, 4]
     ],
     key=["H", "K", "BT", "IS_VARLEN"],
-    prune_configs_by={"early_config_prune": gdn_pruner},
 )
 @triton.jit(do_not_specialize=["T"])
 def chunk_scaled_dot_kkt_fwd_kernel(
