@@ -30,7 +30,18 @@ def use_gfx936(tensor: torch.Tensor) -> bool:
 
 
 def use_packed_decode(tensor: torch.Tensor) -> bool:
-    return tensor.shape[0] <= 3 and use_gfx936(tensor)
+    # The specialized kernel below is a TP1-only layout: H=16, HV=48 and
+    # mixed_qkv=[T, 2 * H * K + HV * V]=[T, 10240].  TP2 shards this to
+    # [T, 5120], so shape-gate it to the official packed decode instead of
+    # launching a kernel with hard-coded TP1 head counts.
+    return (
+        tensor.ndim == 2
+        and tensor.shape[0] <= 3
+        and tensor.shape[1] == 10240
+        and tensor.dtype == torch.bfloat16
+        and tensor.stride(-1) == 1
+        and use_gfx936(tensor)
+    )
 
 
 def qwen35_packed_decode(**args):

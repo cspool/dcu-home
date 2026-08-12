@@ -38,6 +38,7 @@ required_files=(
     scripts/build_cscc_wheel.sh
     scripts/cscc_gfx936_env.sh
     scripts/serve_cscc_dp2.sh
+    scripts/serve_cscc_tp2_batch10.sh
     "$PROFILE_REL"
     vllm/model_executor/layers/fla/ops/gfx936.py
     vllm/model_executor/models/qwen3_next.py
@@ -96,12 +97,13 @@ PY
 pass "frozen TunableOp profile"
 
 required_patterns=(
-    "qwen35_gemv"
-    "_output_gemv"
     "speculative_config is None"
     "fixed_gdn"
     "qwen35_packed_decode"
     "_mrope_scratch"
+    "tensor.shape[1] == 10240"
+    "dual_card_topology"
+    "max_cudagraph_capture_size = 16"
 )
 for pattern in "${required_patterns[@]}"; do
     git grep -q -F "$pattern" -- csrc vllm || \
@@ -124,14 +126,15 @@ for pattern in "${forbidden_patterns[@]}"; do
 done
 pass "required paths present and rejected experiments absent"
 
-git grep -q -F -- "--data-parallel-size 2" scripts/serve_cscc_dp2.sh || \
-    fail "DP=2 launcher does not request internal data parallelism"
-git grep -q -F -- "--tensor-parallel-size 1" scripts/serve_cscc_dp2.sh || \
-    fail "DP=2 launcher does not retain TP=1 per replica"
-if git grep -q -E -- "speculative|prefix.cach" scripts/serve_cscc_dp2.sh; then
-    fail "DP=2 launcher enables a prohibited serving mode"
+git grep -q -F -- "--tensor-parallel-size 2" scripts/serve_cscc_tp2_batch10.sh || \
+    fail "TP=2 launcher does not request tensor parallelism"
+git grep -q -F -- "--max-model-len 32768" scripts/serve_cscc_tp2_batch10.sh || \
+    fail "TP=2 launcher does not enforce the downloaded evaluator context limit"
+if git grep -q -E -- "data-parallel|speculative|prefix.cach" \
+    scripts/serve_cscc_tp2_batch10.sh; then
+    fail "TP=2 launcher enables a prohibited serving mode"
 fi
-pass "DP=2 launcher topology and prohibited-mode checks"
+pass "TP=2 launcher topology and prohibited-mode checks"
 
 VERIFY_TMP="$(mktemp -d "${TMPDIR:-/tmp}/vllm-cscc-verify.XXXXXX")"
 cleanup() {
@@ -164,12 +167,15 @@ bash -n \
     scripts/bench_cscc_multi_request.sh \
     scripts/build_cscc_wheel.sh \
     scripts/cscc_gfx936_env.sh \
-    scripts/serve_cscc_dp2.sh
+    scripts/serve_cscc_dp2.sh \
+    scripts/serve_cscc_tp2_batch10.sh
 if git cat-file -e "$BASELINE^{commit}" 2>/dev/null; then
-    git diff --check "$BASELINE" --
+    format_base="$BASELINE"
 else
-    git diff --check "$SNAPSHOT_ROOT" --
+    format_base="$SNAPSHOT_ROOT"
 fi
+git diff --check "$format_base" -- \
+    csrc setup.py vllm scripts README.md BUILD.md ENVIRONMENT.md
 pass "Python, shell, and patch-format checks"
 
 if [[ -n "$WHEEL" ]]; then

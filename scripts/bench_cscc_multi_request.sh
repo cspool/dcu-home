@@ -5,16 +5,16 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 MODEL_DIR="${MODEL_DIR:-}"
 DATA_DIR="${DATA_DIR:-}"
 RESULT_ROOT="${RESULT_ROOT:-}"
-RUN_LABEL="${RUN_LABEL:-dp2}"
+RUN_LABEL="${RUN_LABEL:-tp2-batch10}"
 PORT="${PORT:-8001}"
 VLLM_BIN="${VLLM_BIN:-vllm}"
-NUM_PROMPTS="${NUM_PROMPTS:-8}"
+NUM_PROMPTS="${NUM_PROMPTS:-}"
 OUTPUT_LEN="${OUTPUT_LEN:-1024}"
 REQUEST_RATE="${REQUEST_RATE:-inf}"
 NUM_WARMUPS="${NUM_WARMUPS:-2}"
-IGNORE_EOS="${IGNORE_EOS:-1}"
+IGNORE_EOS="${IGNORE_EOS:-0}"
 read -r -a datasets <<<"${DATASETS:-4-8K 8-16K 16-32K}"
-read -r -a concurrencies <<<"${CONCURRENCIES:-2 4 8}"
+read -r -a concurrencies <<<"${CONCURRENCIES:-10}"
 
 required_path() {
     local name="$1"
@@ -53,7 +53,9 @@ if [[ ! "$RUN_LABEL" =~ ^[A-Za-z0-9._-]+$ ]]; then
     echo "error: RUN_LABEL contains unsupported characters" >&2
     exit 2
 fi
-positive_integer NUM_PROMPTS "$NUM_PROMPTS"
+if [[ -n "$NUM_PROMPTS" ]]; then
+    positive_integer NUM_PROMPTS "$NUM_PROMPTS"
+fi
 positive_integer OUTPUT_LEN "$OUTPUT_LEN"
 positive_integer NUM_WARMUPS "$NUM_WARMUPS"
 if [[ "$IGNORE_EOS" != 0 && "$IGNORE_EOS" != 1 ]]; then
@@ -101,7 +103,7 @@ if [[ ! -e "$metadata" ]]; then
         echo "model_dir=$MODEL_DIR"
         echo "data_dir=$DATA_DIR"
         echo "port=$PORT"
-        echo "num_prompts=$NUM_PROMPTS"
+        echo "num_prompts=${NUM_PROMPTS:-all_rows}"
         echo "output_len=$OUTPUT_LEN"
         echo "request_rate=$REQUEST_RATE"
         echo "num_warmups=$NUM_WARMUPS"
@@ -125,6 +127,7 @@ fi
 for concurrency in "${concurrencies[@]}"; do
     for dataset in "${datasets[@]}"; do
         dataset_path="$DATA_DIR/${dataset}_throughput.jsonl"
+        n_prompts="${NUM_PROMPTS:-$(wc -l < "$dataset_path")}"
         result_dir="$run_root/c${concurrency}-r${REQUEST_RATE}/$dataset"
         if [[ -e "$result_dir/result.json" ]]; then
             echo "error: refusing to overwrite $result_dir/result.json" >&2
@@ -141,7 +144,7 @@ for concurrency in "${concurrencies[@]}"; do
             --tokenizer "$MODEL_DIR" \
             --dataset-name custom \
             --dataset-path "$dataset_path" \
-            --num-prompts "$NUM_PROMPTS" \
+            --num-prompts "$n_prompts" \
             --no-oversample \
             --max-concurrency "$concurrency" \
             --request-rate "$REQUEST_RATE" \

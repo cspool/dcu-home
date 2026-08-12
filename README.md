@@ -76,18 +76,20 @@ HIP_VISIBLE_DEVICES=0 vllm serve /path/to/Qwen3.5-27B \
 
 ## 双卡多请求
 
-DP=2 使用两个完整的 TP=1 副本，适合存在多个独立请求的吞吐场景：
+当前 TP2/batch10 分支按下载评测包的服务契约启动：两卡组成一个 TP=2
+实例，评测客户端最多并发 10 个请求：
 
 ```bash
 MODEL_DIR=/path/to/Qwen3.5-27B \
 HIP_VISIBLE_DEVICES=0,1 \
-bash scripts/serve_cscc_dp2.sh
+bash scripts/serve_cscc_tp2_batch10.sh
 ```
 
-首次为两个 rank 完成编译后，需要以相同参数重启服务，确认两侧 KV cache
-容量一致再计时。固定 benchmark 命令、验收条件和实测结果见
-[docs/cscc/DP2_MULTI_REQUEST.md](docs/cscc/DP2_MULTI_REQUEST.md)。该结果是多请求
-吞吐实验，不替代现有单请求官方性能分与精度结论。
+该启动参数与 `cscc-testdata-20260812/extracted/start_vllm.sh` 对齐：端口
+8001、TP=2、最大上下文 32768、每步 token 预算 4096。历史 DP2/batch8
+结果仍保留在 `docs/cscc/DP2_MULTI_REQUEST.md`，但不代表当前分支拓扑。
+本分支使用下载评测包完成的小样本、三档全量吞吐、四项全量精度及 OOM
+审计见 [docs/cscc/TP2_BATCH10_EVAL.md](docs/cscc/TP2_BATCH10_EVAL.md)。
 
 ## 权威材料
 
@@ -99,6 +101,8 @@ bash scripts/serve_cscc_dp2.sh
 - [docs/cscc/RESULTS.md](docs/cscc/RESULTS.md)：性能、精度和重构门禁。
 - [docs/cscc/DP2_MULTI_REQUEST.md](docs/cscc/DP2_MULTI_REQUEST.md)：同机 DP=2
   启动、双 rank 预热、多请求 benchmark 和 DP1 对照。
+- [docs/cscc/TP2_BATCH10_EVAL.md](docs/cscc/TP2_BATCH10_EVAL.md)：下载评测包
+  的 TP=2、并发 10 小样本与全量验证、精度重评分和 OOM 审计。
 - [docs/cscc/COMPLIANCE.md](docs/cscc/COMPLIANCE.md)：禁止项与提交边界。
 
 仓库不包含模型权重、评测数据、预编译 wheel、服务日志或结果 JSON。上游
