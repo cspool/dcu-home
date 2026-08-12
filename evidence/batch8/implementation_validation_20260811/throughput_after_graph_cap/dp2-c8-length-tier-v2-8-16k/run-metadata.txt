@@ -1,0 +1,12 @@
+source_commit=ca28376909970b447fd6af15c7cdb9a64ff6a6ee
+model_dir=/root/Qwen3.5-27B
+data_dir=/public/home/tangyu408/Qwen_DCU_Worker_0/modular_validation/results/gqa_page784_k5120_final_dp2_5355cea_20260811/throughput/data
+port=8001
+num_prompts=50
+output_len=1024
+request_rate=inf
+num_warmups=2
+ignore_eos=1
+datasets=8-16K
+concurrencies=8
+vllm_bin=/usr/local/bin/vllm

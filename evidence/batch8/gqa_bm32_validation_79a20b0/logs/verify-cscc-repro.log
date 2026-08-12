@@ -1,0 +1,11 @@
+verify_cscc_repro: OK: official OpenDAS comparison object and submission ancestry
+verify_cscc_repro: OK: required optimization files are tracked
+verify_cscc_repro: OK: runtime source churn 501/600 (471 additions + 30 deletions)
+verify_cscc_repro: OK: runtime source manifest coverage
+verify_cscc_repro: OK: runtime source manifest
+verify_cscc_repro: OK: frozen TunableOp profile
+verify_cscc_repro: OK: required paths present and rejected experiments absent
+verify_cscc_repro: OK: DP=2 launcher topology and prohibited-mode checks
+verify_cscc_repro: OK: Python, shell, and patch-format checks
+verify_cscc_repro: OK: clean wheel contents: 5a3464936a7e2864aa9adea4099c6abb027ee7a5a776250faa061cc8bba46d9a
+verify_cscc_repro: PASS

@@ -1,0 +1,6 @@
+/public/home/tangyu408/Qwen_DCU_Worker_0/pra2026-bh408-gqa-page784-k5120-batch8/vllm/__init__.py:7: RuntimeWarning: Failed to read commit hash:
+No module named 'vllm._version'
+  from .version import __version__, __version_tuple__  # isort:skip
+{"B": 3, "medians_us": {"fallback_bm16": 6467.674255371094, "candidate_bm32": 3998.12920888265}, "gain_percent": 38.18289154617837}
+{"B": 4, "medians_us": {"fallback_bm16": 6803.459803263347, "candidate_bm32": 4895.302454630534}, "gain_percent": 28.046867385290437}
+{"B": 5, "medians_us": {"fallback_bm16": 7111.886978149414, "candidate_bm32": 5429.06125386556}, "gain_percent": 23.66215505749984}

@@ -1,0 +1,146 @@
+{
+  "device": "gfx936:sramecc+:xnack-",
+  "groups": 3,
+  "iterations": 3,
+  "output_movement": {
+    "bytes": 50331648,
+    "decode_padding_zero": {
+      "medians_us": {
+        "candidate_tail_4092_zero": 49.38666522502899,
+        "official_full_4096_zero": 45.9199994802475
+      },
+      "samples_us": {
+        "candidate_tail_4092_zero": [
+          49.38666522502899,
+          48.10666541258494,
+          49.49299991130829
+        ],
+        "official_full_4096_zero": [
+          46.61299784978231,
+          45.9199994802475,
+          45.76000074545542
+        ]
+      }
+    },
+    "interpretation": {
+      "decode": "At local B=4 both paths zero nearly the whole 4096-token padded buffer, so this sub-optimization is covered.",
+      "prefill": "At T=4096 the candidate writes chunk_o directly into the caller buffer and avoids this full D2D copy."
+    },
+    "prefill_direct_output": {
+      "medians_us": {
+        "candidate_direct_output": 5.653333539764087,
+        "official_d2d_copy": 80.32000064849854
+      },
+      "samples_us": {
+        "candidate_direct_output": [
+          6.133333469430606,
+          5.2799998472134275,
+          5.653333539764087
+        ],
+        "official_d2d_copy": [
+          80.32000064849854,
+          80.5863340695699,
+          79.57333326339722
+        ]
+      }
+    },
+    "shape": [
+      4096,
+      48,
+      128
+    ]
+  },
+  "schema": "official-relative-gdn-data-movement-b4-v1",
+  "state_prep": [
+    {
+      "all_existing_prefill": {
+        "medians_us": {
+          "candidate_gather_only": 31.680000325043995,
+          "official_gather_and_empty_mask": 63.51966659228007
+        },
+        "samples_us": {
+          "candidate_gather_only": [
+            31.680000325043995,
+            27.52000093460083,
+            34.1333324710528
+          ],
+          "official_gather_and_empty_mask": [
+            63.51966659228007,
+            63.62666686375936,
+            63.41333190600077
+          ]
+        }
+      },
+      "all_new_prefill": {
+        "medians_us": {
+          "candidate_pass_none": 6.453333422541618,
+          "official_gather_and_mask": 66.50666892528534
+        },
+        "samples_us": {
+          "candidate_pass_none": [
+            6.9333333522081375,
+            6.453333422541618,
+            5.9199997534354525
+          ],
+          "official_gather_and_mask": [
+            68.53333115577698,
+            62.87999947865804,
+            66.50666892528534
+          ]
+        }
+      },
+      "batch": 1,
+      "bytes_per_selected_batch": 3145728,
+      "correctness": {
+        "all_existing_equal": true,
+        "all_new_none_semantically_zero": true
+      },
+      "state_dtype": "torch.float32"
+    },
+    {
+      "all_existing_prefill": {
+        "medians_us": {
+          "candidate_gather_only": 64.1599992911021,
+          "official_gather_and_empty_mask": 67.78666873772939
+        },
+        "samples_us": {
+          "candidate_gather_only": [
+            66.02666775385539,
+            64.1599992911021,
+            50.87999999523163
+          ],
+          "official_gather_and_empty_mask": [
+            67.78666873772939,
+            67.5196647644043,
+            81.60000046094258
+          ]
+        }
+      },
+      "all_new_prefill": {
+        "medians_us": {
+          "candidate_pass_none": 6.026666611433029,
+          "official_gather_and_mask": 70.82666456699371
+        },
+        "samples_us": {
+          "candidate_pass_none": [
+            6.026666611433029,
+            5.653333539764087,
+            6.239999706546466
+          ],
+          "official_gather_and_mask": [
+            69.70633566379547,
+            70.82666456699371,
+            83.146666487058
+          ]
+        }
+      },
+      "batch": 4,
+      "bytes_per_selected_batch": 12582912,
+      "correctness": {
+        "all_existing_equal": true,
+        "all_new_none_semantically_zero": true
+      },
+      "state_dtype": "torch.float32"
+    }
+  ]
+}

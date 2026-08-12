@@ -1,0 +1,9 @@
+/public/home/tangyu408/Qwen_DCU_Worker_0/batch8_official_ablation_20260811/official_fa718/vllm/__init__.py:7: RuntimeWarning: Failed to read commit hash:
+No module named 'vllm._version'
+  from .version import __version__, __version_tuple__  # isort:skip
+WARNING 08-11 18:14:49 [rocm.py:42] Failed to import from vllm._C with ModuleNotFoundError("No module named 'vllm._C'")
+{"name": "chunk_o_t4096", "medians_us": {"baseline": 446.77773388949305, "optimized": 353.38146036321467}, "gain": 20.904415426705043}
+{"name": "kkt_t4096", "medians_us": {"baseline": 101.94899819113992, "optimized": 111.38899759812789}, "gain": -9.259531309262407}
+{"name": "solve_tril_t4096", "medians_us": {"baseline": 201.91972905939275, "optimized": 199.51980764215642}, "gain": 1.1885522174657903}
+{"name": "recompute_t4096", "medians_us": {"baseline": 285.788817839189, "optimized": 288.94517638466573}, "gain": -1.104437384688995}
+{"baseline_sum_us": 1036.4352789792147, "optimized_sum_us": 953.2354419881647, "time_reduction_percent": 8.027499514778533}

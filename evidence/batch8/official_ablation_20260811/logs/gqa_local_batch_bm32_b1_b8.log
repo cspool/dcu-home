@@ -1,0 +1,11 @@
+/public/home/tangyu408/Qwen_DCU_Worker_0/pra2026-bh408-gqa-page784-k5120-batch8/vllm/__init__.py:7: RuntimeWarning: Failed to read commit hash:
+No module named 'vllm._version'
+  from .version import __version__, __version_tuple__  # isort:skip
+{"B": 1, "medians_us": {"current_fallback": 8709.805170694986, "candidate_bm32": 3690.0758743286133}, "gain_percent": 57.63308361082239}
+{"B": 2, "medians_us": {"current_fallback": 5782.074610392253, "candidate_bm32": 3888.2630666097007}, "gain_percent": 32.75314954218616}
+{"B": 3, "medians_us": {"current_fallback": 6294.500350952148, "candidate_bm32": 3997.222900390625}, "gain_percent": 36.49658149934048}
+{"B": 4, "medians_us": {"current_fallback": 6791.140238444011, "candidate_bm32": 4760.315577189128}, "gain_percent": 29.90403069220356}
+{"B": 5, "medians_us": {"current_fallback": 7194.8197682698565, "candidate_bm32": 5340.315500895183}, "gain_percent": 25.775548618372518}
+{"B": 6, "medians_us": {"current_fallback": 7182.766596476237, "candidate_bm32": 5496.795018513997}, "gain_percent": 23.4724538980475}
+{"B": 7, "medians_us": {"current_fallback": 7529.806772867839, "candidate_bm32": 6188.528060913086}, "gain_percent": 17.81292339117896}
+{"B": 8, "medians_us": {"current_fallback": 9888.043721516928, "candidate_bm32": 8196.418762207031}, "gain_percent": 17.107781953156493}

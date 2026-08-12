@@ -1,0 +1,122 @@
+starting internal DP=2, TP=1 on HIP devices 0,1
+model=/root/Qwen3.5-27B port=8001 backend=mp
+/public/home/tangyu408/Qwen_DCU_Worker_0/pra2026-bh408-gqa-page784-k5120-batch8/vllm/__init__.py:7: RuntimeWarning: Failed to read commit hash:
+No module named 'vllm._version'
+  from .version import __version__, __version_tuple__  # isort:skip
+(APIServer pid=990335) INFO 08-11 19:34:37 [utils.py:297] 
+(APIServer pid=990335) INFO 08-11 19:34:37 [utils.py:297]        █     █     █▄   ▄█
+(APIServer pid=990335) INFO 08-11 19:34:37 [utils.py:297]  ▄▄ ▄█ █     █     █ ▀▄▀ █  version dev
+(APIServer pid=990335) INFO 08-11 19:34:37 [utils.py:297]   █▄█▀ █     █     █     █  model   /root/Qwen3.5-27B
+(APIServer pid=990335) INFO 08-11 19:34:37 [utils.py:297]    ▀▀  ▀▀▀▀▀ ▀▀▀▀▀ ▀     ▀
+(APIServer pid=990335) INFO 08-11 19:34:37 [utils.py:297] 
+(APIServer pid=990335) INFO 08-11 19:34:37 [utils.py:233] non-default args: {'model_tag': '/root/Qwen3.5-27B', 'default_chat_template_kwargs': {'enable_thinking': False}, 'enable_auto_tool_choice': True, 'tool_call_parser': 'qwen3_coder', 'port': 8001, 'model': '/root/Qwen3.5-27B', 'trust_remote_code': True, 'dtype': 'bfloat16', 'served_model_name': ['Qwen3.5-27B'], 'reasoning_parser': 'qwen3', 'data_parallel_size': 2, 'gpu_memory_utilization': 0.94, 'max_num_batched_tokens': 4096, 'max_num_seqs': 8, 'compilation_config': {'mode': None, 'debug_dump_path': None, 'cache_dir': '', 'compile_cache_save_format': 'binary', 'backend': 'inductor', 'custom_ops': [], 'splitting_ops': None, 'compile_mm_encoder': False, 'compile_sizes': [4096], 'compile_ranges_endpoints': None, 'inductor_compile_config': {'enable_auto_functionalized_v2': False, 'combo_kernels': True, 'benchmark_combo_kernel': True}, 'inductor_passes': {}, 'cudagraph_mode': None, 'cudagraph_num_of_warmups': 0, 'cudagraph_capture_sizes': None, 'cudagraph_copy_inputs': False, 'cudagraph_specialize_lora': True, 'use_inductor_graph_partition': None, 'pass_config': {}, 'max_cudagraph_capture_size': None, 'dynamic_shapes_config': {'type': <DynamicShapesType.BACKED: 'backed'>, 'evaluate_guards': False, 'assume_32_bit_indexing': False}, 'local_cache_dir': None, 'fast_moe_cold_start': None, 'static_all_moe_layers': []}}
+(APIServer pid=990335) WARNING 08-11 19:34:37 [envs.py:1717] Unknown vLLM environment variable detected: VLLM_ROCM_TUNABLEOP_PROFILE
+(APIServer pid=990335) WARNING 08-11 19:34:37 [envs.py:1717] Unknown vLLM environment variable detected: VLLM_BIN
+(APIServer pid=990335) WARNING 08-11 19:34:37 [envs.py:1717] Unknown vLLM environment variable detected: VLLM_ROCM_TUNABLEOP_PROFILE_SHA256
+(APIServer pid=990335) The argument `trust_remote_code` is to be used with Auto classes. It has no effect here and is ignored.
+(APIServer pid=990335) `layer_type_validation` is deprecated and will be removed in v5.20. Use `PreTrainedConfig.validate_layer_type` instead
+(APIServer pid=990335) `layer_type_validation` is deprecated and will be removed in v5.20. Use `PreTrainedConfig.validate_layer_type` instead
+(APIServer pid=990335) `layer_type_validation` is deprecated and will be removed in v5.20. Use `PreTrainedConfig.validate_layer_type` instead
+(APIServer pid=990335) INFO 08-11 19:34:37 [model.py:533] Resolved architecture: Qwen3_5ForConditionalGeneration
+(APIServer pid=990335) INFO 08-11 19:34:37 [model.py:1582] Using max model len 262144
+(APIServer pid=990335) INFO 08-11 19:34:37 [scheduler.py:231] Chunked prefill is enabled with max_num_batched_tokens=4096.
+(APIServer pid=990335) `Qwen2VLImageProcessorFast` is deprecated. The `Fast` suffix for image processors has been removed; use `Qwen2VLImageProcessor` instead.
+(APIServer pid=990335) INFO 08-11 19:34:38 [config.py:212] Setting attention block size to 784 tokens to ensure that attention page size is >= mamba page size.
+(APIServer pid=990335) INFO 08-11 19:34:38 [config.py:243] Padding mamba page size by 0.13% to ensure that mamba page size and attention page size are exactly equal.
+(APIServer pid=990335) INFO 08-11 19:34:38 [vllm.py:775] Asynchronous scheduling is enabled.
+(APIServer pid=990335) The `use_fast` parameter is deprecated and will be removed in a future version. Use `backend="torchvision"` instead of `use_fast=True`, or `backend="pil"` instead of `use_fast=False`.
+(APIServer pid=990335) INFO 08-11 19:34:52 [utils.py:889] Started DP Coordinator process (PID: 990638)
+/public/home/tangyu408/Qwen_DCU_Worker_0/pra2026-bh408-gqa-page784-k5120-batch8/vllm/__init__.py:7: RuntimeWarning: Failed to read commit hash:
+No module named 'vllm._version'
+  from .version import __version__, __version_tuple__  # isort:skip
+/public/home/tangyu408/Qwen_DCU_Worker_0/pra2026-bh408-gqa-page784-k5120-batch8/vllm/__init__.py:7: RuntimeWarning: Failed to read commit hash:
+No module named 'vllm._version'
+  from .version import __version__, __version_tuple__  # isort:skip
+/public/home/tangyu408/Qwen_DCU_Worker_0/pra2026-bh408-gqa-page784-k5120-batch8/vllm/__init__.py:7: RuntimeWarning: Failed to read commit hash:
+No module named 'vllm._version'
+  from .version import __version__, __version_tuple__  # isort:skip
+(EngineCore_DP0 pid=990641) INFO 08-11 19:35:16 [core.py:103] Initializing a V1 LLM engine (vdev) with config: model='/root/Qwen3.5-27B', speculative_config=None, tokenizer='/root/Qwen3.5-27B', skip_tokenizer_init=False, tokenizer_mode=auto, revision=None, tokenizer_revision=None, trust_remote_code=True, dtype=torch.bfloat16, max_seq_len=262144, download_dir=None, load_format=auto, tensor_parallel_size=1, pipeline_parallel_size=1, data_parallel_size=1, decode_context_parallel_size=1, dcp_comm_backend=ag_rs, disable_custom_all_reduce=True, quantization=None, enforce_eager=False, enable_return_routed_experts=False, kv_cache_dtype=auto, device_config=cuda, structured_outputs_config=StructuredOutputsConfig(backend='auto', disable_any_whitespace=False, disable_additional_properties=False, reasoning_parser='qwen3', reasoning_parser_plugin='', enable_in_reasoning=False), observability_config=ObservabilityConfig(show_hidden_metrics_for_version=None, otlp_traces_endpoint=None, collect_detailed_traces=None, kv_cache_metrics=False, kv_cache_metrics_sample=0.01, cudagraph_metrics=False, enable_layerwise_nvtx_tracing=False, enable_mfu_metrics=False, enable_mm_processor_stats=False, enable_logging_iteration_details=False), seed=0, served_model_name=Qwen3.5-27B, enable_prefix_caching=False, enable_chunked_prefill=True, pooler_config=None, compilation_config={'mode': <CompilationMode.VLLM_COMPILE: 3>, 'debug_dump_path': None, 'cache_dir': '', 'compile_cache_save_format': 'binary', 'backend': 'inductor', 'custom_ops': ['+sparse_attn_indexer', 'none'], 'splitting_ops': ['vllm::unified_attention', 'vllm::unified_attention_with_output', 'vllm::unified_mla_attention', 'vllm::unified_mla_attention_with_output', 'vllm::mamba_mixer2', 'vllm::mamba_mixer', 'vllm::short_conv', 'vllm::linear_attention', 'vllm::plamo2_mamba_mixer', 'vllm::gdn_attention_core', 'vllm::olmo_hybrid_gdn_full_forward', 'vllm::kda_attention', 'vllm::sparse_attn_indexer', 'vllm::rocm_aiter_sparse_attn_indexer', 'vllm::unified_kv_cache_update', 'vllm::unified_mla_kv_cache_update'], 'compile_mm_encoder': False, 'compile_sizes': [4096], 'compile_ranges_endpoints': [4096], 'inductor_compile_config': {'enable_auto_functionalized_v2': False, 'combo_kernels': True, 'benchmark_combo_kernel': True}, 'inductor_passes': {}, 'cudagraph_mode': <CUDAGraphMode.FULL_AND_PIECEWISE: (2, 1)>, 'cudagraph_num_of_warmups': 1, 'cudagraph_capture_sizes': [1, 2, 4, 8, 16], 'cudagraph_copy_inputs': False, 'cudagraph_specialize_lora': True, 'use_inductor_graph_partition': False, 'pass_config': {'fuse_norm_quant': False, 'fuse_act_quant': False, 'fuse_attn_quant': False, 'enable_sp': False, 'fuse_gemm_comms': False, 'fuse_allreduce_rms': False}, 'max_cudagraph_capture_size': 16, 'dynamic_shapes_config': {'type': <DynamicShapesType.BACKED: 'backed'>, 'evaluate_guards': False, 'assume_32_bit_indexing': False}, 'local_cache_dir': None, 'fast_moe_cold_start': True, 'static_all_moe_layers': []}
+(EngineCore_DP1 pid=990642) WARNING 08-11 19:35:16 [multiproc_executor.py:997] Reducing Torch parallelism from 32 threads to 1 to avoid unnecessary CPU contention. Set OMP_NUM_THREADS in the external environment to tune this value as needed.
+(EngineCore_DP0 pid=990641) WARNING 08-11 19:35:16 [multiproc_executor.py:997] Reducing Torch parallelism from 32 threads to 1 to avoid unnecessary CPU contention. Set OMP_NUM_THREADS in the external environment to tune this value as needed.
+(EngineCore_DP1 pid=990642) INFO 08-11 19:35:16 [multiproc_executor.py:134] DP group leader: node_rank=0, node_rank_within_dp=0, master_addr=127.0.0.1, mq_connect_ip=173.18.25.2 (local), world_size=1, local_world_size=1
+(EngineCore_DP0 pid=990641) INFO 08-11 19:35:16 [multiproc_executor.py:134] DP group leader: node_rank=0, node_rank_within_dp=0, master_addr=127.0.0.1, mq_connect_ip=173.18.25.2 (local), world_size=1, local_world_size=1
+/public/home/tangyu408/Qwen_DCU_Worker_0/pra2026-bh408-gqa-page784-k5120-batch8/vllm/__init__.py:7: RuntimeWarning: Failed to read commit hash:
+No module named 'vllm._version'
+  from .version import __version__, __version_tuple__  # isort:skip
+/public/home/tangyu408/Qwen_DCU_Worker_0/pra2026-bh408-gqa-page784-k5120-batch8/vllm/__init__.py:7: RuntimeWarning: Failed to read commit hash:
+No module named 'vllm._version'
+  from .version import __version__, __version_tuple__  # isort:skip
+`Qwen2VLImageProcessorFast` is deprecated. The `Fast` suffix for image processors has been removed; use `Qwen2VLImageProcessor` instead.
+`Qwen2VLImageProcessorFast` is deprecated. The `Fast` suffix for image processors has been removed; use `Qwen2VLImageProcessor` instead.
+(Worker pid=991020) INFO 08-11 19:35:43 [parallel_state.py:1395] world_size=1 rank=0 local_rank=1 distributed_init_method=tcp://127.0.0.1:57209 backend=nccl
+(Worker pid=991021) INFO 08-11 19:35:43 [parallel_state.py:1395] world_size=1 rank=0 local_rank=0 distributed_init_method=tcp://127.0.0.1:44137 backend=nccl
+WARNING: Logging before InitGoogleLogging() is written to STDERR
+W0811 19:35:43.357021 991020 ProcessGroupGloo.cpp:511] Warning: Unable to resolve hostname to a (local) address. Using the loopback address as fallback. Manually set the network interface to bind to with GLOO_SOCKET_IFNAME. (function operator())
+WARNING: Logging before InitGoogleLogging() is written to STDERR
+W0811 19:35:43.359558 991021 ProcessGroupGloo.cpp:511] Warning: Unable to resolve hostname to a (local) address. Using the loopback address as fallback. Manually set the network interface to bind to with GLOO_SOCKET_IFNAME. (function operator())
+(Worker pid=991020) INFO 08-11 19:35:43 [parallel_state.py:1717] rank 0 in world size 1 is assigned as DP rank 0, PP rank 0, PCP rank 0, TP rank 0, EP rank N/A, EPLB rank N/A
+(Worker pid=991021) INFO 08-11 19:35:43 [parallel_state.py:1717] rank 0 in world size 1 is assigned as DP rank 0, PP rank 0, PCP rank 0, TP rank 0, EP rank N/A, EPLB rank N/A
+(Worker pid=991021) /public/home/tangyu408/Qwen_DCU_Worker_0/pra2026-bh408-gqa-page784-k5120-batch8/vllm/v1/sample/logits_processor/builtin.py:182: UserWarning: expandable_segments not supported on this platform (Triggered internally at /home/pytorch/c10/hip/HIPAllocatorConfig.h:41.)
+(Worker pid=991021)   self.neg_inf_tensor = torch.tensor(
+(Worker pid=991020) /public/home/tangyu408/Qwen_DCU_Worker_0/pra2026-bh408-gqa-page784-k5120-batch8/vllm/v1/sample/logits_processor/builtin.py:182: UserWarning: expandable_segments not supported on this platform (Triggered internally at /home/pytorch/c10/hip/HIPAllocatorConfig.h:41.)
+(Worker pid=991020)   self.neg_inf_tensor = torch.tensor(
+(Worker pid=991020) The `use_fast` parameter is deprecated and will be removed in a future version. Use `backend="torchvision"` instead of `use_fast=True`, or `backend="pil"` instead of `use_fast=False`.
+(Worker pid=991021) The `use_fast` parameter is deprecated and will be removed in a future version. Use `backend="torchvision"` instead of `use_fast=True`, or `backend="pil"` instead of `use_fast=False`.
+(Worker pid=991020) INFO 08-11 19:35:53 [gpu_model_runner.py:4493] Starting to load model /root/Qwen3.5-27B...
+(Worker pid=991021) INFO 08-11 19:35:53 [gpu_model_runner.py:4493] Starting to load model /root/Qwen3.5-27B...
+(Worker pid=991020) INFO 08-11 19:35:53 [rocm.py:561] Using Torch SDPA backend for ViT model.
+(Worker pid=991020) WARNING 08-11 19:35:53 [activation.py:643] [ROCm] PyTorch's native GELU with tanh approximation is unstable. Falling back to GELU(approximate='none').
+(Worker pid=991020) INFO 08-11 19:35:53 [mm_encoder_attention.py:230] Using AttentionBackendEnum.TORCH_SDPA for MMEncoderAttention.
+(Worker pid=991020) INFO 08-11 19:35:53 [qwen3_next.py:199] Using Triton/FLA GDN prefill kernel
+(Worker pid=991021) INFO 08-11 19:35:54 [rocm.py:561] Using Torch SDPA backend for ViT model.
+(Worker pid=991021) WARNING 08-11 19:35:54 [activation.py:643] [ROCm] PyTorch's native GELU with tanh approximation is unstable. Falling back to GELU(approximate='none').
+(Worker pid=991021) INFO 08-11 19:35:54 [mm_encoder_attention.py:230] Using AttentionBackendEnum.TORCH_SDPA for MMEncoderAttention.
+(Worker pid=991021) INFO 08-11 19:35:54 [qwen3_next.py:199] Using Triton/FLA GDN prefill kernel
+(Worker pid=991020) INFO 08-11 19:35:54 [rocm_aiter_unified_attn.py:124] Using aiter unified attention for RocmAiterUnifiedAttentionImpl
+(Worker pid=991021) INFO 08-11 19:35:54 [rocm.py:501] Using ROCM_AITER_UNIFIED_ATTN attention backend out of potential backends: ['ROCM_AITER_UNIFIED_ATTN', 'TRITON_ATTN'].
+(Worker pid=991021) INFO 08-11 19:35:54 [rocm_aiter_unified_attn.py:124] Using aiter unified attention for RocmAiterUnifiedAttentionImpl
+(Worker pid=991020) WARNING 08-11 19:35:55 [compilation.py:1136] Op 'sparse_attn_indexer' not present in model, enabling with '+sparse_attn_indexer' has no effect
+(Worker pid=991020) Loading safetensors checkpoint shards:   0% Completed | 0/11 [00:00<?, ?it/s]
+(Worker pid=991021) WARNING 08-11 19:35:55 [compilation.py:1136] Op 'sparse_attn_indexer' not present in model, enabling with '+sparse_attn_indexer' has no effect
+(Worker pid=991021) Loading safetensors checkpoint shards:   0% Completed | 0/11 [00:00<?, ?it/s]
+(Worker pid=991020) Loading safetensors checkpoint shards:   9% Completed | 1/11 [00:00<00:05,  1.71it/s]
+(Worker pid=991021) Loading safetensors checkpoint shards:   9% Completed | 1/11 [00:00<00:06,  1.50it/s]
+(Worker pid=991020) Loading safetensors checkpoint shards:  18% Completed | 2/11 [00:01<00:05,  1.55it/s]
+(Worker pid=991021) Loading safetensors checkpoint shards:  18% Completed | 2/11 [00:01<00:06,  1.41it/s]
+(Worker pid=991020) Loading safetensors checkpoint shards:  27% Completed | 3/11 [00:02<00:05,  1.39it/s]
+(Worker pid=991021) Loading safetensors checkpoint shards:  27% Completed | 3/11 [00:02<00:06,  1.29it/s]
+(Worker pid=991020) Loading safetensors checkpoint shards:  36% Completed | 4/11 [00:02<00:05,  1.29it/s]
+(Worker pid=991021) Loading safetensors checkpoint shards:  36% Completed | 4/11 [00:03<00:05,  1.23it/s]
+(Worker pid=991020) Loading safetensors checkpoint shards:  45% Completed | 5/11 [00:03<00:04,  1.32it/s]
+(Worker pid=991021) Loading safetensors checkpoint shards:  45% Completed | 5/11 [00:03<00:04,  1.24it/s]
+(Worker pid=991020) Loading safetensors checkpoint shards:  55% Completed | 6/11 [00:04<00:03,  1.32it/s]
+(Worker pid=991021) Loading safetensors checkpoint shards:  55% Completed | 6/11 [00:04<00:04,  1.25it/s]
+(Worker pid=991020) Loading safetensors checkpoint shards:  64% Completed | 7/11 [00:05<00:03,  1.31it/s]
+(Worker pid=991021) Loading safetensors checkpoint shards:  64% Completed | 7/11 [00:05<00:03,  1.23it/s]
+(Worker pid=991020) Loading safetensors checkpoint shards:  73% Completed | 8/11 [00:05<00:02,  1.32it/s]
+(Worker pid=991021) Loading safetensors checkpoint shards:  73% Completed | 8/11 [00:06<00:02,  1.24it/s]
+(Worker pid=991020) Loading safetensors checkpoint shards:  82% Completed | 9/11 [00:06<00:01,  1.27it/s]
+(Worker pid=991021) Loading safetensors checkpoint shards:  82% Completed | 9/11 [00:07<00:01,  1.20it/s]
+(Worker pid=991020) Loading safetensors checkpoint shards:  91% Completed | 10/11 [00:07<00:00,  1.25it/s]
+(Worker pid=991020) Loading safetensors checkpoint shards: 100% Completed | 11/11 [00:08<00:00,  1.43it/s]
+(Worker pid=991020) Loading safetensors checkpoint shards: 100% Completed | 11/11 [00:08<00:00,  1.36it/s]
+(Worker pid=991020) 
+(Worker pid=991021) Loading safetensors checkpoint shards:  91% Completed | 10/11 [00:08<00:00,  1.19it/s]
+(Worker pid=991021) Loading safetensors checkpoint shards: 100% Completed | 11/11 [00:08<00:00,  1.38it/s]
+(Worker pid=991021) Loading safetensors checkpoint shards: 100% Completed | 11/11 [00:08<00:00,  1.29it/s]
+(Worker pid=991021) 
+(Worker pid=991021) INFO 08-11 19:36:04 [default_loader.py:384] Loading weights took 8.59 seconds
+(Worker pid=991020) INFO 08-11 19:36:04 [gpu_model_runner.py:5500] Encoder cache will be initialized with a budget of 16384 tokens, and profiled with 1 image items of the maximum feature size.
+(Worker pid=991021) INFO 08-11 19:36:05 [gpu_model_runner.py:4578] Model loading took 51.22 GiB memory and 10.554736 seconds
+(Worker pid=991021) INFO 08-11 19:36:05 [gpu_model_runner.py:5500] Encoder cache will be initialized with a budget of 16384 tokens, and profiled with 1 image items of the maximum feature size.
+(Worker pid=991020) /public/home/tangyu408/Qwen_DCU_Worker_0/pra2026-bh408-gqa-page784-k5120-batch8/vllm/v1/attention/ops/vit_attn_wrappers.py:202: UserWarning: sdpa adopt the new interface of flash-attn (Triggered internally at /home/pytorch/aten/src/ATen/native/transformers/hip/cutlassfa_adapter.h:145.)
+(Worker pid=991020)   output = F.scaled_dot_product_attention(
+(Worker pid=991021) /public/home/tangyu408/Qwen_DCU_Worker_0/pra2026-bh408-gqa-page784-k5120-batch8/vllm/v1/attention/ops/vit_attn_wrappers.py:202: UserWarning: sdpa adopt the new interface of flash-attn (Triggered internally at /home/pytorch/aten/src/ATen/native/transformers/hip/cutlassfa_adapter.h:145.)
+(Worker pid=991021)   output = F.scaled_dot_product_attention(
+(Worker pid=991020) /usr/local/lib/python3.10/dist-packages/torch/_dynamo/variables/functions.py:2056: UserWarning: Dynamo detected a call to a `functools.lru_cache`-wrapped function. Dynamo ignores the cache wrapper and directly traces the wrapped function. Silent incorrectness is only a *potential* risk, not something we have observed. Enable TORCH_LOGS="+dynamo" for a DEBUG stack trace.
+(Worker pid=991020)   torch._dynamo.utils.warn_once(msg)
+(Worker pid=991021) /usr/local/lib/python3.10/dist-packages/torch/_dynamo/variables/functions.py:2056: UserWarning: Dynamo detected a call to a `functools.lru_cache`-wrapped function. Dynamo ignores the cache wrapper and directly traces the wrapped function. Silent incorrectness is only a *potential* risk, not something we have observed. Enable TORCH_LOGS="+dynamo" for a DEBUG stack trace.
+(Worker pid=991021)   torch._dynamo.utils.warn_once(msg)
+(Worker pid=991021) INFO 08-11 19:36:29 [backends.py:988] Using cache directory: /root/.cache/vllm/torch_compile_cache/bdbef9cd82/rank_0_0/backbone for vLLM's torch.compile
+(Worker pid=991021) INFO 08-11 19:36:29 [backends.py:1048] Dynamo bytecode transform time: 15.03 s
+(Worker pid=991020) INFO 08-11 19:36:29 [backends.py:371] Cache the graph of compile range (4096, 4096) for later use

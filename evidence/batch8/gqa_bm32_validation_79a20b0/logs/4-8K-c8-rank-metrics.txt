@@ -1,0 +1,72 @@
+2026-08-11T04:45:26Z
+vllm:prompt_tokens_total{engine="0",model_name="Qwen3.5-27B"} 57879.0
+vllm:prompt_tokens_total{engine="1",model_name="Qwen3.5-27B"} 56947.0
+vllm:generation_tokens_total{engine="0",model_name="Qwen3.5-27B"} 328.0
+vllm:generation_tokens_total{engine="1",model_name="Qwen3.5-27B"} 342.0
+vllm:num_requests_running{engine="0",model_name="Qwen3.5-27B"} 4.0
+vllm:num_requests_running{engine="1",model_name="Qwen3.5-27B"} 4.0
+vllm:num_requests_waiting{engine="0",model_name="Qwen3.5-27B"} 0.0
+vllm:num_requests_waiting{engine="1",model_name="Qwen3.5-27B"} 0.0
+2026-08-11T04:45:28Z
+vllm:prompt_tokens_total{engine="0",model_name="Qwen3.5-27B"} 57879.0
+vllm:prompt_tokens_total{engine="1",model_name="Qwen3.5-27B"} 56947.0
+vllm:generation_tokens_total{engine="0",model_name="Qwen3.5-27B"} 358.0
+vllm:generation_tokens_total{engine="1",model_name="Qwen3.5-27B"} 396.0
+vllm:num_requests_running{engine="0",model_name="Qwen3.5-27B"} 4.0
+vllm:num_requests_running{engine="1",model_name="Qwen3.5-27B"} 4.0
+vllm:num_requests_waiting{engine="0",model_name="Qwen3.5-27B"} 0.0
+vllm:num_requests_waiting{engine="1",model_name="Qwen3.5-27B"} 0.0
+2026-08-11T04:45:29Z
+vllm:prompt_tokens_total{engine="0",model_name="Qwen3.5-27B"} 62572.0
+vllm:prompt_tokens_total{engine="1",model_name="Qwen3.5-27B"} 56947.0
+vllm:generation_tokens_total{engine="0",model_name="Qwen3.5-27B"} 369.0
+vllm:generation_tokens_total{engine="1",model_name="Qwen3.5-27B"} 399.0
+vllm:num_requests_running{engine="0",model_name="Qwen3.5-27B"} 5.0
+vllm:num_requests_running{engine="1",model_name="Qwen3.5-27B"} 3.0
+vllm:num_requests_waiting{engine="0",model_name="Qwen3.5-27B"} 0.0
+vllm:num_requests_waiting{engine="1",model_name="Qwen3.5-27B"} 0.0
+2026-08-11T04:45:30Z
+vllm:prompt_tokens_total{engine="0",model_name="Qwen3.5-27B"} 62572.0
+vllm:prompt_tokens_total{engine="1",model_name="Qwen3.5-27B"} 64732.0
+vllm:generation_tokens_total{engine="0",model_name="Qwen3.5-27B"} 373.0
+vllm:generation_tokens_total{engine="1",model_name="Qwen3.5-27B"} 429.0
+vllm:num_requests_running{engine="0",model_name="Qwen3.5-27B"} 5.0
+vllm:num_requests_running{engine="1",model_name="Qwen3.5-27B"} 3.0
+vllm:num_requests_waiting{engine="0",model_name="Qwen3.5-27B"} 0.0
+vllm:num_requests_waiting{engine="1",model_name="Qwen3.5-27B"} 0.0
+2026-08-11T04:45:31Z
+vllm:prompt_tokens_total{engine="0",model_name="Qwen3.5-27B"} 70120.0
+vllm:prompt_tokens_total{engine="1",model_name="Qwen3.5-27B"} 64732.0
+vllm:generation_tokens_total{engine="0",model_name="Qwen3.5-27B"} 408.0
+vllm:generation_tokens_total{engine="1",model_name="Qwen3.5-27B"} 492.0
+vllm:num_requests_running{engine="0",model_name="Qwen3.5-27B"} 5.0
+vllm:num_requests_running{engine="1",model_name="Qwen3.5-27B"} 3.0
+vllm:num_requests_waiting{engine="0",model_name="Qwen3.5-27B"} 0.0
+vllm:num_requests_waiting{engine="1",model_name="Qwen3.5-27B"} 0.0
+2026-08-11T04:45:32Z
+vllm:prompt_tokens_total{engine="0",model_name="Qwen3.5-27B"} 70120.0
+vllm:prompt_tokens_total{engine="1",model_name="Qwen3.5-27B"} 64732.0
+vllm:generation_tokens_total{engine="0",model_name="Qwen3.5-27B"} 501.0
+vllm:generation_tokens_total{engine="1",model_name="Qwen3.5-27B"} 520.0
+vllm:num_requests_running{engine="0",model_name="Qwen3.5-27B"} 4.0
+vllm:num_requests_running{engine="1",model_name="Qwen3.5-27B"} 3.0
+vllm:num_requests_waiting{engine="0",model_name="Qwen3.5-27B"} 0.0
+vllm:num_requests_waiting{engine="1",model_name="Qwen3.5-27B"} 0.0
+2026-08-11T04:45:33Z
+vllm:prompt_tokens_total{engine="0",model_name="Qwen3.5-27B"} 70120.0
+vllm:prompt_tokens_total{engine="1",model_name="Qwen3.5-27B"} 64732.0
+vllm:generation_tokens_total{engine="0",model_name="Qwen3.5-27B"} 585.0
+vllm:generation_tokens_total{engine="1",model_name="Qwen3.5-27B"} 522.0
+vllm:num_requests_running{engine="0",model_name="Qwen3.5-27B"} 4.0
+vllm:num_requests_running{engine="1",model_name="Qwen3.5-27B"} 3.0
+vllm:num_requests_waiting{engine="0",model_name="Qwen3.5-27B"} 0.0
+vllm:num_requests_waiting{engine="1",model_name="Qwen3.5-27B"} 0.0
+2026-08-11T04:45:34Z
+vllm:prompt_tokens_total{engine="0",model_name="Qwen3.5-27B"} 70120.0
+vllm:prompt_tokens_total{engine="1",model_name="Qwen3.5-27B"} 72279.0
+vllm:generation_tokens_total{engine="0",model_name="Qwen3.5-27B"} 662.0
+vllm:generation_tokens_total{engine="1",model_name="Qwen3.5-27B"} 525.0
+vllm:num_requests_running{engine="0",model_name="Qwen3.5-27B"} 3.0
+vllm:num_requests_running{engine="1",model_name="Qwen3.5-27B"} 4.0
+vllm:num_requests_waiting{engine="0",model_name="Qwen3.5-27B"} 0.0
+vllm:num_requests_waiting{engine="1",model_name="Qwen3.5-27B"} 0.0

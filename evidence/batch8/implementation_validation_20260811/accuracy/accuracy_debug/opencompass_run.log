@@ -1,0 +1,242 @@
+08/11 22:10:24 - OpenCompass - INFO - Current exp folder: ./output/local_accuracy_qwen35/20260811_221024
+08/11 22:10:24 - OpenCompass - WARNING - SlurmRunner is not used, so the partition argument is ignored.
+08/11 22:10:24 - OpenCompass - INFO - Partitioned into 1 tasks.
+08/11 22:10:26 - OpenCompass - INFO - Task [Qwen3.5-27B-vLLM/hotpotqa]
+08/11 22:10:27 - OpenCompass - INFO - Used openai_client: <openai.OpenAI object at 0x7f677cf41300>
+08/11 22:10:27 - OpenCompass - INFO - Start inferencing [Qwen3.5-27B-vLLM/hotpotqa]
+08/11 22:10:27 - OpenCompass - INFO - Used tokenizer_path: /root/Qwen3.5-27B
+08/11 22:10:27 - OpenCompass - INFO - Start load tiktoken encoding: /root/Qwen3.5-27B
+08/11 22:10:27 - OpenCompass - WARNING - 'Could not automatically map /root/Qwen3.5-27B to a tokeniser. Please use `tiktoken.get_encoding` to explicitly get the tokeniser you expect.', tiktoken encoding cannot load /root/Qwen3.5-27B
+08/11 22:10:27 - OpenCompass - INFO - Start load hf tokenizer: /root/Qwen3.5-27B
+08/11 22:10:28 - OpenCompass - INFO - Successfully load HF Tokenizer from /root/Qwen3.5-27B
+08/11 22:10:28 - OpenCompass - INFO - Used tokenizer_path: /root/Qwen3.5-27B
+08/11 22:10:28 - OpenCompass - INFO - Start load tiktoken encoding: /root/Qwen3.5-27B
+08/11 22:10:28 - OpenCompass - INFO - Used tokenizer_path: /root/Qwen3.5-27B
+08/11 22:10:28 - OpenCompass - INFO - Start load tiktoken encoding: /root/Qwen3.5-27B
+08/11 22:10:28 - OpenCompass - INFO - Used tokenizer_path: /root/Qwen3.5-27B
+08/11 22:10:28 - OpenCompass - INFO - Start load tiktoken encoding: /root/Qwen3.5-27B
+08/11 22:10:29 - OpenCompass - INFO - Used tokenizer_path: /root/Qwen3.5-27B
+08/11 22:10:29 - OpenCompass - INFO - Start load tiktoken encoding: /root/Qwen3.5-27B
+08/11 22:10:29 - OpenCompass - INFO - Used tokenizer_path: /root/Qwen3.5-27B
+08/11 22:10:29 - OpenCompass - INFO - Start load tiktoken encoding: /root/Qwen3.5-27B
+08/11 22:10:29 - OpenCompass - INFO - Used tokenizer_path: /root/Qwen3.5-27B
+08/11 22:10:29 - OpenCompass - INFO - Start load tiktoken encoding: /root/Qwen3.5-27B
+08/11 22:10:29 - OpenCompass - INFO - Used tokenizer_path: /root/Qwen3.5-27B
+08/11 22:10:29 - OpenCompass - INFO - Start load tiktoken encoding: /root/Qwen3.5-27B
+08/11 22:10:29 - OpenCompass - INFO - Used tokenizer_path: /root/Qwen3.5-27B
+08/11 22:10:29 - OpenCompass - INFO - Start load tiktoken encoding: /root/Qwen3.5-27B
+08/11 22:10:29 - OpenCompass - INFO - Used tokenizer_path: /root/Qwen3.5-27B
+08/11 22:10:29 - OpenCompass - INFO - Start load tiktoken encoding: /root/Qwen3.5-27B
+08/11 22:10:29 - OpenCompass - INFO - Used tokenizer_path: /root/Qwen3.5-27B
+08/11 22:10:29 - OpenCompass - INFO - Start load tiktoken encoding: /root/Qwen3.5-27B
+08/11 22:10:29 - OpenCompass - INFO - Used tokenizer_path: /root/Qwen3.5-27B
+08/11 22:10:29 - OpenCompass - INFO - Start load tiktoken encoding: /root/Qwen3.5-27B
+08/11 22:10:29 - OpenCompass - INFO - Used tokenizer_path: /root/Qwen3.5-27B
+08/11 22:10:29 - OpenCompass - INFO - Start load tiktoken encoding: /root/Qwen3.5-27B
+08/11 22:10:29 - OpenCompass - INFO - Used tokenizer_path: /root/Qwen3.5-27B
+08/11 22:10:29 - OpenCompass - INFO - Start load tiktoken encoding: /root/Qwen3.5-27B
+08/11 22:10:29 - OpenCompass - INFO - Used tokenizer_path: /root/Qwen3.5-27B
+08/11 22:10:29 - OpenCompass - INFO - Start load tiktoken encoding: /root/Qwen3.5-27B
+08/11 22:10:29 - OpenCompass - INFO - Used tokenizer_path: /root/Qwen3.5-27B
+08/11 22:10:29 - OpenCompass - INFO - Start load tiktoken encoding: /root/Qwen3.5-27B
+08/11 22:10:29 - OpenCompass - INFO - Used tokenizer_path: /root/Qwen3.5-27B
+08/11 22:10:29 - OpenCompass - INFO - Start load tiktoken encoding: /root/Qwen3.5-27B
+08/11 22:10:29 - OpenCompass - INFO - Used tokenizer_path: /root/Qwen3.5-27B
+08/11 22:10:29 - OpenCompass - INFO - Start load tiktoken encoding: /root/Qwen3.5-27B
+08/11 22:10:29 - OpenCompass - INFO - Used tokenizer_path: /root/Qwen3.5-27B
+08/11 22:10:29 - OpenCompass - INFO - Start load tiktoken encoding: /root/Qwen3.5-27B
+08/11 22:10:29 - OpenCompass - INFO - Used tokenizer_path: /root/Qwen3.5-27B
+08/11 22:10:29 - OpenCompass - INFO - Start load tiktoken encoding: /root/Qwen3.5-27B
+[2026-08-11 22:10:29,827] [opencompass.openicl.icl_inferencer.icl_gen_inferencer] [INFO] Starting build dataloader
+[2026-08-11 22:10:29,827] [opencompass.openicl.icl_inferencer.icl_gen_inferencer] [INFO] Starting inference process...
+  0%|          | 0/10 [00:00<?, ?it/s]08/11 22:10:29 - OpenCompass - INFO - Used tokenizer_path: /root/Qwen3.5-27B
+08/11 22:10:29 - OpenCompass - INFO - Start load tiktoken encoding: /root/Qwen3.5-27B
+08/11 22:10:29 - OpenCompass - INFO - Used tokenizer_path: /root/Qwen3.5-27B
+
+08/11 22:10:29 - OpenCompass - INFO - Start load tiktoken encoding: /root/Qwen3.5-27B
+Inferencing:   0%|          | 0/2 [00:00<?, ?it/s][A08/11 22:10:29 - OpenCompass - INFO - Used tokenizer_path: /root/Qwen3.5-27B
+08/11 22:10:29 - OpenCompass - INFO - Start load tiktoken encoding: /root/Qwen3.5-27B
+08/11 22:10:29 - OpenCompass - INFO - Used tokenizer_path: /root/Qwen3.5-27B
+08/11 22:10:29 - OpenCompass - INFO - Start load tiktoken encoding: /root/Qwen3.5-27B
+08/11 22:10:29 - OpenCompass - INFO - Start calling OpenAI API
+08/11 22:10:30 - OpenCompass - INFO - Start calling OpenAI API
+08/11 22:10:34 - OpenCompass - INFO - Successfully get response from OpenAI API
+08/11 22:10:34 - OpenCompass - INFO - ChatCompletion(id='chatcmpl-90b4072e29d09749', choices=[Choice(finish_reason='stop', index=0, logprobs=None, message=ChatCompletionMessage(content='January 18, 1813', refusal=None, role='assistant', annotations=None, audio=None, function_call=None, tool_calls=[], reasoning=None), stop_reason=None, token_ids=None)], created=1786457430, model='Qwen3.5-27B', object='chat.completion', service_tier=None, system_fingerprint=None, usage=CompletionUsage(completion_tokens=11, prompt_tokens=10388, total_tokens=10399, completion_tokens_details=None, prompt_tokens_details=None), prompt_logprobs=None, prompt_token_ids=None, kv_transfer_params=None)
+08/11 22:10:36 - OpenCompass - INFO - Successfully get response from OpenAI API
+08/11 22:10:36 - OpenCompass - INFO - ChatCompletion(id='chatcmpl-8a991874e6dfdbbc', choices=[Choice(finish_reason='stop', index=0, logprobs=None, message=ChatCompletionMessage(content='Constantine', refusal=None, role='assistant', annotations=None, audio=None, function_call=None, tool_calls=[], reasoning=None), stop_reason=None, token_ids=None)], created=1786457430, model='Qwen3.5-27B', object='chat.completion', service_tier=None, system_fingerprint=None, usage=CompletionUsage(completion_tokens=3, prompt_tokens=16291, total_tokens=16294, completion_tokens_details=None, prompt_tokens_details=None), prompt_logprobs=None, prompt_token_ids=None, kv_transfer_params=None)
+
+Inferencing:  50%|█████     | 1/2 [00:06<00:06,  6.61s/it][AInferencing: 100%|██████████| 2/2 [00:06<00:00,  3.30s/it]
+ 10%|█         | 1/10 [00:06<00:59,  6.62s/it]08/11 22:10:36 - OpenCompass - INFO - Used tokenizer_path: /root/Qwen3.5-27B
+
+Inferencing:   0%|          | 0/2 [00:00<?, ?it/s][A08/11 22:10:36 - OpenCompass - INFO - Used tokenizer_path: /root/Qwen3.5-27B
+08/11 22:10:36 - OpenCompass - INFO - Start load tiktoken encoding: /root/Qwen3.5-27B
+08/11 22:10:36 - OpenCompass - INFO - Start load tiktoken encoding: /root/Qwen3.5-27B
+08/11 22:10:36 - OpenCompass - INFO - Used tokenizer_path: /root/Qwen3.5-27B
+08/11 22:10:36 - OpenCompass - INFO - Start load tiktoken encoding: /root/Qwen3.5-27B
+08/11 22:10:36 - OpenCompass - INFO - Used tokenizer_path: /root/Qwen3.5-27B
+08/11 22:10:36 - OpenCompass - INFO - Start load tiktoken encoding: /root/Qwen3.5-27B
+08/11 22:10:36 - OpenCompass - INFO - Start calling OpenAI API
+08/11 22:10:36 - OpenCompass - INFO - Start calling OpenAI API
+08/11 22:10:40 - OpenCompass - INFO - Successfully get response from OpenAI API
+08/11 22:10:40 - OpenCompass - INFO - ChatCompletion(id='chatcmpl-972cebdc38a9d116', choices=[Choice(finish_reason='stop', index=0, logprobs=None, message=ChatCompletionMessage(content='Pac-12 Conference', refusal=None, role='assistant', annotations=None, audio=None, function_call=None, tool_calls=[], reasoning=None), stop_reason=None, token_ids=None)], created=1786457436, model='Qwen3.5-27B', object='chat.completion', service_tier=None, system_fingerprint=None, usage=CompletionUsage(completion_tokens=7, prompt_tokens=12334, total_tokens=12341, completion_tokens_details=None, prompt_tokens_details=None), prompt_logprobs=None, prompt_token_ids=None, kv_transfer_params=None)
+
+Inferencing:  50%|█████     | 1/2 [00:04<00:04,  4.08s/it][A08/11 22:10:41 - OpenCompass - INFO - Successfully get response from OpenAI API
+08/11 22:10:41 - OpenCompass - INFO - ChatCompletion(id='chatcmpl-9b0ede41e4ff875e', choices=[Choice(finish_reason='stop', index=0, logprobs=None, message=ChatCompletionMessage(content='father of liberalism', refusal=None, role='assistant', annotations=None, audio=None, function_call=None, tool_calls=[], reasoning=None), stop_reason=None, token_ids=None)], created=1786457436, model='Qwen3.5-27B', object='chat.completion', service_tier=None, system_fingerprint=None, usage=CompletionUsage(completion_tokens=4, prompt_tokens=15870, total_tokens=15874, completion_tokens_details=None, prompt_tokens_details=None), prompt_logprobs=None, prompt_token_ids=None, kv_transfer_params=None)
+
+Inferencing: 100%|██████████| 2/2 [00:05<00:00,  2.41s/it][AInferencing: 100%|██████████| 2/2 [00:05<00:00,  2.66s/it]
+ 20%|██        | 2/10 [00:11<00:46,  5.87s/it]08/11 22:10:41 - OpenCompass - INFO - Used tokenizer_path: /root/Qwen3.5-27B
+
+Inferencing:   0%|          | 0/2 [00:00<?, ?it/s][A08/11 22:10:41 - OpenCompass - INFO - Used tokenizer_path: /root/Qwen3.5-27B
+08/11 22:10:41 - OpenCompass - INFO - Start load tiktoken encoding: /root/Qwen3.5-27B
+08/11 22:10:41 - OpenCompass - INFO - Start load tiktoken encoding: /root/Qwen3.5-27B
+08/11 22:10:41 - OpenCompass - INFO - Used tokenizer_path: /root/Qwen3.5-27B
+08/11 22:10:41 - OpenCompass - INFO - Start load tiktoken encoding: /root/Qwen3.5-27B
+08/11 22:10:41 - OpenCompass - INFO - Used tokenizer_path: /root/Qwen3.5-27B
+08/11 22:10:41 - OpenCompass - INFO - Start load tiktoken encoding: /root/Qwen3.5-27B
+08/11 22:10:41 - OpenCompass - INFO - Start calling OpenAI API
+08/11 22:10:41 - OpenCompass - INFO - Start calling OpenAI API
+08/11 22:10:47 - OpenCompass - INFO - Successfully get response from OpenAI API
+08/11 22:10:47 - OpenCompass - INFO - ChatCompletion(id='chatcmpl-bbedfe620b795663', choices=[Choice(finish_reason='stop', index=0, logprobs=None, message=ChatCompletionMessage(content='No one; he won the contest.', refusal=None, role='assistant', annotations=None, audio=None, function_call=None, tool_calls=[], reasoning=None), stop_reason=None, token_ids=None)], created=1786457441, model='Qwen3.5-27B', object='chat.completion', service_tier=None, system_fingerprint=None, usage=CompletionUsage(completion_tokens=9, prompt_tokens=15993, total_tokens=16002, completion_tokens_details=None, prompt_tokens_details=None), prompt_logprobs=None, prompt_token_ids=None, kv_transfer_params=None)
+
+Inferencing:  50%|█████     | 1/2 [00:05<00:05,  5.39s/it][A08/11 22:10:47 - OpenCompass - INFO - Successfully get response from OpenAI API
+08/11 22:10:47 - OpenCompass - INFO - ChatCompletion(id='chatcmpl-baba6e7ae68ba3ef', choices=[Choice(finish_reason='stop', index=0, logprobs=None, message=ChatCompletionMessage(content='Brittany, Cornwall, Ireland, the Isle of Man, Scotland, and Wales', refusal=None, role='assistant', annotations=None, audio=None, function_call=None, tool_calls=[], reasoning=None), stop_reason=None, token_ids=None)], created=1786457441, model='Qwen3.5-27B', object='chat.completion', service_tier=None, system_fingerprint=None, usage=CompletionUsage(completion_tokens=18, prompt_tokens=15973, total_tokens=15991, completion_tokens_details=None, prompt_tokens_details=None), prompt_logprobs=None, prompt_token_ids=None, kv_transfer_params=None)
+
+Inferencing: 100%|██████████| 2/2 [00:06<00:00,  2.58s/it][AInferencing: 100%|██████████| 2/2 [00:06<00:00,  3.00s/it]
+ 30%|███       | 3/10 [00:17<00:41,  5.93s/it]08/11 22:10:47 - OpenCompass - INFO - Used tokenizer_path: /root/Qwen3.5-27B
+
+08/11 22:10:47 - OpenCompass - INFO - Used tokenizer_path: /root/Qwen3.5-27B
+Inferencing:   0%|          | 0/2 [00:00<?, ?it/s][A08/11 22:10:47 - OpenCompass - INFO - Start load tiktoken encoding: /root/Qwen3.5-27B
+08/11 22:10:47 - OpenCompass - INFO - Start load tiktoken encoding: /root/Qwen3.5-27B
+08/11 22:10:47 - OpenCompass - INFO - Used tokenizer_path: /root/Qwen3.5-27B
+08/11 22:10:47 - OpenCompass - INFO - Start load tiktoken encoding: /root/Qwen3.5-27B
+08/11 22:10:47 - OpenCompass - INFO - Used tokenizer_path: /root/Qwen3.5-27B
+08/11 22:10:47 - OpenCompass - INFO - Start load tiktoken encoding: /root/Qwen3.5-27B
+08/11 22:10:47 - OpenCompass - INFO - Start calling OpenAI API
+08/11 22:10:47 - OpenCompass - INFO - Start calling OpenAI API
+08/11 22:10:51 - OpenCompass - INFO - Successfully get response from OpenAI API
+08/11 22:10:51 - OpenCompass - INFO - ChatCompletion(id='chatcmpl-af3cdd75b16660c8', choices=[Choice(finish_reason='stop', index=0, logprobs=None, message=ChatCompletionMessage(content='1961', refusal=None, role='assistant', annotations=None, audio=None, function_call=None, tool_calls=[], reasoning=None), stop_reason=None, token_ids=None)], created=1786457447, model='Qwen3.5-27B', object='chat.completion', service_tier=None, system_fingerprint=None, usage=CompletionUsage(completion_tokens=5, prompt_tokens=12084, total_tokens=12089, completion_tokens_details=None, prompt_tokens_details=None), prompt_logprobs=None, prompt_token_ids=None, kv_transfer_params=None)
+08/11 22:10:53 - OpenCompass - INFO - Successfully get response from OpenAI API
+08/11 22:10:53 - OpenCompass - INFO - ChatCompletion(id='chatcmpl-940c0b0881f37da2', choices=[Choice(finish_reason='stop', index=0, logprobs=None, message=ChatCompletionMessage(content='No, Yoo-hoo is not a carbonated drink, while Faygo is.', refusal=None, role='assistant', annotations=None, audio=None, function_call=None, tool_calls=[], reasoning=None), stop_reason=None, token_ids=None)], created=1786457447, model='Qwen3.5-27B', object='chat.completion', service_tier=None, system_fingerprint=None, usage=CompletionUsage(completion_tokens=19, prompt_tokens=13862, total_tokens=13881, completion_tokens_details=None, prompt_tokens_details=None), prompt_logprobs=None, prompt_token_ids=None, kv_transfer_params=None)
+
+Inferencing:  50%|█████     | 1/2 [00:05<00:05,  5.36s/it][AInferencing: 100%|██████████| 2/2 [00:05<00:00,  2.68s/it]
+ 40%|████      | 4/10 [00:23<00:34,  5.71s/it]08/11 22:10:53 - OpenCompass - INFO - Used tokenizer_path: /root/Qwen3.5-27B
+
+Inferencing:   0%|          | 0/2 [00:00<?, ?it/s][A08/11 22:10:53 - OpenCompass - INFO - Used tokenizer_path: /root/Qwen3.5-27B
+08/11 22:10:53 - OpenCompass - INFO - Start load tiktoken encoding: /root/Qwen3.5-27B
+08/11 22:10:53 - OpenCompass - INFO - Start load tiktoken encoding: /root/Qwen3.5-27B
+08/11 22:10:53 - OpenCompass - INFO - Used tokenizer_path: /root/Qwen3.5-27B
+08/11 22:10:53 - OpenCompass - INFO - Start load tiktoken encoding: /root/Qwen3.5-27B
+08/11 22:10:53 - OpenCompass - INFO - Used tokenizer_path: /root/Qwen3.5-27B
+08/11 22:10:53 - OpenCompass - INFO - Start load tiktoken encoding: /root/Qwen3.5-27B
+08/11 22:10:53 - OpenCompass - INFO - Start calling OpenAI API
+08/11 22:10:53 - OpenCompass - INFO - Start calling OpenAI API
+08/11 22:10:57 - OpenCompass - INFO - Successfully get response from OpenAI API
+08/11 22:10:57 - OpenCompass - INFO - ChatCompletion(id='chatcmpl-aca220381c80abbe', choices=[Choice(finish_reason='stop', index=0, logprobs=None, message=ChatCompletionMessage(content='None', refusal=None, role='assistant', annotations=None, audio=None, function_call=None, tool_calls=[], reasoning=None), stop_reason=None, token_ids=None)], created=1786457453, model='Qwen3.5-27B', object='chat.completion', service_tier=None, system_fingerprint=None, usage=CompletionUsage(completion_tokens=2, prompt_tokens=15056, total_tokens=15058, completion_tokens_details=None, prompt_tokens_details=None), prompt_logprobs=None, prompt_token_ids=None, kv_transfer_params=None)
+08/11 22:10:58 - OpenCompass - INFO - Successfully get response from OpenAI API
+08/11 22:10:58 - OpenCompass - INFO - ChatCompletion(id='chatcmpl-b60565534ec1645f', choices=[Choice(finish_reason='stop', index=0, logprobs=None, message=ChatCompletionMessage(content='James II', refusal=None, role='assistant', annotations=None, audio=None, function_call=None, tool_calls=[], reasoning=None), stop_reason=None, token_ids=None)], created=1786457453, model='Qwen3.5-27B', object='chat.completion', service_tier=None, system_fingerprint=None, usage=CompletionUsage(completion_tokens=3, prompt_tokens=15296, total_tokens=15299, completion_tokens_details=None, prompt_tokens_details=None), prompt_logprobs=None, prompt_token_ids=None, kv_transfer_params=None)
+
+Inferencing:  50%|█████     | 1/2 [00:05<00:05,  5.31s/it][AInferencing: 100%|██████████| 2/2 [00:05<00:00,  2.66s/it]
+ 50%|█████     | 5/10 [00:28<00:27,  5.57s/it]08/11 22:10:58 - OpenCompass - INFO - Used tokenizer_path: /root/Qwen3.5-27B
+
+Inferencing:   0%|          | 0/2 [00:00<?, ?it/s][A08/11 22:10:58 - OpenCompass - INFO - Used tokenizer_path: /root/Qwen3.5-27B
+08/11 22:10:58 - OpenCompass - INFO - Start load tiktoken encoding: /root/Qwen3.5-27B
+08/11 22:10:58 - OpenCompass - INFO - Start load tiktoken encoding: /root/Qwen3.5-27B
+08/11 22:10:58 - OpenCompass - INFO - Used tokenizer_path: /root/Qwen3.5-27B
+08/11 22:10:58 - OpenCompass - INFO - Start load tiktoken encoding: /root/Qwen3.5-27B
+08/11 22:10:58 - OpenCompass - INFO - Used tokenizer_path: /root/Qwen3.5-27B
+08/11 22:10:58 - OpenCompass - INFO - Start load tiktoken encoding: /root/Qwen3.5-27B
+08/11 22:10:58 - OpenCompass - INFO - Start calling OpenAI API
+08/11 22:10:58 - OpenCompass - INFO - Start calling OpenAI API
+08/11 22:11:02 - OpenCompass - INFO - Successfully get response from OpenAI API
+08/11 22:11:02 - OpenCompass - INFO - ChatCompletion(id='chatcmpl-97cb5a2fdcbbdf7b', choices=[Choice(finish_reason='stop', index=0, logprobs=None, message=ChatCompletionMessage(content='Morgan Llywelyn', refusal=None, role='assistant', annotations=None, audio=None, function_call=None, tool_calls=[], reasoning=None), stop_reason=None, token_ids=None)], created=1786457458, model='Qwen3.5-27B', object='chat.completion', service_tier=None, system_fingerprint=None, usage=CompletionUsage(completion_tokens=7, prompt_tokens=12113, total_tokens=12120, completion_tokens_details=None, prompt_tokens_details=None), prompt_logprobs=None, prompt_token_ids=None, kv_transfer_params=None)
+
+Inferencing:  50%|█████     | 1/2 [00:03<00:03,  3.91s/it][A08/11 22:11:02 - OpenCompass - INFO - Successfully get response from OpenAI API
+08/11 22:11:02 - OpenCompass - INFO - ChatCompletion(id='chatcmpl-a4d5bad97bb316b1', choices=[Choice(finish_reason='stop', index=0, logprobs=None, message=ChatCompletionMessage(content='Netflix', refusal=None, role='assistant', annotations=None, audio=None, function_call=None, tool_calls=[], reasoning=None), stop_reason=None, token_ids=None)], created=1786457458, model='Qwen3.5-27B', object='chat.completion', service_tier=None, system_fingerprint=None, usage=CompletionUsage(completion_tokens=2, prompt_tokens=12813, total_tokens=12815, completion_tokens_details=None, prompt_tokens_details=None), prompt_logprobs=None, prompt_token_ids=None, kv_transfer_params=None)
+
+Inferencing: 100%|██████████| 2/2 [00:04<00:00,  1.75s/it][AInferencing: 100%|██████████| 2/2 [00:04<00:00,  2.07s/it]
+ 60%|██████    | 6/10 [00:32<00:20,  5.10s/it]08/11 22:11:02 - OpenCompass - INFO - Used tokenizer_path: /root/Qwen3.5-27B
+
+08/11 22:11:02 - OpenCompass - INFO - Used tokenizer_path: /root/Qwen3.5-27B
+Inferencing:   0%|          | 0/2 [00:00<?, ?it/s][A08/11 22:11:02 - OpenCompass - INFO - Start load tiktoken encoding: /root/Qwen3.5-27B
+08/11 22:11:02 - OpenCompass - INFO - Start load tiktoken encoding: /root/Qwen3.5-27B
+08/11 22:11:02 - OpenCompass - INFO - Used tokenizer_path: /root/Qwen3.5-27B
+08/11 22:11:02 - OpenCompass - INFO - Start load tiktoken encoding: /root/Qwen3.5-27B
+08/11 22:11:02 - OpenCompass - INFO - Used tokenizer_path: /root/Qwen3.5-27B
+08/11 22:11:02 - OpenCompass - INFO - Start load tiktoken encoding: /root/Qwen3.5-27B
+08/11 22:11:02 - OpenCompass - INFO - Start calling OpenAI API
+08/11 22:11:02 - OpenCompass - INFO - Start calling OpenAI API
+08/11 22:11:05 - OpenCompass - INFO - Successfully get response from OpenAI API
+08/11 22:11:05 - OpenCompass - INFO - ChatCompletion(id='chatcmpl-b6c601321d9c1830', choices=[Choice(finish_reason='stop', index=0, logprobs=None, message=ChatCompletionMessage(content="Elvis' Christmas Album", refusal=None, role='assistant', annotations=None, audio=None, function_call=None, tool_calls=[], reasoning=None), stop_reason=None, token_ids=None)], created=1786457462, model='Qwen3.5-27B', object='chat.completion', service_tier=None, system_fingerprint=None, usage=CompletionUsage(completion_tokens=6, prompt_tokens=9293, total_tokens=9299, completion_tokens_details=None, prompt_tokens_details=None), prompt_logprobs=None, prompt_token_ids=None, kv_transfer_params=None)
+08/11 22:11:06 - OpenCompass - INFO - Successfully get response from OpenAI API
+08/11 22:11:06 - OpenCompass - INFO - ChatCompletion(id='chatcmpl-ae13386d1b1b3221', choices=[Choice(finish_reason='stop', index=0, logprobs=None, message=ChatCompletionMessage(content='Eileen Atkins', refusal=None, role='assistant', annotations=None, audio=None, function_call=None, tool_calls=[], reasoning=None), stop_reason=None, token_ids=None)], created=1786457462, model='Qwen3.5-27B', object='chat.completion', service_tier=None, system_fingerprint=None, usage=CompletionUsage(completion_tokens=4, prompt_tokens=12884, total_tokens=12888, completion_tokens_details=None, prompt_tokens_details=None), prompt_logprobs=None, prompt_token_ids=None, kv_transfer_params=None)
+
+Inferencing:  50%|█████     | 1/2 [00:04<00:04,  4.12s/it][AInferencing: 100%|██████████| 2/2 [00:04<00:00,  2.06s/it]
+ 70%|███████   | 7/10 [00:36<00:14,  4.78s/it]08/11 22:11:06 - OpenCompass - INFO - Used tokenizer_path: /root/Qwen3.5-27B
+
+08/11 22:11:06 - OpenCompass - INFO - Used tokenizer_path: /root/Qwen3.5-27B
+Inferencing:   0%|          | 0/2 [00:00<?, ?it/s][A08/11 22:11:06 - OpenCompass - INFO - Start load tiktoken encoding: /root/Qwen3.5-27B
+08/11 22:11:06 - OpenCompass - INFO - Start load tiktoken encoding: /root/Qwen3.5-27B
+08/11 22:11:06 - OpenCompass - INFO - Used tokenizer_path: /root/Qwen3.5-27B
+08/11 22:11:06 - OpenCompass - INFO - Start load tiktoken encoding: /root/Qwen3.5-27B
+08/11 22:11:06 - OpenCompass - INFO - Used tokenizer_path: /root/Qwen3.5-27B
+08/11 22:11:06 - OpenCompass - INFO - Start load tiktoken encoding: /root/Qwen3.5-27B
+08/11 22:11:06 - OpenCompass - INFO - Start calling OpenAI API
+08/11 22:11:06 - OpenCompass - INFO - Start calling OpenAI API
+08/11 22:11:09 - OpenCompass - INFO - Successfully get response from OpenAI API
+08/11 22:11:09 - OpenCompass - INFO - ChatCompletion(id='chatcmpl-803ee809ed657542', choices=[Choice(finish_reason='stop', index=0, logprobs=None, message=ChatCompletionMessage(content='Australian Supercars Championship', refusal=None, role='assistant', annotations=None, audio=None, function_call=None, tool_calls=[], reasoning=None), stop_reason=None, token_ids=None)], created=1786457466, model='Qwen3.5-27B', object='chat.completion', service_tier=None, system_fingerprint=None, usage=CompletionUsage(completion_tokens=6, prompt_tokens=9439, total_tokens=9445, completion_tokens_details=None, prompt_tokens_details=None), prompt_logprobs=None, prompt_token_ids=None, kv_transfer_params=None)
+
+Inferencing:  50%|█████     | 1/2 [00:03<00:03,  3.03s/it][A08/11 22:11:11 - OpenCompass - INFO - Successfully get response from OpenAI API
+08/11 22:11:11 - OpenCompass - INFO - ChatCompletion(id='chatcmpl-b9ac45d1ce5a0565', choices=[Choice(finish_reason='stop', index=0, logprobs=None, message=ChatCompletionMessage(content='Brothers Quay', refusal=None, role='assistant', annotations=None, audio=None, function_call=None, tool_calls=[], reasoning=None), stop_reason=None, token_ids=None)], created=1786457466, model='Qwen3.5-27B', object='chat.completion', service_tier=None, system_fingerprint=None, usage=CompletionUsage(completion_tokens=4, prompt_tokens=16020, total_tokens=16024, completion_tokens_details=None, prompt_tokens_details=None), prompt_logprobs=None, prompt_token_ids=None, kv_transfer_params=None)
+
+Inferencing: 100%|██████████| 2/2 [00:05<00:00,  2.44s/it][AInferencing: 100%|██████████| 2/2 [00:05<00:00,  2.53s/it]
+ 80%|████████  | 8/10 [00:42<00:09,  4.88s/it]08/11 22:11:11 - OpenCompass - INFO - Used tokenizer_path: /root/Qwen3.5-27B
+
+08/11 22:11:11 - OpenCompass - INFO - Used tokenizer_path: /root/Qwen3.5-27B
+Inferencing:   0%|          | 0/2 [00:00<?, ?it/s][A08/11 22:11:11 - OpenCompass - INFO - Start load tiktoken encoding: /root/Qwen3.5-27B
+08/11 22:11:11 - OpenCompass - INFO - Start load tiktoken encoding: /root/Qwen3.5-27B
+08/11 22:11:11 - OpenCompass - INFO - Used tokenizer_path: /root/Qwen3.5-27B
+08/11 22:11:11 - OpenCompass - INFO - Start load tiktoken encoding: /root/Qwen3.5-27B
+08/11 22:11:11 - OpenCompass - INFO - Used tokenizer_path: /root/Qwen3.5-27B
+08/11 22:11:11 - OpenCompass - INFO - Start load tiktoken encoding: /root/Qwen3.5-27B
+08/11 22:11:11 - OpenCompass - INFO - Start calling OpenAI API
+08/11 22:11:12 - OpenCompass - INFO - Start calling OpenAI API
+08/11 22:11:21 - OpenCompass - INFO - Successfully get response from OpenAI API
+08/11 22:11:21 - OpenCompass - INFO - ChatCompletion(id='chatcmpl-82715ff9971b5b1e', choices=[Choice(finish_reason='stop', index=0, logprobs=None, message=ChatCompletionMessage(content='Vienna', refusal=None, role='assistant', annotations=None, audio=None, function_call=None, tool_calls=[], reasoning=None), stop_reason=None, token_ids=None)], created=1786457472, model='Qwen3.5-27B', object='chat.completion', service_tier=None, system_fingerprint=None, usage=CompletionUsage(completion_tokens=3, prompt_tokens=16128, total_tokens=16131, completion_tokens_details=None, prompt_tokens_details=None), prompt_logprobs=None, prompt_token_ids=None, kv_transfer_params=None)
+08/11 22:11:22 - OpenCompass - INFO - Successfully get response from OpenAI API
+08/11 22:11:22 - OpenCompass - INFO - ChatCompletion(id='chatcmpl-b929ccff185dfcd9', choices=[Choice(finish_reason='stop', index=0, logprobs=None, message=ChatCompletionMessage(content='Both Lavinia Greenlaw and Nâzım Hikmet are poets and novelists.', refusal=None, role='assistant', annotations=None, audio=None, function_call=None, tool_calls=[], reasoning=None), stop_reason=None, token_ids=None)], created=1786457472, model='Qwen3.5-27B', object='chat.completion', service_tier=None, system_fingerprint=None, usage=CompletionUsage(completion_tokens=20, prompt_tokens=14382, total_tokens=14402, completion_tokens_details=None, prompt_tokens_details=None), prompt_logprobs=None, prompt_token_ids=None, kv_transfer_params=None)
+
+Inferencing:  50%|█████     | 1/2 [00:10<00:10, 10.17s/it][AInferencing: 100%|██████████| 2/2 [00:10<00:00,  5.08s/it]
+ 90%|█████████ | 9/10 [00:52<00:06,  6.54s/it]08/11 22:11:22 - OpenCompass - INFO - Used tokenizer_path: /root/Qwen3.5-27B
+08/11 22:11:22 - OpenCompass - INFO - Start load tiktoken encoding: /root/Qwen3.5-27B
+08/11 22:11:22 - OpenCompass - INFO - Used tokenizer_path: /root/Qwen3.5-27B
+
+08/11 22:11:22 - OpenCompass - INFO - Start load tiktoken encoding: /root/Qwen3.5-27B
+Inferencing:   0%|          | 0/2 [00:00<?, ?it/s][A08/11 22:11:22 - OpenCompass - INFO - Used tokenizer_path: /root/Qwen3.5-27B
+08/11 22:11:22 - OpenCompass - INFO - Start load tiktoken encoding: /root/Qwen3.5-27B
+08/11 22:11:22 - OpenCompass - INFO - Used tokenizer_path: /root/Qwen3.5-27B
+08/11 22:11:22 - OpenCompass - INFO - Start load tiktoken encoding: /root/Qwen3.5-27B
+08/11 22:11:22 - OpenCompass - INFO - Start calling OpenAI API
+08/11 22:11:22 - OpenCompass - INFO - Start calling OpenAI API
+08/11 22:11:25 - OpenCompass - INFO - Successfully get response from OpenAI API
+08/11 22:11:25 - OpenCompass - INFO - ChatCompletion(id='chatcmpl-a789c0ff392d9ad9', choices=[Choice(finish_reason='stop', index=0, logprobs=None, message=ChatCompletionMessage(content='No', refusal=None, role='assistant', annotations=None, audio=None, function_call=None, tool_calls=[], reasoning=None), stop_reason=None, token_ids=None)], created=1786457482, model='Qwen3.5-27B', object='chat.completion', service_tier=None, system_fingerprint=None, usage=CompletionUsage(completion_tokens=2, prompt_tokens=11738, total_tokens=11740, completion_tokens_details=None, prompt_tokens_details=None), prompt_logprobs=None, prompt_token_ids=None, kv_transfer_params=None)
+08/11 22:11:30 - OpenCompass - INFO - Successfully get response from OpenAI API
+08/11 22:11:30 - OpenCompass - INFO - ChatCompletion(id='chatcmpl-b04633fbca9fafb1', choices=[Choice(finish_reason='stop', index=0, logprobs=None, message=ChatCompletionMessage(content='No', refusal=None, role='assistant', annotations=None, audio=None, function_call=None, tool_calls=[], reasoning=None), stop_reason=None, token_ids=None)], created=1786457482, model='Qwen3.5-27B', object='chat.completion', service_tier=None, system_fingerprint=None, usage=CompletionUsage(completion_tokens=2, prompt_tokens=16176, total_tokens=16178, completion_tokens_details=None, prompt_tokens_details=None), prompt_logprobs=None, prompt_token_ids=None, kv_transfer_params=None)
+
+Inferencing:  50%|█████     | 1/2 [00:08<00:08,  8.34s/it][AInferencing: 100%|██████████| 2/2 [00:08<00:00,  4.17s/it]
+100%|██████████| 10/10 [01:00<00:00,  7.10s/it]100%|██████████| 10/10 [01:00<00:00,  6.06s/it]
+08/11 22:11:30 - OpenCompass - INFO - Partitioned into 1 tasks.
+08/11 22:11:33 - OpenCompass - INFO - Task [Qwen3.5-27B-vLLM/hotpotqa]: {'score': 77.95970695970695}
+dataset    version    metric    mode      Qwen3.5-27B-vLLM
+---------  ---------  --------  ------  ------------------
+hotpotqa   fece4a     score     gen                  77.96
+08/11 22:11:33 - OpenCompass - INFO - write summary to /public/home/tangyu408/Qwen_DCU_Worker_0/batch8_implementation_validation_20260811/accuracy/accuracy_debug/output/local_accuracy_qwen35/20260811_221024/summary/summary_20260811_221024.txt
+08/11 22:11:33 - OpenCompass - INFO - write csv to /public/home/tangyu408/Qwen_DCU_Worker_0/batch8_implementation_validation_20260811/accuracy/accuracy_debug/output/local_accuracy_qwen35/20260811_221024/summary/summary_20260811_221024.csv
+
+
+The markdown format results is as below:
+
+| dataset | version | metric | mode | Qwen3.5-27B-vLLM |
+|----- | ----- | ----- | ----- | -----|
+| hotpotqa | fece4a | score | gen | 77.96 |
+
+08/11 22:11:33 - OpenCompass - INFO - write markdown summary to /public/home/tangyu408/Qwen_DCU_Worker_0/batch8_implementation_validation_20260811/accuracy/accuracy_debug/output/local_accuracy_qwen35/20260811_221024/summary/summary_20260811_221024.md

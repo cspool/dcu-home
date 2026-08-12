@@ -1,0 +1,165 @@
+{
+  "device": "gfx936:sramecc+:xnack-",
+  "groups": 3,
+  "iterations": 1,
+  "profile": "/public/home/tangyu408/Qwen_DCU_Worker_0/pra2026-bh408-gqa-page784-k5120-batch8/vllm/platforms/tunable_profiles/gfx936_qwen3_5_27b_bf16_tn_m4096.csv",
+  "profile_results_loaded": 5,
+  "records": [
+    {
+      "correctness": {
+        "allclose_atol_0.5_rtol_0.02": true,
+        "finite": true,
+        "max_abs": 0.0,
+        "mean_abs": 0.0
+      },
+      "dp2_interpretation": "M remains 4096 when four local requests share the prefill token budget",
+      "medians_us": {
+        "official_disabled": 1930.5579662322998,
+        "profile_enabled": 1771.8379497528076
+      },
+      "profile_time_reduction_percent": 8.221458213412369,
+      "samples_us": {
+        "official_disabled": [
+          1940.1580095291138,
+          1929.7579526901245,
+          1930.5579662322998
+        ],
+        "profile_enabled": [
+          1771.8390226364136,
+          1768.9579725265503,
+          1771.8379497528076
+        ]
+      },
+      "shape": {
+        "K": 5120,
+        "M_total_tokens": 4096,
+        "N": 14336
+      }
+    },
+    {
+      "correctness": {
+        "allclose_atol_0.5_rtol_0.02": true,
+        "finite": true,
+        "max_abs": 0.0,
+        "mean_abs": 0.0
+      },
+      "dp2_interpretation": "M remains 4096 when four local requests share the prefill token budget",
+      "medians_us": {
+        "official_disabled": 2112.1580600738525,
+        "profile_enabled": 1979.8389673233032
+      },
+      "profile_time_reduction_percent": 6.264639718578766,
+      "samples_us": {
+        "official_disabled": [
+          2138.3979320526123,
+          2112.1580600738525,
+          2110.718011856079
+        ],
+        "profile_enabled": [
+          1976.3189554214478,
+          1979.8389673233032,
+          1983.3580255508423
+        ]
+      },
+      "shape": {
+        "K": 5120,
+        "M_total_tokens": 4096,
+        "N": 16384
+      }
+    },
+    {
+      "correctness": {
+        "allclose_atol_0.5_rtol_0.02": true,
+        "finite": true,
+        "max_abs": 0.0,
+        "mean_abs": 0.0
+      },
+      "dp2_interpretation": "M remains 4096 when four local requests share the prefill token budget",
+      "medians_us": {
+        "official_disabled": 4401.916980743408,
+        "profile_enabled": 4167.675971984863
+      },
+      "profile_time_reduction_percent": 5.321340901776518,
+      "samples_us": {
+        "official_disabled": [
+          4401.916980743408,
+          4383.677005767822,
+          4405.436038970947
+        ],
+        "profile_enabled": [
+          4145.116806030273,
+          4167.675971984863,
+          4171.676158905029
+        ]
+      },
+      "shape": {
+        "K": 5120,
+        "M_total_tokens": 4096,
+        "N": 34816
+      }
+    },
+    {
+      "correctness": {
+        "allclose_atol_0.5_rtol_0.02": true,
+        "finite": true,
+        "max_abs": 0.0,
+        "mean_abs": 0.0
+      },
+      "dp2_interpretation": "M remains 4096 when four local requests share the prefill token budget",
+      "medians_us": {
+        "official_disabled": 2496.9570636749268,
+        "profile_enabled": 2375.9970664978027
+      },
+      "profile_time_reduction_percent": 4.844296241085527,
+      "samples_us": {
+        "official_disabled": [
+          2471.0381031036377,
+          2624.3178844451904,
+          2496.9570636749268
+        ],
+        "profile_enabled": [
+          2407.0379734039307,
+          2375.9970664978027,
+          2368.638038635254
+        ]
+      },
+      "shape": {
+        "K": 17408,
+        "M_total_tokens": 4096,
+        "N": 5120
+      }
+    },
+    {
+      "correctness": {
+        "allclose_atol_0.5_rtol_0.02": true,
+        "finite": true,
+        "max_abs": 0.0,
+        "mean_abs": 0.0
+      },
+      "dp2_interpretation": "M remains 4096 when four local requests share the prefill token budget",
+      "medians_us": {
+        "official_disabled": 761.2800002098083,
+        "profile_enabled": 746.8799948692322
+      },
+      "profile_time_reduction_percent": 1.8915517728835038,
+      "samples_us": {
+        "official_disabled": [
+          789.5990014076233,
+          761.2800002098083,
+          754.3990015983582
+        ],
+        "profile_enabled": [
+          746.7190027236938,
+          750.3989934921265,
+          746.8799948692322
+        ]
+      },
+      "shape": {
+        "K": 6144,
+        "M_total_tokens": 4096,
+        "N": 5120
+      }
+    }
+  ],
+  "schema": "official-relative-m4096-tunable-b4-v1"
+}

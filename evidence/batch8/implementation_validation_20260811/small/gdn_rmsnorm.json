@@ -1,0 +1,194 @@
+{
+  "device": "gfx936:sramecc+:xnack-",
+  "groups": 3,
+  "iterations": 3,
+  "records": [
+    {
+      "candidate_time_reduction_percent": 57.88695689629084,
+      "correctness": {
+        "allclose_atol_0.02_rtol_0.02": true,
+        "max_abs": 0.0,
+        "mean_abs": 0.0
+      },
+      "gate_stride": [
+        16384,
+        128,
+        1
+      ],
+      "logical_batch": 1,
+      "medians_us": {
+        "fused": 90.1330014069875,
+        "official": 214.0263319015503
+      },
+      "official_gate_reshape_copies": false,
+      "samples_us": {
+        "fused": [
+          90.1330014069875,
+          85.97333232561748,
+          90.2933379014333
+        ],
+        "official": [
+          214.98600641886392,
+          214.0263319015503,
+          213.43966325124106
+        ]
+      },
+      "shape": [
+        1,
+        48,
+        128
+      ],
+      "tokens": 1
+    },
+    {
+      "candidate_time_reduction_percent": 62.400531290297614,
+      "correctness": {
+        "allclose_atol_0.02_rtol_0.02": true,
+        "max_abs": 0.0,
+        "mean_abs": 0.0
+      },
+      "gate_stride": [
+        16384,
+        128,
+        1
+      ],
+      "logical_batch": 4,
+      "medians_us": {
+        "fused": 90.71999788284302,
+        "official": 241.27999941507974
+      },
+      "official_gate_reshape_copies": true,
+      "samples_us": {
+        "fused": [
+          96.58633669217427,
+          90.71999788284302,
+          86.5066647529602
+        ],
+        "official": [
+          238.98599545160928,
+          241.27999941507974,
+          244.74632740020752
+        ]
+      },
+      "shape": [
+        4,
+        48,
+        128
+      ],
+      "tokens": 4
+    },
+    {
+      "candidate_time_reduction_percent": 63.24343357550935,
+      "correctness": {
+        "allclose_atol_0.02_rtol_0.02": true,
+        "max_abs": 0.0,
+        "mean_abs": 0.0
+      },
+      "gate_stride": [
+        16384,
+        128,
+        1
+      ],
+      "logical_batch": 8,
+      "medians_us": {
+        "fused": 87.99999952316284,
+        "official": 239.41300312678018
+      },
+      "official_gate_reshape_copies": true,
+      "samples_us": {
+        "fused": [
+          88.58666817347209,
+          87.46666709582011,
+          87.99999952316284
+        ],
+        "official": [
+          241.01299047470093,
+          239.41300312678018,
+          238.61300945281982
+        ]
+      },
+      "shape": [
+        8,
+        48,
+        128
+      ],
+      "tokens": 8
+    },
+    {
+      "candidate_time_reduction_percent": 62.01372918707087,
+      "correctness": {
+        "allclose_atol_0.02_rtol_0.02": true,
+        "max_abs": 0.0,
+        "mean_abs": 0.0
+      },
+      "gate_stride": [
+        16384,
+        128,
+        1
+      ],
+      "logical_batch": 16,
+      "medians_us": {
+        "fused": 88.53333195050557,
+        "official": 233.06665817896524
+      },
+      "official_gate_reshape_copies": true,
+      "samples_us": {
+        "fused": [
+          88.53333195050557,
+          86.45300070444743,
+          91.62633617719014
+        ],
+        "official": [
+          234.98632510503134,
+          233.06665817896524,
+          230.4533322652181
+        ]
+      },
+      "shape": [
+        16,
+        48,
+        128
+      ],
+      "tokens": 16
+    },
+    {
+      "candidate_time_reduction_percent": 43.434929962405256,
+      "correctness": {
+        "allclose_atol_0.02_rtol_0.02": true,
+        "max_abs": 0.0,
+        "mean_abs": 0.0
+      },
+      "gate_stride": [
+        16384,
+        128,
+        1
+      ],
+      "logical_batch": 4096,
+      "medians_us": {
+        "fused": 169.33300097783408,
+        "official": 299.359659353892
+      },
+      "official_gate_reshape_copies": true,
+      "samples_us": {
+        "fused": [
+          173.22667439778647,
+          167.30632384618124,
+          169.33300097783408
+        ],
+        "official": [
+          299.7863292694092,
+          299.359659353892,
+          296.95965846379596
+        ]
+      },
+      "shape": [
+        4096,
+        48,
+        128
+      ],
+      "tokens": 4096
+    }
+  ],
+  "schema": "official-relative-gdn-rmsnorm-b4-v1",
+  "source": "/public/home/tangyu408/Qwen_DCU_Worker_0/pra2026-bh408-gqa-page784-k5120-batch8"
+}

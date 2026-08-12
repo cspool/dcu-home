@@ -1,0 +1,5 @@
+{"shape": {"N": 14336, "M_total_tokens": 4096, "K": 5120}, "medians_us": {"official_disabled": 1899.0379969278972, "profile_enabled": 1738.6646270751953}, "gain_percent": 8.444979516583679}
+{"shape": {"N": 16384, "M_total_tokens": 4096, "K": 5120}, "medians_us": {"official_disabled": 2081.331411997477, "profile_enabled": 1947.6779301961262}, "gain_percent": 6.421537724887459}
+{"shape": {"N": 34816, "M_total_tokens": 4096, "K": 5120}, "medians_us": {"official_disabled": 4377.701759338379, "profile_enabled": 4120.582262674968}, "gain_percent": 5.873389984023734}
+{"shape": {"N": 5120, "M_total_tokens": 4096, "K": 17408}, "medians_us": {"official_disabled": 2492.90402730306, "profile_enabled": 2349.6507008870444}, "gain_percent": 5.746443699679596}
+{"shape": {"N": 5120, "M_total_tokens": 4096, "K": 6144}, "medians_us": {"official_disabled": 737.2790177663168, "profile_enabled": 716.7993386586508}, "gain_percent": 2.7777379545822263}

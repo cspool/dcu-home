@@ -1,0 +1,9 @@
+/public/home/tangyu408/Qwen_DCU_Worker_0/pra2026-bh408-gqa-page784-k5120-batch8/vllm/__init__.py:7: RuntimeWarning: Failed to read commit hash:
+No module named 'vllm._version'
+  from .version import __version__, __version_tuple__  # isort:skip
+{"shape": {"input": [4, 17408], "weight": [5120, 17408]}, "medians_us": {"official_f_linear": 156.47985254015242, "batch4_custom": 519.8165689195905}, "gain_percent": -232.19392815200064}
+{"shape": {"input": [4, 5120], "weight": [96, 5120]}, "medians_us": {"official_f_linear": 29.71428632736206, "batch4_custom": 91.13143171582904}, "gain_percent": -206.69231194663323}
+{"shape": {"input": [4, 5120], "weight": [14336, 5120]}, "medians_us": {"official_f_linear": 128.98271424429757, "batch4_custom": 409.5767225537981}, "gain_percent": -217.543885592333}
+{"shape": {"input": [4, 5120], "weight": [16384, 5120]}, "medians_us": {"official_f_linear": 145.57700497763497, "batch4_custom": 465.0965758732387}, "gain_percent": -219.48491861382334}
+{"shape": {"input": [4, 5120], "weight": [34816, 5120]}, "medians_us": {"official_f_linear": 296.4111396244594, "batch4_custom": 971.4046886989048}, "gain_percent": -227.72205860064307}
+{"shape": {"input": [4, 5120], "weight": [248320, 5120]}, "medians_us": {"official_f_linear": 2035.9977994646345, "batch4_custom": 6762.781960623605}, "gain_percent": -232.16057317949355}
