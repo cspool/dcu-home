@@ -1,5 +1,8 @@
 # TP2 / concurrency 10 evaluation
 
+> 最新调度优化、最终结果和一键构建/启动方式见
+> `docs/cscc/TP2_BATCH10_BUILD_AND_RUN.md`。本文保留上一阶段的原始评测记录。
+
 ## Scope
 
 This branch adapts the dual-card service to one TP=2, DP=1 instance and tests it

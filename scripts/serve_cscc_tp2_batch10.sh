@@ -6,6 +6,7 @@ MODEL_DIR="${MODEL_DIR:-${1:-$ROOT/../Qwen3.5-27B}}"
 PORT="${PORT:-8001}"
 VLLM_BIN="${VLLM_BIN:-vllm}"
 HIP_VISIBLE_DEVICES="${HIP_VISIBLE_DEVICES:-0,1}"
+VLLM_RUN_DIR="${VLLM_RUN_DIR:-${TMPDIR:-/tmp}}"
 
 if [[ "$#" -gt 1 ]]; then
     echo "usage: MODEL_DIR=/path/to/Qwen3.5-27B $0" >&2
@@ -24,6 +25,20 @@ if ! command -v "$VLLM_BIN" >/dev/null 2>&1; then
     echo "error: vllm executable not found: $VLLM_BIN" >&2
     exit 2
 fi
+if [[ ! -d "$VLLM_RUN_DIR" ]]; then
+    echo "error: VLLM_RUN_DIR not found: $VLLM_RUN_DIR" >&2
+    exit 2
+fi
+
+MODEL_DIR="$(realpath "$MODEL_DIR")"
+VLLM_BIN="$(command -v "$VLLM_BIN")"
+VLLM_RUN_DIR="$(realpath "$VLLM_RUN_DIR")"
+case "$VLLM_RUN_DIR" in
+    "$ROOT" | "$ROOT"/*)
+        echo "error: VLLM_RUN_DIR must be outside the source checkout" >&2
+        exit 2
+        ;;
+esac
 
 IFS=',' read -r -a visible_devices <<<"$HIP_VISIBLE_DEVICES"
 if [[ "${#visible_devices[@]}" -ne 2 ||
@@ -43,6 +58,12 @@ export no_proxy="127.0.0.1,localhost${no_proxy:+,$no_proxy}"
 
 echo "starting TP=2, DP=1 on HIP devices $HIP_VISIBLE_DEVICES"
 echo "model=$MODEL_DIR port=$PORT evaluation_concurrency=10"
+echo "runtime_dir=$VLLM_RUN_DIR executable=$VLLM_BIN"
+
+# Running a console script from the source checkout places that checkout at the
+# front of Python's import path. Use a neutral directory so the verified wheel,
+# including its native extensions, is the package that actually serves traffic.
+cd "$VLLM_RUN_DIR"
 
 exec "$VLLM_BIN" serve "$MODEL_DIR" \
     --served-model-name Qwen3.5-27B \

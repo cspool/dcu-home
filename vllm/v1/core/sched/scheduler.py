@@ -373,7 +373,18 @@ class Scheduler(SchedulerInterface):
             ]
             if prefill_requests:
                 max_prompt_tokens = max(r.num_prompt_tokens for r in prefill_requests)
-                if max_prompt_tokens > 16384:
+                if self.parallel_config.tensor_parallel_size == 2:
+                    # TP2 has enough per-rank activation headroom to process a
+                    # larger prefill chunk and reduce long-prompt TTFT.
+                    if max_prompt_tokens > 16384:
+                        prefill_budget = 4096
+                    elif max_prompt_tokens > 8192:
+                        prefill_budget = 2048
+                    else:
+                        prefill_budget = 2048
+                elif max_prompt_tokens > 16384:
+                    # Keep the proven conservative fallback for DP and other
+                    # topologies, where activations are not sharded by TP.
                     prefill_budget = 512
                 elif max_prompt_tokens > 8192:
                     prefill_budget = 1024

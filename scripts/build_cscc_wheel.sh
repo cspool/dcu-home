@@ -18,7 +18,17 @@ else
     mkdir -p "$BUILD_BASE"
 fi
 
+# setup.py refreshes vllm/version.py while producing the wheel. Preserve the
+# exact submitted source file so a successful or failed build does not leave
+# the checkout dirty.
+VERSION_FILE="$ROOT/vllm/version.py"
+VERSION_BACKUP="$BUILD_BASE/vllm-version.py.before-build"
+cp --preserve=mode,timestamps "$VERSION_FILE" "$VERSION_BACKUP"
+
 cleanup() {
+    if ! cmp -s "$VERSION_BACKUP" "$VERSION_FILE"; then
+        cp --preserve=mode,timestamps "$VERSION_BACKUP" "$VERSION_FILE"
+    fi
     if [[ "$cleanup_build_base" == "1" ]]; then
         rm -rf -- "$BUILD_BASE"
     fi

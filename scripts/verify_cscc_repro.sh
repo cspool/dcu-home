@@ -37,8 +37,10 @@ required_files=(
     scripts/bench_cscc_multi_request.sh
     scripts/build_cscc_wheel.sh
     scripts/cscc_gfx936_env.sh
+    scripts/run_cscc_tp2_batch10_e2e.sh
     scripts/serve_cscc_dp2.sh
     scripts/serve_cscc_tp2_batch10.sh
+    scripts/setup_cscc_tp2_batch10.sh
     "$PROFILE_REL"
     vllm/model_executor/layers/fla/ops/gfx936.py
     vllm/model_executor/models/qwen3_next.py
@@ -167,8 +169,10 @@ bash -n \
     scripts/bench_cscc_multi_request.sh \
     scripts/build_cscc_wheel.sh \
     scripts/cscc_gfx936_env.sh \
+    scripts/run_cscc_tp2_batch10_e2e.sh \
     scripts/serve_cscc_dp2.sh \
-    scripts/serve_cscc_tp2_batch10.sh
+    scripts/serve_cscc_tp2_batch10.sh \
+    scripts/setup_cscc_tp2_batch10.sh
 if git cat-file -e "$BASELINE^{commit}" 2>/dev/null; then
     format_base="$BASELINE"
 else
