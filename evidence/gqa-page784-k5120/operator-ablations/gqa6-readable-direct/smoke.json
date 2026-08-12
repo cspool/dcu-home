@@ -1,0 +1,51 @@
+{
+  "calls": 1,
+  "cases": [
+    {
+      "cache_strides": {
+        "compact": [
+          802816,
+          1024,
+          256,
+          1
+        ],
+        "interleaved": [
+          1605632,
+          1024,
+          256,
+          1
+        ]
+      },
+      "context_len": 4096,
+      "correctness": {
+        "compact_interleaved_bitwise": true,
+        "direct_repeat_bitwise": true,
+        "finite": true,
+        "max_abs": 0.00146484375,
+        "mean_abs": 0.00010609986202325672
+      },
+      "direct_vs_current_percent": 103.25771231509484,
+      "medians_us": {
+        "current_page784_fa": 4940.95516204834,
+        "direct_gqa6_compact": 10042.872428894043,
+        "direct_gqa6_interleaved": 9841.753005981445
+      },
+      "name": "4-8K_q3437_ctx4096",
+      "query_len": 3437,
+      "samples_us": {
+        "current_page784_fa": [
+          4940.95516204834
+        ],
+        "direct_gqa6_compact": [
+          10042.872428894043
+        ],
+        "direct_gqa6_interleaved": [
+          9841.753005981445
+        ]
+      }
+    }
+  ],
+  "device": "gfx936:sramecc+:xnack-",
+  "groups": 1,
+  "schema": "readable-direct-page-gqa6-ab-v1"
+}

@@ -1,0 +1,11 @@
+(Worker pid=693250) INFO 08-11 00:38:43 [rocm.py:496] Using ROCM_AITER_UNIFIED_ATTN attention backend out of potential backends: ['ROCM_AITER_UNIFIED_ATTN', 'TRITON_ATTN'].
+(Worker pid=693250) INFO 08-11 00:38:43 [rocm_aiter_unified_attn.py:130] Using aiter unified attention for RocmAiterUnifiedAttentionImpl
+(Worker pid=693245) INFO 08-11 00:38:45 [rocm_aiter_unified_attn.py:130] Using aiter unified attention for RocmAiterUnifiedAttentionImpl
+(Worker pid=693245) INFO 08-11 00:39:33 [backends.py:371] Cache the graph of compile range (1, 4096) for later use
+(Worker pid=693250) INFO 08-11 00:39:33 [backends.py:371] Cache the graph of compile range (1, 4096) for later use
+(EngineCore_DP1 pid=692746) INFO 08-11 00:44:15 [kv_cache_utils.py:1316] GPU KV cache size: 25,872 tokens
+(EngineCore_DP0 pid=692745) INFO 08-11 00:44:15 [kv_cache_utils.py:1316] GPU KV cache size: 25,872 tokens
+(EngineCore_DP0 pid=692745) INFO 08-11 00:44:34 [core.py:281] init engine (profile, create kv cache, warmup model) took 339.91 seconds
+(EngineCore_DP1 pid=692746) INFO 08-11 00:44:34 [core.py:281] init engine (profile, create kv cache, warmup model) took 338.00 seconds
+(ApiServer_0 pid=692747) INFO:     Application startup complete.
+(ApiServer_1 pid=692748) INFO:     Application startup complete.

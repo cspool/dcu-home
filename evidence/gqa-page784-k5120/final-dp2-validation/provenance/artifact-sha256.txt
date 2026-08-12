@@ -1,0 +1,2 @@
+e23e033ed580dded4e9261f96a37ab62357f84e3e4f8d9617005e111cbe6391f  /tmp/qwen35-dp2-full-5355cea/dist/vllm-0.18.1+das.dtk2604-cp310-cp310-linux_x86_64.whl
+edf0ec0b42e1689adc021ccc2849b2b37da184b2b16ef3455d4300d69a1628d0  /tmp/qwen35-dp2-full-5355cea/site/vllm/_rocm_C.abi3.so

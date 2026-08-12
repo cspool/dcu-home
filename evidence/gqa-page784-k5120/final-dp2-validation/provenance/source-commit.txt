@@ -1,0 +1,13 @@
+5355ceab41a0801c611d5267ef6e36eefdcd4c77
+ M vllm/version.py
+commit 5355ceab41a0801c611d5267ef6e36eefdcd4c77
+Author:     北航408 <t2026100069912215@eduxiji.net>
+AuthorDate: Tue Aug 11 00:14:30 2026 +0800
+Commit:     北航408 <t2026100069912215@eduxiji.net>
+CommitDate: Tue Aug 11 00:14:30 2026 +0800
+
+    docs(cscc): split owner guides and add PDFs
+    
+    Keep the shared ownership overview concise while giving A, B and C standalone implementation, build and validation handbooks with readable PDF exports.
+    
+    Assisted-by: OpenAI Codex
