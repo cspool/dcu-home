@@ -37,6 +37,7 @@ required_files=(
     scripts/bench_cscc_multi_request.sh
     scripts/build_cscc_wheel.sh
     scripts/cscc_gfx936_env.sh
+    scripts/opencompass_accuracy_entry.py
     scripts/run_cscc_tp2_batch10_e2e.sh
     scripts/serve_cscc_dp2.sh
     scripts/serve_cscc_tp2_batch10.sh
@@ -145,6 +146,7 @@ cleanup() {
 trap cleanup EXIT
 
 PYTHONPYCACHEPREFIX="$VERIFY_TMP/pycache" python3 -m py_compile \
+    scripts/opencompass_accuracy_entry.py \
     vllm/_custom_ops.py \
     vllm/config/parallel.py \
     vllm/model_executor/layers/fla/ops/chunk.py \

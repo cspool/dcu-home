@@ -127,9 +127,24 @@ run_throughput() {
 run_accuracy() {
     [[ -f "$OFFICIAL_TEST_DIR/run_accuracy.sh" ]] || \
         fail "missing $OFFICIAL_TEST_DIR/run_accuracy.sh"
+    accuracy_eval_dir="$LOG_DIR/accuracy-eval"
+    accuracy_runtime_dir="$LOG_DIR/accuracy-runtime"
+    mkdir -p "$accuracy_eval_dir" "$accuracy_runtime_dir"
+
+    # The downloaded accuracy-only entry point generates bench.py in a fresh
+    # EVAL_WORK_DIR and then invokes `python run.py bench.py`, but its archive
+    # does not include run.py. Supply the standard OpenCompass CLI entry point
+    # in the runtime directory without changing the official script or its
+    # command-line interface.
+    cp "$ROOT/scripts/opencompass_accuracy_entry.py" \
+        "$accuracy_eval_dir/run.py"
     (
         cd "$OFFICIAL_TEST_DIR"
-        MODEL_PATH="$MODEL_DIR" bash ./run_accuracy.sh all
+        MODEL_PATH="$MODEL_DIR" \
+        SERVICE_PORT="$PORT" \
+        RUNTIME_BASE="$accuracy_runtime_dir" \
+        EVAL_WORK_DIR="$accuracy_eval_dir" \
+            bash ./run_accuracy.sh all
     ) 2>&1 | tee "$LOG_DIR/official-accuracy.log"
 }
 

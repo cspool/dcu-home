@@ -97,9 +97,28 @@ RUN_SETUP=0             使用当前已经安装的 wheel，跳过构建安装
 ```
 
 官方脚本在其原目录、用其原参数形式执行。封装层只传入官方已经支持的
-`MODEL_DIR`、`MODEL_PATH` 和 `CONCURRENCY=10` 环境变量，不复制、不打补丁，也不改
-调用方式。因为当前官方入口固定访问 8001 端口，运行正式测试时封装层也强制端口为
-8001。
+`MODEL_DIR`、`MODEL_PATH`、`CONCURRENCY=10`、`SERVICE_PORT`、`RUNTIME_BASE` 和
+`EVAL_WORK_DIR` 环境变量，不复制、不打补丁，也不改调用方式。因为当前官方入口固定
+访问 8001 端口，运行正式测试时封装层也强制端口为 8001。
+
+当前下载包中的精度调试入口会在新的 `EVAL_WORK_DIR` 中调用
+`python run.py bench.py`，但压缩包本身没有包含 `run.py`。一键封装会将仓库内经过
+验证的标准 OpenCompass CLI 入口 `scripts/opencompass_accuracy_entry.py` 复制到本次
+运行目录，并通过官方已经支持的 `EVAL_WORK_DIR`、`RUNTIME_BASE` 环境变量传入。
+这只补齐运行环境，不修改官方 `run_accuracy.sh` 的内容或命令行接口。
+
+## 官方入口直跑补测
+
+最终提交安装后重新启动同一 TP2 服务，并从原始压缩包解压出全新测试目录进行了
+小样本直跑：
+
+| 官方入口 | 参数 | 结果 |
+|---|---|---|
+| `run_throughput.sh` | `4-8K 1` | 成功 1、失败 0，总吞吐 1255.96 token/s |
+| `run_accuracy.sh` | `hotpotqa 1` | rc=0，OpenCompass 分数 20.00 |
+
+两份脚本在执行前后 SHA-256 均与原始压缩包一致。服务在两项测试后仍可访问，日志中
+没有 OOM、HTTP 5xx、Traceback、HIP/kernel error，随后正常关闭并释放双卡显存。
 
 ## 当前优化实现
 
