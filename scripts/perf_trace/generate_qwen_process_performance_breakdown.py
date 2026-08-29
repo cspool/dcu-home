@@ -356,23 +356,35 @@ def normalize_component_pair(
     mlp_ms: float,
     *,
     role: str,
+    max_overage_fraction: float | None = 0.10,
 ) -> tuple[float, float, float, float]:
     if total_ms < 0 or attn_ms < 0 or mlp_ms < 0:
         raise ProjectionError(f"negative {role} component duration")
     component_sum = attn_ms + mlp_ms
-    if component_sum > total_ms * 1.10 + 1e-12:
+    if (
+        max_overage_fraction is not None
+        and component_sum > total_ms * (1.0 + max_overage_fraction) + 1e-12
+    ):
         raise ProjectionError(
-            f"{role} attn+mlp exceeds the R01 total by more than 10%: "
+            f"{role} attn+mlp exceeds the R01 total by more than "
+            f"{100.0 * max_overage_fraction:g}%: "
             f"total={total_ms}, attn={attn_ms}, mlp={mlp_ms}"
         )
-    scale = 1.0
     if component_sum > total_ms and component_sum > 0:
         scale = total_ms / component_sum
-    normalized_attn = attn_ms * scale
-    normalized_mlp = mlp_ms * scale
-    outer = max(0.0, total_ms - normalized_attn - normalized_mlp)
-    # Assign the final floating residual to outer so conservation is exact.
-    outer += total_ms - (normalized_attn + normalized_mlp + outer)
+        # Construct the second normalized component as an exact residual. This
+        # keeps every bucket non-negative without turning a floating-point
+        # roundoff residual into a small negative outer duration.
+        normalized_attn = min(
+            total_ms, max(0.0, total_ms * attn_ms / component_sum)
+        )
+        normalized_mlp = total_ms - normalized_attn
+        outer = 0.0
+    else:
+        scale = 1.0
+        normalized_attn = attn_ms
+        normalized_mlp = mlp_ms
+        outer = total_ms - component_sum
     return normalized_attn, normalized_mlp, outer, scale
 
 
@@ -891,6 +903,11 @@ def attach_component_evidence(
             occurrence.raw_attn_cpu_ms,
             occurrence.raw_mlp_cpu_ms,
             role=f"{event_id} CPU",
+            # R02 HIPTX child ranges come from a separately instrumented
+            # capture whose absolute host duration is not comparable to R01.
+            # Consume only their attn/MLP ratio and rescale it to the R01 host
+            # denominator. The output remains an attribution estimate.
+            max_overage_fraction=None,
         )
         normalization_rows.append(
             {
@@ -1485,6 +1502,12 @@ def render_report(
                 "- `outer = R01 total - normalized R02 attn - normalized R02 "
                 "mlp`; the ambiguous shared residual-add/RMSNorm transition is "
                 "therefore counted once in outer."
+            ),
+            (
+                "- R02 HIPTX component CPU durations come from the separately "
+                "instrumented process capture. Only their attn/MLP ratio is "
+                "used, and it is always normalized to the R01 layer HIPTX CPU "
+                "denominator; it is not cross-run absolute timing."
             ),
             (
                 f"- Process weighting mode: `{process_weight_mode}`. Requested "
@@ -2095,6 +2118,17 @@ def run(args: argparse.Namespace) -> dict[str, Any]:
         "coverage_rows": len(coverage_rows),
         "component_measurement_rows": len(measurement_rows),
         "component_normalization_rows": len(normalization_rows_all),
+        "component_normalization_policy": {
+            "kernel": (
+                "normalize R02 attn/MLP to the R01 launch-owned kernel "
+                "denominator; reject raw component sums more than 10% above "
+                "the denominator"
+            ),
+            "cpu": (
+                "use the separately instrumented R02 HIPTX attn/MLP ratio and "
+                "always normalize it to the R01 layer HIPTX denominator"
+            ),
+        },
         "outputs": output_index,
         "evidence_boundary": {
             "output_is_process_attribution": True,

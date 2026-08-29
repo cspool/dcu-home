@@ -7,6 +7,7 @@ import argparse
 import csv
 import hashlib
 import json
+import subprocess
 from collections import Counter, defaultdict
 from datetime import datetime, timezone
 from decimal import Decimal
@@ -80,6 +81,30 @@ def sha256_file(path: Path) -> str:
         for chunk in iter(lambda: handle.read(1024 * 1024), b""):
             digest.update(chunk)
     return digest.hexdigest()
+
+
+def current_source_state(source_root: Path) -> dict[str, str]:
+    def git_output(*args: str) -> bytes:
+        result = subprocess.run(
+            ["git", "-C", str(source_root), *args],
+            check=False,
+            capture_output=True,
+        )
+        require(
+            result.returncode == 0,
+            f"git {' '.join(args)} failed: "
+            f"{result.stderr.decode(errors='replace').strip()}",
+        )
+        return result.stdout
+
+    status = git_output("status", "--porcelain=v1", "-z")
+    return {
+        "revision": git_output("rev-parse", "HEAD").decode().strip(),
+        "branch": git_output(
+            "rev-parse", "--abbrev-ref", "HEAD"
+        ).decode().strip(),
+        "status_porcelain_v1_z_sha256": hashlib.sha256(status).hexdigest(),
+    }
 
 
 def read_json(path: Path) -> dict[str, Any]:
@@ -166,6 +191,23 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--branch", required=True)
     parser.add_argument("--runtime-goal", default="R05")
     parser.add_argument("--tolerance-ms", default="1e-9")
+    parser.add_argument(
+        "--workflow05-policy-version",
+        default="workflow05-low-cost-timeline-v4",
+    )
+    parser.add_argument(
+        "--evidence-acquisition-mode",
+        default="fresh_no_prior_runtime_reuse",
+    )
+    parser.add_argument("--target-cumulative-latency-coverage", default="1.0")
+    parser.add_argument("--maximum-selected-layer-input-count", type=int,
+                        default=4096)
+    parser.add_argument("--maximum-selected-process-count", type=int,
+                        default=25000)
+    parser.add_argument("--maximum-trace-bundle-bytes", type=int,
+                        default=8589934592)
+    parser.add_argument("--maximum-profiling-wall-time-seconds", type=float,
+                        default=28800.0)
     return parser.parse_args()
 
 
@@ -174,6 +216,24 @@ def main() -> int:
     tolerance = decimal_value(args.tolerance_ms, "--tolerance-ms")
     require(tolerance > 0, "tolerance must be positive")
     require(args.runtime_goal == "R05", "auditor is restricted to R05")
+    target_coverage = decimal_value(
+        args.target_cumulative_latency_coverage,
+        "--target-cumulative-latency-coverage",
+    )
+    require(Decimal(0) <= target_coverage <= Decimal(1),
+            "target cumulative latency coverage must be in [0, 1]")
+    require(args.maximum_selected_layer_input_count > 0,
+            "maximum selected layer-input count must be positive")
+    require(args.maximum_selected_process_count > 0,
+            "maximum selected process count must be positive")
+    require(args.maximum_trace_bundle_bytes > 0,
+            "maximum trace bundle bytes must be positive")
+    require(args.maximum_profiling_wall_time_seconds > 0,
+            "maximum profiling wall time must be positive")
+    require(
+        args.evidence_acquisition_mode == "fresh_no_prior_runtime_reuse",
+        "R05 requires fresh_no_prior_runtime_reuse",
+    )
 
     project_root = args.project_root.resolve()
     source_root = args.source_root.resolve()
@@ -212,6 +272,7 @@ def main() -> int:
             "generator is outside the live source tree")
     require(is_relative_to(auditor_path, source_root),
             "auditor is outside the live source tree")
+    r05_source_state = current_source_state(source_root)
 
     upstream_paths = {
         "R01": args.r01_handoff.resolve(),
@@ -228,6 +289,20 @@ def main() -> int:
                 f"{goal} handoff has the wrong runtime_goal")
         require(upstream[goal].get("status") == "complete",
                 f"{goal} handoff is not complete")
+        require(upstream[goal].get("run_id") == args.run_id,
+                f"{goal} handoff has the wrong run ID")
+        require(upstream[goal].get("branch") == args.branch,
+                f"{goal} handoff has the wrong branch")
+        require(
+            upstream[goal].get("workflow05_policy_version")
+            == args.workflow05_policy_version,
+            f"{goal} handoff has the wrong Workflow05 policy version",
+        )
+        require(
+            upstream_paths[goal].parent == runtime_root / "handoffs"
+            and upstream_paths[goal].name == f"{goal}.json",
+            f"{goal} handoff is outside the current runtime handoff ledger",
+        )
 
     r01 = upstream["R01"]
     r02 = upstream["R02"]
@@ -235,7 +310,14 @@ def main() -> int:
     r04 = upstream["R04"]
     contract_id = str(nested(r01, "contract", "contract_id"))
     contract_sha = str(nested(r01, "contract", "canonical_sha256"))
-    source_revision = str(nested(r01, "source", "git_revision"))
+    r01_source_revision = str(nested(r01, "source", "git_revision"))
+    stage_source_revisions = {
+        "R01": r01_source_revision,
+        "R02": str(nested(r02, "source", "git_revision")),
+        "R03": str(nested(r03, "source", "git_revision")),
+        "R04": str(nested(r04, "live_toolchain", "source_revision")),
+        "R05": r05_source_state["revision"],
+    }
     require(
         str(resolved_model_root) == nested(r01, "model", "resolved_model_root"),
         "resolved model root differs from the R01 binding",
@@ -244,13 +326,13 @@ def main() -> int:
     require(upstream_hashes["R02"]
             == nested(r03, "component_source", "handoff_file_sha256"),
             "R03 does not bind the supplied R02 handoff hash")
-    require(nested(r02, "same_input_parent", "contract_id") == contract_id,
+    require(nested(r02, "contract", "contract_id") == contract_id,
             "R02 contract differs from R01")
     require(nested(r03, "same_input_parent", "contract_id") == contract_id,
             "R03 contract differs from R01")
     require(nested(r04, "same_input_parent", "contract_id") == contract_id,
             "R04 contract differs from R01")
-    require(nested(r02, "same_input_parent", "canonical_sha256") == contract_sha,
+    require(nested(r02, "contract", "canonical_sha256") == contract_sha,
             "R02 contract SHA differs from R01")
     require(nested(r03, "same_input_parent", "contract_canonical_sha256")
             == contract_sha, "R03 contract SHA differs from R01")
@@ -260,6 +342,22 @@ def main() -> int:
             "R04 independent completion audit did not pass")
     require(nested(r04, "validation", "hardware_coverage", "status") == "PASS",
             "R04 hardware coverage did not pass")
+    require(nested(r01, "run", "fresh_non_replay") is True,
+            "R01 denominator is not marked fresh/non-replay")
+    for goal in ("R02", "R03", "R04"):
+        require(
+            upstream[goal].get("evidence_acquisition_mode")
+            == args.evidence_acquisition_mode,
+            f"{goal} evidence acquisition mode differs from R05",
+        )
+    require(nested(r03, "upstream", "prior_runtime_evidence_used") is False,
+            "R03 reports prior-runtime evidence use")
+    require(
+        nested(r04, "evidence_boundary",
+               "prior_runtime_evidence_used_for_measurement_or_attribution")
+        is False,
+        "R04 reports prior-runtime evidence use",
+    )
 
     for name in GENERATOR_OUTPUT_NAMES:
         require((primary_dir / name).is_file(),
@@ -289,12 +387,52 @@ def main() -> int:
             "run contract has the wrong run ID")
     require(run_contract.get("branch") == args.branch,
             "run contract has the wrong branch")
+    require(
+        run_contract.get("workflow05_policy_version")
+        == args.workflow05_policy_version,
+        "run contract has the wrong Workflow05 policy version",
+    )
+    require(
+        run_contract.get("evidence_acquisition_mode")
+        == args.evidence_acquisition_mode,
+        "run contract has the wrong evidence acquisition mode",
+    )
     require(nested(run_contract, "contract", "contract_id") == contract_id,
             "run contract has the wrong SAME_INPUT contract")
     require(nested(run_contract, "contract", "canonical_sha256") == contract_sha,
             "run contract has the wrong SAME_INPUT contract SHA")
-    require(nested(run_contract, "contract", "source_revision") == source_revision,
-            "run contract has the wrong source revision")
+    require(
+        nested(run_contract, "contract", "r01_source_revision")
+        == r01_source_revision,
+        "run contract has the wrong R01 source revision",
+    )
+    require(
+        nested(run_contract, "contract", "stage_source_revisions")
+        == stage_source_revisions,
+        "run contract has the wrong per-stage source revisions",
+    )
+    require(
+        nested(run_contract, "contract", "r05_source_state")
+        == r05_source_state,
+        "run contract differs from the frozen R05 source state",
+    )
+    require(
+        nested(run_contract, "contract", "source_hash_equality_required")
+        is False,
+        "run contract incorrectly requires cross-stage source equality",
+    )
+    for goal in ("R01", "R02", "R03", "R04"):
+        require(
+            Path(nested(
+                run_contract, "upstream_handoffs", goal, "path"
+            )).resolve() == upstream_paths[goal],
+            f"run contract binds a different {goal} handoff path",
+        )
+        require(
+            nested(run_contract, "upstream_handoffs", goal, "sha256")
+            == upstream_hashes[goal],
+            f"run contract binds a different {goal} handoff hash",
+        )
     require(
         nested(run_contract, "evidence_boundary",
                "template_scaled_is_direct_full_layer_trace") is False,
@@ -385,8 +523,31 @@ def main() -> int:
         event_id: tuple(row["process"] for row in rows)
         for event_id, rows in representative_by_event.items()
     }
-    require(len(representative_by_event) == 9,
-            "unexpected representative event count")
+    expected_representative_events = integer_value(
+        str(nested(r03, "coverage", "filtered_fx_events")),
+        "R03 representative event count",
+    )
+    require(len(representative_by_event) == expected_representative_events,
+            "representative event count differs from the R03 handoff")
+    representative_matches: dict[str, str] = {}
+    for event_id, rows in representative_by_event.items():
+        match_values = {row["match"] for row in rows}
+        require(len(match_values) == 1,
+                f"representative event {event_id} mixes match labels")
+        representative_matches[event_id] = next(iter(match_values))
+    representative_match_counts = Counter(representative_matches.values())
+    require(
+        representative_match_counts["exact"]
+        == integer_value(str(nested(r03, "coverage", "exact")),
+                         "R03 exact event count"),
+        "exact representative event count differs from R03",
+    )
+    require(
+        representative_match_counts["nearest_shape"]
+        == integer_value(str(nested(r03, "coverage", "nearest_shape")),
+                         "R03 nearest-shape event count"),
+        "nearest-shape representative event count differs from R03",
+    )
 
     variants = {row["variant"] for row in assignment_rows}
     require(len(variants) == 1, "assignment table mixes variants")
@@ -430,10 +591,20 @@ def main() -> int:
         )
         require(prior_context == current_context,
                 f"denominator context varies across metrics: {occurrence_key}")
-    require(len(denominator_by_occurrence_key) == 1856,
-            "unexpected denominator occurrence count")
-    require(len(expected_metric_groups) == 5568,
-            "unexpected denominator metric-group count")
+    expected_denominator_occurrences = integer_value(
+        str(nested(r01, "run", "observed_layer_events")),
+        "R01 denominator occurrence count",
+    )
+    expected_denominator_metric_groups = integer_value(
+        str(nested(r01, "primary_outputs", "all_input_layer_performance", "rows")),
+        "R01 denominator metric-group count",
+    )
+    require(
+        len(denominator_by_occurrence_key) == expected_denominator_occurrences,
+        "denominator occurrence count differs from R01",
+    )
+    require(len(expected_metric_groups) == expected_denominator_metric_groups,
+            "denominator metric-group count differs from R01")
 
     assignments_by_occurrence_key: dict[str, dict[str, str]] = {}
     assignment_source_counts: Counter[str] = Counter()
@@ -490,6 +661,16 @@ def main() -> int:
     require(set(assignments_by_occurrence_key)
             == set(denominator_by_occurrence_key),
             "assignment coverage differs from denominator coverage")
+    assignment_coverage = (
+        Decimal(len(assignments_by_occurrence_key))
+        / Decimal(len(denominator_by_occurrence_key))
+    )
+    require(assignment_coverage >= target_coverage,
+            "assignment coverage is below the requested target")
+    require(
+        len(assignment_rows) <= args.maximum_selected_layer_input_count,
+        "selected layer-input count exceeds the configured limit",
+    )
     for type_id, row in type_by_id.items():
         require(integer_value(row["assignment_count"], type_id)
                 == assignment_type_counts[type_id],
@@ -623,6 +804,14 @@ def main() -> int:
                 f"process IDs/order differ from template for {group_key}")
     require(busy_union_proxy_rows > 0,
             "busy-union diagnostic proxy rows are absent")
+    selected_process_targets = len({
+        (row["occurrence_key"], row["process_id"])
+        for row in attribution_rows
+    })
+    require(
+        selected_process_targets <= args.maximum_selected_process_count,
+        "selected process target count exceeds the configured limit",
+    )
 
     aggregate_sums: dict[
         tuple[str, str, str, str, str], Decimal
@@ -727,7 +916,10 @@ def main() -> int:
         "failure_checks": [],
         "contract_id": contract_id,
         "contract_sha256": contract_sha,
-        "source_revision": source_revision,
+        "r01_source_revision": r01_source_revision,
+        "stage_source_revisions": stage_source_revisions,
+        "r05_source_state": r05_source_state,
+        "source_hash_equality_required": False,
         "counts": {
             "denominator_occurrences": len(denominator_by_occurrence_key),
             "denominator_metric_groups": len(expected_metric_groups),
@@ -739,6 +931,7 @@ def main() -> int:
             "aggregation_rows": len(aggregation_rows),
             "coverage_rows": len(coverage_rows),
             "busy_union_proxy_rows": busy_union_proxy_rows,
+            "selected_process_targets": selected_process_targets,
         },
         "assignment_counts": {
             "by_attribution_source": dict(
@@ -776,7 +969,8 @@ def main() -> int:
         "checks": {
             "runtime_paths_confined": True,
             "upstream_handoffs_complete": True,
-            "same_contract_and_revision": True,
+            "same_semantic_contract": True,
+            "stage_sources_recorded_without_equality_gate": True,
             "generation_audit_pass": True,
             "every_denominator_has_one_assignment": True,
             "assignment_source_and_type_complete": True,
@@ -792,6 +986,27 @@ def main() -> int:
             "identical_regeneration": True,
             "hardware_timing_not_consumed": True,
             "archive_evidence_not_consumed": True,
+            "fresh_current_runtime_only": True,
+            "assignment_coverage_target_met": True,
+            "selected_layer_input_count_within_limit": True,
+            "selected_process_target_count_within_limit": True,
+        },
+        "selection_policy": {
+            "candidate_selection_policy": (
+                "latency_coverage_with_feature_diversity"
+            ),
+            "feature_diversity_budget_fraction": "0.0",
+            "target_cumulative_latency_coverage": str(target_coverage),
+            "observed_assignment_coverage": str(assignment_coverage),
+            "maximum_selected_layer_input_count": (
+                args.maximum_selected_layer_input_count
+            ),
+            "selected_layer_input_count": len(assignment_rows),
+            "maximum_selected_process_count": (
+                args.maximum_selected_process_count
+            ),
+            "selected_process_target_count": selected_process_targets,
+            "coverage_target_met": True,
         },
         "upstream_handoffs": {
             goal: {
@@ -818,12 +1033,25 @@ def main() -> int:
             "busy_union_process_values_are_direct_measurements": False,
             "hardware_replay_used_as_timing_denominator": False,
             "perf_trace_bk_used_as_current_evidence": False,
+            "prior_runtime_evidence_used_for_measurement_or_attribution": False,
+            "r05_role": "planning evidence for R06",
+            "r07_observed_process_timeline_is_authoritative": True,
         },
     }
     independent_audit_path = artifact_root / INDEPENDENT_AUDIT_NAME
     write_json(independent_audit_path, independent_audit)
     independent_audit_metadata = file_metadata(independent_audit_path)
     primary_outputs[INDEPENDENT_AUDIT_NAME] = independent_audit_metadata
+
+    artifact_bytes_before_handoff = sum(
+        path.stat().st_size
+        for path in artifact_root.rglob("*")
+        if path.is_file()
+    )
+    require(
+        artifact_bytes_before_handoff <= args.maximum_trace_bundle_bytes,
+        "R05 artifact bundle exceeds the configured byte limit",
+    )
 
     r04_family_path = Path(nested(
         r04, "primary_outputs", "hardware_metrics_by_kernel_family.csv", "path"
@@ -846,7 +1074,27 @@ def main() -> int:
         "schema_version": 1,
         "runtime_goal": "R05",
         "status": "complete",
+        "execution_status": "complete",
+        "evidence_status": "complete",
+        "coverage_target_met": True,
+        "next_authorization_required": False,
         "skill": "qwen-dcu-segmented-process-attribution",
+        "branch": args.branch,
+        "run_id": args.run_id,
+        "runtime_root": str(runtime_root),
+        "runtime_artifact_root": str(artifact_root),
+        "completed_utc": completed_utc,
+        "workflow05_policy_version": args.workflow05_policy_version,
+        "evidence_acquisition_mode": args.evidence_acquisition_mode,
+        "artifact_budget": {
+            "artifact_bytes_before_handoff": artifact_bytes_before_handoff,
+            "maximum_trace_bundle_bytes": args.maximum_trace_bundle_bytes,
+            "profiling_wall_time_seconds": 0.0,
+            "maximum_profiling_wall_time_seconds": (
+                args.maximum_profiling_wall_time_seconds
+            ),
+            "within_limit": True,
+        },
         "run": {
             "branch": args.branch,
             "run_id": args.run_id,
@@ -876,6 +1124,13 @@ def main() -> int:
             },
             "archive_used_as_current_evidence": False,
             "hardware_replay_used_as_timing_denominator": False,
+            "prior_runtime_evidence_policy": (
+                "forbidden_for_measurement_or_attribution"
+            ),
+            "prior_runtime_evidence_used": False,
+            "analysis_strategy": (
+                "fresh_run_full_request_e2e_timeline"
+            ),
         },
         "same_input_parent": {
             "source_goal": "R01",
@@ -884,7 +1139,9 @@ def main() -> int:
             "contract_id": contract_id,
             "contract_canonical_sha256": contract_sha,
             "contract_path": nested(r01, "contract", "path"),
-            "full_input_layer_performance": file_metadata(denominator_path, 5568),
+            "full_input_layer_performance": file_metadata(
+                denominator_path, expected_denominator_metric_groups
+            ),
             "layer_kernel_breakdown": file_metadata(
                 Path(nested(
                     r01, "primary_outputs", "layer_kernel_breakdown_csv", "path"
@@ -913,18 +1170,18 @@ def main() -> int:
                 )).resolve()
             ),
             "representative_events": len(representative_by_event),
-            "exact_events": int(nested(
-                r03, "validation", "default", "exact"
-            )),
-            "nearest_shape_events": int(nested(
-                r03, "validation", "default", "nearest_shape"
-            )),
+            "exact_events": representative_match_counts["exact"],
+            "nearest_shape_events": representative_match_counts[
+                "nearest_shape"
+            ],
             "strict_ownership_rule": nested(
-                r03, "component_source", "ownership", "rule"
+                r02, "trace_binding", "ownership_rule"
             ),
             "strict_owned_kernel_count": nested(
-                r03, "component_source", "ownership",
-                "strict_owned_kernel_count"
+                r03, "component_source", "strict_owned_kernel_count"
+            ),
+            "multiply_owned_runtime_indices": nested(
+                r03, "component_source", "multiply_owned_runtime_indices"
             ),
             "direct_process_timing": False,
         },
@@ -958,8 +1215,14 @@ def main() -> int:
         "source": {
             "project_root": str(project_root),
             "source_root": str(source_root),
-            "git_revision": source_revision,
-            "git_branch": nested(r01, "source", "git_branch"),
+            "git_revision": r05_source_state["revision"],
+            "git_branch": r05_source_state["branch"],
+            "git_status_porcelain_v1_z_sha256": r05_source_state[
+                "status_porcelain_v1_z_sha256"
+            ],
+            "r01_source_revision": r01_source_revision,
+            "stage_source_revisions": stage_source_revisions,
+            "source_hash_equality_required": False,
             "files": {
                 "generator": {
                     "path": str(generator_path),
@@ -992,6 +1255,12 @@ def main() -> int:
                     sorted(assignment_type_counts.items())
                 ),
             },
+            "selection_policy": nested(
+                run_contract, "method", "selection_policy"
+            ),
+            "ranking_metrics": nested(
+                run_contract, "method", "ranking_metrics"
+            ),
         },
         "primary_outputs": primary_outputs,
         "determinism": independent_audit["determinism"],
@@ -1001,6 +1270,7 @@ def main() -> int:
             "required_output_count": len(GENERATOR_OUTPUT_NAMES),
             "denominator_occurrences": len(denominator_by_occurrence_key),
             "assignment_rows": len(assignment_rows),
+            "selected_process_targets": selected_process_targets,
             "coverage_rows": len(coverage_rows),
             "attribution_rows": len(attribution_rows),
             "metric_groups": len(expected_metric_groups),
@@ -1015,6 +1285,11 @@ def main() -> int:
             "reports_distinguish_evidence_classes": True,
             "deterministic_regeneration": True,
             "independent_completion_audit_status": "PASS",
+            "assignment_coverage": str(assignment_coverage),
+            "target_cumulative_latency_coverage": str(target_coverage),
+            "coverage_target_met": True,
+            "selected_layer_input_count_within_limit": True,
+            "selected_process_target_count_within_limit": True,
         },
         "same_run_binding": {
             "contract_id": contract_id,
@@ -1067,6 +1342,8 @@ def main() -> int:
                 "are estimates, and all R03 timing rows remain attribution "
                 "rather than direct process timing"
             ),
+            "planning_consumer_goal": "R06",
+            "authoritative_observed_process_timing_goal": "R07",
             "consumer_gate": (
                 "require the exact contract canonical SHA-256, R01/R02/R03 "
                 "handoff hashes, denominator/template hashes, generator hash, "
@@ -1094,6 +1371,9 @@ def main() -> int:
             "cpu_gpu_metric_fractions_mixed": False,
             "hardware_replay_used_as_timing": False,
             "perf_trace_bk_used_as_current_evidence": False,
+            "prior_runtime_evidence_used_for_measurement_or_attribution": False,
+            "r05_estimates_are_planning_evidence_for_r06": True,
+            "r07_full_request_process_trace_is_authoritative": True,
         },
         "handoff_output": str(handoff_output),
     }
@@ -1102,9 +1382,17 @@ def main() -> int:
     handoff_output.parent.mkdir(parents=True, exist_ok=True)
     write_json(handoff_output, handoff)
     persisted_handoff = read_json(handoff_output)
-    require(persisted_handoff.get("runtime_goal") == "R05"
-            and persisted_handoff.get("status") == "complete",
-            "persisted handoff failed final validation")
+    require(
+        persisted_handoff.get("runtime_goal") == "R05"
+        and persisted_handoff.get("status") == "complete"
+        and persisted_handoff.get("execution_status") == "complete"
+        and persisted_handoff.get("evidence_status") == "complete"
+        and persisted_handoff.get("coverage_target_met") is True
+        and persisted_handoff.get("next_authorization_required") is False
+        and persisted_handoff.get("skill")
+        == "qwen-dcu-segmented-process-attribution",
+        "persisted handoff failed final validation",
+    )
 
     print(json.dumps({
         "status": "PASS",

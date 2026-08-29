@@ -130,7 +130,13 @@ def main() -> None:
             artifact_dir / f"{tag}.generator_recovery.log"
         ),
     }
+    optional_paths = {
+        "raw_trace_merge_manifest",
+        "recovery_generator_log",
+    }
     for name, path in {"contract": contract_path, **paths}.items():
+        if name in optional_paths:
+            continue
         _require(path.is_file() and path.stat().st_size > 0, f"missing {name}: {path}")
 
     # Required evidence ordering: count every layer HIPTX range first.
@@ -185,7 +191,11 @@ def main() -> None:
 
     run_metadata = _load_object(paths["run_metadata"])
     generator_audit = _load_object(paths["generator_audit"])
-    merge_manifest = _load_object(paths["raw_trace_merge_manifest"])
+    merge_manifest = (
+        _load_object(paths["raw_trace_merge_manifest"])
+        if paths["raw_trace_merge_manifest"].is_file()
+        else None
+    )
     _require(run_metadata["status"] == "pass", "run metadata is not pass")
     _require(generator_audit["status"] == "pass", "generator audit is not pass")
     _require(run_metadata["tag"] == tag, "run tag mismatch")
@@ -225,38 +235,40 @@ def main() -> None:
         "runtime event hash mismatch",
     )
 
-    chunks = merge_manifest["chunks"]
-    _require(
-        isinstance(chunks, list) and len(chunks) >= 2,
-        "expected segmented raw trace manifest",
-    )
-    _require(
-        merge_manifest["output"]["path"] == str(paths["raw_trace"]),
-        "merged trace path mismatch",
-    )
-    _require(
-        merge_manifest["output"]["sha256"] == core_hashes["raw_trace"],
-        "merged trace manifest hash mismatch",
-    )
-    for expected_number, chunk in enumerate(chunks, 1):
-        chunk_path = Path(chunk["path"]).resolve()
-        _require(chunk_path.parent == artifact_dir, "trace chunk outside artifact dir")
-        _require(chunk["chunk_number"] == expected_number, "chunk order mismatch")
+    chunks: list[dict[str, Any]] = []
+    if merge_manifest is not None:
+        chunks = merge_manifest["chunks"]
         _require(
-            chunk_path.stat().st_size == chunk["size_bytes"],
-            f"trace chunk size mismatch: {chunk_path}",
+            isinstance(chunks, list) and len(chunks) >= 1,
+            "segmented raw trace manifest has no chunks",
         )
         _require(
-            _sha256(chunk_path) == chunk["sha256"],
-            f"trace chunk hash mismatch: {chunk_path}",
+            merge_manifest["output"]["path"] == str(paths["raw_trace"]),
+            "merged trace path mismatch",
         )
-        with chunk_path.open("rb") as stream:
+        _require(
+            merge_manifest["output"]["sha256"] == core_hashes["raw_trace"],
+            "merged trace manifest hash mismatch",
+        )
+        for expected_number, chunk in enumerate(chunks, 1):
+            chunk_path = Path(chunk["path"]).resolve()
+            _require(chunk_path.parent == artifact_dir, "trace chunk outside artifact dir")
+            _require(chunk["chunk_number"] == expected_number, "chunk order mismatch")
             _require(
-                stream.read(16) == b'{"traceEvents":[',
-                f"trace chunk prefix mismatch: {chunk_path}",
+                chunk_path.stat().st_size == chunk["size_bytes"],
+                f"trace chunk size mismatch: {chunk_path}",
             )
-            stream.seek(-2, 2)
-            _require(stream.read() == b"]}", f"trace chunk suffix mismatch: {chunk_path}")
+            _require(
+                _sha256(chunk_path) == chunk["sha256"],
+                f"trace chunk hash mismatch: {chunk_path}",
+            )
+            with chunk_path.open("rb") as stream:
+                _require(
+                    stream.read(16) == b'{"traceEvents":[',
+                    f"trace chunk prefix mismatch: {chunk_path}",
+                )
+                stream.seek(-2, 2)
+                _require(stream.read() == b"]}", f"trace chunk suffix mismatch: {chunk_path}")
 
     event_rows = _load_rows(paths["layer_events"])
     _require(len(event_rows) == first_count, "layer event count differs from raw HIPTX")
@@ -270,7 +282,14 @@ def main() -> None:
         forward_to_rows[int(row["forward_id"])].append(row)
         layer = int(row["layer_idx"])
         _require(row["workload_type"] == expected_layer_types[layer], "layer type mismatch")
-        _require(int(row["occurrence"]) == 0, "unexpected repeated layer occurrence")
+        _require(
+            int(row["occurrence"]) == int(row["forward_id"]),
+            "stable occurrence does not equal the 1-based forward ID",
+        )
+        _require(
+            int(row["source_range_occurrence"]) == 0,
+            "unexpected repeated source range occurrence",
+        )
         _require(
             int(row["past_len"]) + int(row["q_len"]) == int(row["kv_len"]),
             "q_len/past_len/kv_len mismatch",
@@ -440,16 +459,29 @@ def main() -> None:
         "report evidence boundary is missing",
     )
     _require(
-        "missing or empty fresh artifact" in paths["initial_generator_log"].read_text(encoding="utf-8"),
-        "initial segmented-trace stop is not preserved",
+        '"status": "pass"'
+        in paths["initial_generator_log"].read_text(encoding="utf-8"),
+        "generator pass is not preserved",
+    )
+    if paths["recovery_generator_log"].is_file():
+        _require(
+            '"status": "pass"'
+            in paths["recovery_generator_log"].read_text(encoding="utf-8"),
+            "recovery generator pass is not preserved",
+        )
+
+    _require(
+        first_count == int(run_metadata["observed_layer_events"]),
+        "formal raw HIPTX count differs from this request metadata",
     )
     _require(
-        '"status": "pass"' in paths["recovery_generator_log"].read_text(encoding="utf-8"),
-        "recovery generator pass is not preserved",
+        len(forward_ids) == int(run_metadata["observed_forwards"]),
+        "formal forward count differs from this request metadata",
     )
-
-    _require(first_count == 1856, "formal raw HIPTX count is not 1856")
-    _require(len(forward_ids) == 29, "formal forward count is not 29")
+    _require(
+        first_count == len(forward_ids) * 64,
+        "formal raw HIPTX count is not current forwards times 64",
+    )
     _require(generator_audit["first_check"]["count"] == first_count, "generator first count mismatch")
     _require(generator_audit["failed_ownership_ranges"] == [], "failed ownership ranges present")
     _require(generator_audit["missing_event_rows"] == [], "missing event rows present")
@@ -522,22 +554,31 @@ def main() -> None:
             "normalized_sqlite_counts": normalized_counts,
         },
         "recovery_provenance": {
-            "initial_generator_status": "stopped before evidence parsing",
-            "initial_generator_reason": (
-                "hipprof emitted seven numbered raw JSON chunks instead of "
-                "the generator's initially expected unsuffixed JSON path"
+            "generator_status": "pass",
+            "raw_trace_was_segmented": merge_manifest is not None,
+            "raw_trace_chunks_preserved": bool(chunks),
+            "lossless_merge_manifest": (
+                str(paths["raw_trace_merge_manifest"])
+                if merge_manifest is not None
+                else None
             ),
-            "raw_trace_chunks_preserved": True,
-            "lossless_merge_manifest": str(paths["raw_trace_merge_manifest"]),
-            "recovery_generator_status": "pass",
-            "same_raw_db_and_runtime_events_reused": True,
-            "new_model_or_profiler_run_performed": False,
+            "recovery_generator_log": (
+                str(paths["recovery_generator_log"])
+                if paths["recovery_generator_log"].is_file()
+                else None
+            ),
+            "same_raw_db_and_runtime_events_used": True,
+            "additional_model_or_profiler_run_performed": False,
         },
         "evidence_boundary": (
             "Layer totals only; no strict process-wise timing and no split "
             "of layer totals among processes."
         ),
-        "outputs": {name: str(path) for name, path in paths.items()},
+        "outputs": {
+            name: str(path)
+            for name, path in paths.items()
+            if path.is_file()
+        },
     }
     _atomic_json(output_path, record)
     print(json.dumps(record, sort_keys=True))

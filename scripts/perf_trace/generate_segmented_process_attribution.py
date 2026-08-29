@@ -14,6 +14,7 @@ import hashlib
 import json
 import math
 import re
+import subprocess
 from collections import Counter, defaultdict
 from decimal import Decimal, ROUND_HALF_EVEN, getcontext
 from pathlib import Path
@@ -206,6 +207,30 @@ def sha256_file(path: Path) -> str:
     return digest.hexdigest()
 
 
+def current_source_state(source_root: Path) -> dict[str, str]:
+    def git_output(*args: str) -> bytes:
+        result = subprocess.run(
+            ["git", "-C", str(source_root), *args],
+            check=False,
+            capture_output=True,
+        )
+        require(
+            result.returncode == 0,
+            f"git {' '.join(args)} failed: "
+            f"{result.stderr.decode(errors='replace').strip()}",
+        )
+        return result.stdout
+
+    status = git_output("status", "--porcelain=v1", "-z")
+    return {
+        "revision": git_output("rev-parse", "HEAD").decode().strip(),
+        "branch": git_output(
+            "rev-parse", "--abbrev-ref", "HEAD"
+        ).decode().strip(),
+        "status_porcelain_v1_z_sha256": hashlib.sha256(status).hexdigest(),
+    }
+
+
 def read_json(path: Path) -> dict[str, Any]:
     require(path.is_file(), f"missing JSON input: {path}")
     value = json.loads(path.read_text(encoding="utf-8"))
@@ -368,6 +393,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--r01-handoff", required=True, type=Path)
     parser.add_argument("--r02-handoff", required=True, type=Path)
     parser.add_argument("--r03-handoff", required=True, type=Path)
+    parser.add_argument("--r04-handoff", required=True, type=Path)
+    parser.add_argument("--source-root", required=True, type=Path)
     parser.add_argument("--full-input-layer-csv", required=True, type=Path)
     parser.add_argument("--layer-kernel-csv", required=True, type=Path)
     parser.add_argument("--representative-process-csv", required=True, type=Path)
@@ -378,6 +405,19 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--branch", required=True)
     parser.add_argument("--runtime-goal", default="R05")
     parser.add_argument("--tolerance-ms", default="1e-9")
+    parser.add_argument(
+        "--workflow05-policy-version",
+        default="workflow05-low-cost-timeline-v4",
+    )
+    parser.add_argument(
+        "--evidence-acquisition-mode",
+        default="fresh_no_prior_runtime_reuse",
+    )
+    parser.add_argument("--target-cumulative-latency-coverage", default="1.0")
+    parser.add_argument("--maximum-selected-layer-input-count", type=int,
+                        default=4096)
+    parser.add_argument("--maximum-selected-process-count", type=int,
+                        default=25000)
     return parser.parse_args()
 
 
@@ -386,16 +426,40 @@ def main() -> int:
     tolerance = decimal_value(args.tolerance_ms, "--tolerance-ms")
     require(tolerance > 0, "tolerance must be positive")
     require(args.runtime_goal == "R05", "this generator invocation is restricted to R05")
+    target_coverage = decimal_value(
+        args.target_cumulative_latency_coverage,
+        "--target-cumulative-latency-coverage",
+    )
+    require(DECIMAL_ZERO <= target_coverage <= Decimal("1"),
+            "target cumulative latency coverage must be in [0, 1]")
+    require(args.maximum_selected_layer_input_count > 0,
+            "maximum selected layer-input count must be positive")
+    require(args.maximum_selected_process_count > 0,
+            "maximum selected process count must be positive")
+    require(
+        args.evidence_acquisition_mode == "fresh_no_prior_runtime_reuse",
+        "R05 fresh full-request mode requires fresh_no_prior_runtime_reuse",
+    )
 
     output_dir = args.output_dir.resolve()
     output_dir.mkdir(parents=True, exist_ok=True)
 
+    source_root = args.source_root.resolve()
+    require(source_root.is_dir(), f"source root is missing: {source_root}")
+    require(
+        Path(__file__).resolve().is_relative_to(source_root),
+        "R05 generator is outside the requested source root",
+    )
+    r05_source_state = current_source_state(source_root)
+
     r01_path = args.r01_handoff.resolve()
     r02_path = args.r02_handoff.resolve()
     r03_path = args.r03_handoff.resolve()
+    r04_path = args.r04_handoff.resolve()
     r01 = read_json(r01_path)
     r02 = read_json(r02_path)
     r03 = read_json(r03_path)
+    r04 = read_json(r04_path)
 
     require(r01.get("runtime_goal") == "R01" and r01.get("status") == "complete",
             "R01 handoff is not complete")
@@ -403,10 +467,40 @@ def main() -> int:
             "R02 handoff is not complete")
     require(r03.get("runtime_goal") == "R03" and r03.get("status") == "complete",
             "R03 handoff is not complete")
+    require(r04.get("runtime_goal") == "R04" and r04.get("status") == "complete",
+            "R04 handoff is not complete")
+    for goal, handoff in (
+        ("R01", r01), ("R02", r02), ("R03", r03), ("R04", r04)
+    ):
+        require(handoff.get("run_id") == args.run_id,
+                f"{goal} handoff run ID differs from R05")
+        require(handoff.get("branch") == args.branch,
+                f"{goal} handoff branch differs from R05")
+        require(
+            handoff.get("workflow05_policy_version")
+            == args.workflow05_policy_version,
+            f"{goal} handoff Workflow05 policy differs from R05",
+        )
+    require(nested(r01, "run", "fresh_non_replay") is True,
+            "R01 denominator is not marked fresh/non-replay")
+    for goal, handoff in (("R02", r02), ("R03", r03), ("R04", r04)):
+        require(
+            handoff.get("evidence_acquisition_mode")
+            == args.evidence_acquisition_mode,
+            f"{goal} evidence acquisition mode differs from R05",
+        )
+    require(nested(r03, "upstream", "prior_runtime_evidence_used") is False,
+            "R03 reports prior-runtime evidence use")
+    require(
+        nested(r03, "evidence_boundary", "historical_runtime_evidence_used")
+        is False,
+        "R03 reports historical runtime evidence use",
+    )
 
     r01_hash = sha256_file(r01_path)
     r02_hash = sha256_file(r02_path)
     r03_hash = sha256_file(r03_path)
+    r04_hash = sha256_file(r04_path)
     require(r02_hash == nested(r03, "component_source", "handoff_file_sha256"),
             "R02 handoff hash does not match the R03 binding")
     require(Path(nested(r03, "component_source", "handoff_path")).resolve() == r02_path,
@@ -414,9 +508,9 @@ def main() -> int:
 
     contract_id = str(nested(r01, "contract", "contract_id"))
     contract_sha = str(nested(r01, "contract", "canonical_sha256"))
-    require(nested(r02, "same_input_parent", "contract_id") == contract_id,
+    require(nested(r02, "contract", "contract_id") == contract_id,
             "R02 parent contract differs from R01")
-    require(nested(r02, "same_input_parent", "canonical_sha256") == contract_sha,
+    require(nested(r02, "contract", "canonical_sha256") == contract_sha,
             "R02 parent contract SHA differs from R01")
     require(nested(r03, "same_input_parent", "contract_id") == contract_id,
             "R03 parent contract differs from R01")
@@ -424,12 +518,22 @@ def main() -> int:
             "R03 parent contract SHA differs from R01")
     require(nested(r03, "component_source", "parent_contract_id") == contract_id,
             "R03 component source parent contract differs from R01")
+    require(nested(r04, "same_input_parent", "contract_id") == contract_id,
+            "R04 parent contract differs from R01")
+    require(
+        nested(r04, "same_input_parent", "contract_canonical_sha256")
+        == contract_sha,
+        "R04 parent contract SHA differs from R01",
+    )
 
-    source_revision = str(nested(r01, "source", "git_revision"))
-    require(nested(r02, "source", "git_revision") == source_revision,
-            "R02 source revision differs from R01")
-    require(nested(r03, "fx_source", "source_revision") == source_revision,
-            "R03 FX structural source revision differs from R01")
+    r01_source_revision = str(nested(r01, "source", "git_revision"))
+    stage_source_revisions = {
+        "R01": r01_source_revision,
+        "R02": str(nested(r02, "source", "git_revision")),
+        "R03": str(nested(r03, "source", "git_revision")),
+        "R04": str(nested(r04, "live_toolchain", "source_revision")),
+        "R05": r05_source_state["revision"],
+    }
 
     input_bindings = {
         "full_input_layer_performance": validate_bound_file(
@@ -460,8 +564,8 @@ def main() -> int:
     }
 
     r02_db_binding = validate_bound_file(
-        Path(nested(r02, "primary_outputs", "queryable_trace", "path")),
-        nested(r02, "primary_outputs", "queryable_trace"),
+        Path(nested(r02, "primary_outputs", "queryable_process_trace", "path")),
+        nested(r02, "primary_outputs", "queryable_process_trace"),
         "R02 strict process trace database",
     )
     require(
@@ -499,6 +603,19 @@ def main() -> int:
         nested(r03, "projection_method", "output_is_direct_process_timing")
         is False,
         "unexpected R03 direct-timing claim",
+    )
+    require(nested(r02, "trace_binding", "correlation_identity") == "_Index",
+            "R02 strict process trace does not use runtime _Index")
+    require(nested(r03, "component_source", "correlation_identity") == "_Index",
+            "R03 component source does not use runtime _Index")
+    require(nested(r02, "trace_binding", "kernel_durations_calculated") is False,
+            "R02 unexpectedly claims process kernel durations")
+    require(nested(r03, "component_source", "multiply_owned_runtime_indices") == 0,
+            "R03 contains multiply owned runtime indices")
+    require(
+        nested(r03, "component_source", "strict_owned_kernel_count")
+        == nested(r03, "component_source", "unique_strict_owned_runtime_indices"),
+        "R03 strict kernel/runtime-index counts disagree",
     )
 
     denominator_header, denominator_rows = read_csv(
@@ -1049,6 +1166,23 @@ def main() -> int:
     require(all(row["attribution_source"] and row["attribution_type_id"]
                 for row in assignments),
             "assignment has an empty attribution source or type")
+    assignment_coverage = (
+        Decimal(len(assignments)) / Decimal(len(denominator_by_group))
+    )
+    require(assignment_coverage >= target_coverage,
+            "assignment coverage is below the requested target")
+    require(
+        len(assignments) <= args.maximum_selected_layer_input_count,
+        "selected layer-input count exceeds the configured limit",
+    )
+    selected_process_targets = sum(
+        len(templates[row["template_event_id"]]["rows"])
+        for row in assignments
+    )
+    require(
+        selected_process_targets <= args.maximum_selected_process_count,
+        "selected process target count exceeds the configured limit",
+    )
 
     used_type_ids = sorted({row["attribution_type_id"] for row in assignments})
     type_rows: list[dict[str, str]] = []
@@ -1334,12 +1468,17 @@ def main() -> int:
         "runtime_goal": args.runtime_goal,
         "run_id": args.run_id,
         "branch": args.branch,
+        "workflow05_policy_version": args.workflow05_policy_version,
+        "evidence_acquisition_mode": args.evidence_acquisition_mode,
         "variant": variant,
         "display_name": display_name,
         "contract": {
             "contract_id": contract_id,
             "canonical_sha256": contract_sha,
-            "source_revision": source_revision,
+            "r01_source_revision": r01_source_revision,
+            "stage_source_revisions": stage_source_revisions,
+            "r05_source_state": r05_source_state,
+            "source_hash_equality_required": False,
             "prompt_rendered_sha256": nested(
                 r01, "contract", "prompt", "rendered_prompt_sha256"
             ),
@@ -1360,21 +1499,20 @@ def main() -> int:
             "R01": {"path": str(r01_path), "sha256": r01_hash},
             "R02": {"path": str(r02_path), "sha256": r02_hash},
             "R03": {"path": str(r03_path), "sha256": r03_hash},
+            "R04": {"path": str(r04_path), "sha256": r04_hash},
         },
         "inputs": input_bindings,
         "strict_process_evidence": {
             "r02_process_db": r02_db_binding,
             "r02_process_inventory": r02_inventory_binding,
             "ownership_rule": nested(
-                r03, "component_source", "ownership", "rule"
+                r02, "trace_binding", "ownership_rule"
             ),
             "strict_owned_kernel_count": nested(
-                r03, "component_source", "ownership",
-                "strict_owned_kernel_count"
+                r03, "component_source", "strict_owned_kernel_count"
             ),
-            "multiply_owned_kernel_count": nested(
-                r03, "component_source", "ownership",
-                "multiply_owned_kernel_count"
+            "multiply_owned_runtime_indices": nested(
+                r03, "component_source", "multiply_owned_runtime_indices"
             ),
         },
         "generator": {
@@ -1404,6 +1542,30 @@ def main() -> int:
                 "representative launch-owned kernel-sum fractions only as an "
                 "explicit diagnostic proxy"
             ),
+            "selection_policy": {
+                "candidate_selection_policy": (
+                    "latency_coverage_with_feature_diversity"
+                ),
+                "feature_diversity_budget_fraction": "0.0",
+                "target_cumulative_latency_coverage": str(target_coverage),
+                "observed_assignment_coverage": str(assignment_coverage),
+                "maximum_selected_layer_input_count": (
+                    args.maximum_selected_layer_input_count
+                ),
+                "selected_layer_input_count": len(assignments),
+                "maximum_selected_process_count": (
+                    args.maximum_selected_process_count
+                ),
+                "selected_process_target_count": selected_process_targets,
+                "coverage_target_met": assignment_coverage >= target_coverage,
+            },
+            "ranking_metrics": {
+                "selected": "hiptx_host_range_duration_ms",
+                "secondary": [
+                    "hipprof_launch_owned_kernel_busy_union_ms",
+                    "hipprof_launch_owned_kernel_sum_ms",
+                ],
+            },
         },
         "evidence_boundary": {
             "template_scaled_is_direct_full_layer_trace": False,
@@ -1413,6 +1575,9 @@ def main() -> int:
             "cpu_gpu_metric_fractions_mixed": False,
             "hardware_replay_used_as_timing_denominator": False,
             "perf_trace_bk_used_as_current_evidence": False,
+            "prior_runtime_evidence_used_for_measurement_or_attribution": False,
+            "r05_role": "planning evidence for R06",
+            "r07_observed_process_timeline_is_authoritative": True,
         },
     }
     run_contract_path = output_dir / RUN_CONTRACT_NAME
@@ -1442,7 +1607,9 @@ def main() -> int:
         "## Frozen SAME_INPUT Sources",
         "",
         f"- Contract: `{contract_id}` (`{contract_sha}`).",
-        f"- Source revision: `{source_revision}`.",
+        "- Stage source revisions: `"
+        + json.dumps(stage_source_revisions, sort_keys=True)
+        + "`; equality across stages is not required.",
         (
             f"- Complete denominator: `{input_bindings['full_input_layer_performance']['path']}` "
             f"(`{input_bindings['full_input_layer_performance']['sha256']}`)."
@@ -1651,7 +1818,10 @@ def main() -> int:
         "status": "PASS",
         "contract_id": contract_id,
         "contract_sha256": contract_sha,
-        "source_revision": source_revision,
+        "r01_source_revision": r01_source_revision,
+        "stage_source_revisions": stage_source_revisions,
+        "r05_source_state": r05_source_state,
+        "source_hash_equality_required": False,
         "variant": variant,
         "counts": {
             "forward_count": len(forward_ids),
@@ -1665,6 +1835,7 @@ def main() -> int:
             "aggregation_rows": len(aggregation_rows),
             "coverage_rows": len(coverage_rows),
             "metric_groups": len(conservation_sources),
+            "selected_process_targets": selected_process_targets,
         },
         "assignment_counts": {
             "by_attribution_source": dict(sorted(source_counts.items())),
@@ -1699,7 +1870,7 @@ def main() -> int:
             "all_upstream_handoffs_complete": True,
             "all_bound_input_hashes_match": True,
             "single_contract": True,
-            "source_revisions_compatible": True,
+            "source_revisions_recorded_without_equality_gate": True,
             "rocm_hip_metric_semantics_resolved": True,
             "every_denominator_occurrence_has_one_assignment": True,
             "every_assignment_has_source_and_type": True,
@@ -1709,6 +1880,12 @@ def main() -> int:
             "all_metric_groups_conserve": True,
             "cpu_gpu_metric_fractions_mixed": False,
             "reports_distinguish_observed_scaled_and_fallback": True,
+            "assignment_coverage_target_met": (
+                assignment_coverage >= target_coverage
+            ),
+            "selected_layer_input_count_within_limit": True,
+            "selected_process_target_count_within_limit": True,
+            "fresh_current_runtime_only": True,
         },
         "metric_fraction_policy": {
             spec["metric"]: {

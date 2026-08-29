@@ -62,6 +62,16 @@ def nested(value: dict[str, Any], *keys: str) -> Any:
     return current
 
 
+def handoff_runtime_root(handoff: dict[str, Any]) -> str:
+    value = handoff.get("runtime_root")
+    if value:
+        return str(value)
+    handoff_output = handoff.get("handoff_output")
+    if handoff_output:
+        return str(Path(str(handoff_output)).resolve().parent.parent)
+    raise PlanError("handoff lacks runtime_root and handoff_output")
+
+
 def require_equal(label: str, *values: Any) -> None:
     if not values or any(value != values[0] for value in values[1:]):
         raise PlanError(f"{label} mismatch: {values!r}")
@@ -97,6 +107,16 @@ def main() -> None:
     parser.add_argument("--r02-run-metadata", type=Path, required=True)
     parser.add_argument("--family-ledger", type=Path, required=True)
     parser.add_argument("--trace-summary", type=Path, required=True)
+    parser.add_argument("--selection-batch-id", required=True)
+    parser.add_argument(
+        "--pmc-collection-policy",
+        choices=("bounded_family_superset_exact_post_attribution",),
+        required=True,
+    )
+    parser.add_argument("--kernel-name-filter", required=True)
+    parser.add_argument(
+        "--maximum-targeted-pmc-family-count", type=int, required=True
+    )
     args = parser.parse_args()
 
     project_root = args.project_root.resolve()
@@ -111,8 +131,8 @@ def main() -> None:
     require_under(source_root, project_root, "source root")
     require_under(runtime_root, project_root / "perf_trace", "runtime root")
     require_under(output_root, runtime_root, "R04 output root")
-    if output_root.name != "R04":
-        raise PlanError("R04 output root must end in artifacts/R04")
+    expected_artifact_parent = runtime_root / "artifacts" / "R04"
+    require_under(output_root, expected_artifact_parent, "R04 attempt output root")
     output_root.mkdir(parents=True, exist_ok=True)
 
     paths = {
@@ -137,22 +157,21 @@ def main() -> None:
     trace_summary = load_json(paths["trace_summary"])
     for label, handoff in (("R01", r01), ("R02", r02), ("R03", r03)):
         require_equal(f"{label} status", handoff.get("status"), "complete")
-        require_equal(f"{label} branch", nested(handoff, "run", "branch"), args.branch)
-        require_equal(f"{label} run_id", nested(handoff, "run", "run_id"), args.run_id)
+        require_equal(f"{label} branch", handoff.get("branch"), args.branch)
+        require_equal(f"{label} run_id", handoff.get("run_id"), args.run_id)
         require_equal(
             f"{label} runtime_root",
-            str(Path(nested(handoff, "run", "runtime_root")).resolve()),
+            str(Path(handoff_runtime_root(handoff)).resolve()),
             str(runtime_root),
         )
 
     contract_sha = canonical_contract_sha(contract)
     contract_id = str(contract["contract_id"])
-    source_revision = str(nested(contract, "source", "revision"))
-    git_revision = subprocess.check_output(
+    r01_source_revision = str(nested(contract, "source", "revision"))
+    source_revision = subprocess.check_output(
         ["git", "-C", str(source_root), "rev-parse", "HEAD"],
         text=True,
     ).strip()
-    require_equal("source revision", source_revision, git_revision)
     require_equal(
         "contract source root",
         str(Path(nested(contract, "source", "source_root")).resolve()),
@@ -186,12 +205,12 @@ def main() -> None:
     )
     require_equal(
         "R02 parent contract",
-        nested(r02, "same_input_parent", "contract_id"),
+        nested(r02, "contract", "contract_id"),
         contract_id,
     )
     require_equal(
         "R02 parent contract SHA",
-        nested(r02, "same_input_parent", "canonical_sha256"),
+        nested(r02, "contract", "canonical_sha256"),
         contract_sha,
     )
     require_equal(
@@ -285,7 +304,7 @@ def main() -> None:
     )
     require_equal(
         "R02 device",
-        int(nested(r02, "device", "physical_device_id")),
+        int(nested(r02, "contract", "device", "physical_device_id")),
         1,
     )
     require_equal(
@@ -299,8 +318,14 @@ def main() -> None:
         "1",
     )
 
-    r02_db_path = Path(nested(r02, "primary_outputs", "queryable_trace", "path"))
-    r02_db_sha = nested(r02, "primary_outputs", "queryable_trace", "sha256")
+    r02_primary = nested(r02, "primary_outputs")
+    r02_db_record = r02_primary.get("queryable_process_trace") or r02_primary.get(
+        "queryable_trace"
+    )
+    if not isinstance(r02_db_record, dict):
+        raise PlanError("R02 handoff lacks a queryable process trace")
+    r02_db_path = Path(str(r02_db_record["path"]))
+    r02_db_sha = str(r02_db_record["sha256"])
     require_equal("R02 DB file SHA", sha256_file(r02_db_path), r02_db_sha)
     require_equal(
         "R03 component DB path",
@@ -347,6 +372,7 @@ def main() -> None:
     )
 
     family_rows = read_csv(paths["family_ledger"])
+    family_ledger_sha256 = sha256_file(paths["family_ledger"])
     required_family_fields = {
         "parent_layer_range",
         "forward_id",
@@ -377,6 +403,37 @@ def main() -> None:
             raise PlanError(f"duplicate non-replay family key: {key}")
         family_keys.add(key)
         grouped[(row["event_id"], row["stage"])].append(row)
+    kernel_family_names = {
+        row["matched_kernel_family"]
+        for row in family_rows
+        if row["matched_kernel_family"] != "no_kernel"
+    }
+    if args.maximum_targeted_pmc_family_count <= 0:
+        raise PlanError("maximum targeted PMC family count must be positive")
+    if len(kernel_family_names) > args.maximum_targeted_pmc_family_count:
+        raise PlanError(
+            "current family denominator exceeds the authorized PMC family cap: "
+            f"{len(kernel_family_names)} > "
+            f"{args.maximum_targeted_pmc_family_count}"
+        )
+    kernel_name_filter = args.kernel_name_filter.strip()
+    if not kernel_name_filter or "\n" in kernel_name_filter or "\r" in kernel_name_filter:
+        raise PlanError("kernel-name filter must be one non-empty literal")
+    uncovered_filter_rows = [
+        (row["event_id"], row["stage"], row["matched_kernel_family"])
+        for row in family_rows
+        if row["matched_kernel_family"] != "no_kernel"
+        and not any(
+            kernel_name_filter in name
+            for name in row["hipprof_kernel_name_examples"].split(";")
+            if name
+        )
+    ]
+    if uncovered_filter_rows:
+        raise PlanError(
+            "the single literal kernel-name filter does not cover every "
+            f"expected family row: {uncovered_filter_rows[:10]}"
+        )
     expected_process_count = int(
         trace_summary["checks"]["expected_process_marker_count"]
     )
@@ -442,17 +499,22 @@ def main() -> None:
                 "gpu_order_basis": first["gpu_order_basis"],
                 "collection_required": bool_text(bool(kernel_rows)),
                 "expected_no_kernel": bool_text(bool(no_kernel)),
-                "selection_mode": "all_current_workflow02_representatives",
+                "selection_mode": "all_same_run_r02_representatives",
                 "collection_status": "pending" if kernel_rows else "no_kernel",
+                "selection_batch_id": args.selection_batch_id,
+                "capture_batch_id": args.selection_batch_id,
+                "contract_relation": "current_measurement",
+                "measurement_contract_id": contract_id,
+                "measurement_contract_sha256": contract_sha,
+                "pmc_collection_policy": args.pmc_collection_policy,
+                "kernel_name_filter": kernel_name_filter,
                 "run_id": args.run_id,
                 "branch": args.branch,
                 "contract_id": contract_id,
                 "contract_sha256": contract_sha,
                 "source_revision": source_revision,
                 "r02_non_replay_db_sha256": r02_db_sha,
-                "non_replay_family_ledger_sha256": sha256_file(
-                    paths["family_ledger"]
-                ),
+                "non_replay_family_ledger_sha256": family_ledger_sha256,
             }
         )
     selection_rows.sort(
@@ -475,6 +537,21 @@ def main() -> None:
         writer = csv.DictWriter(handle, fieldnames=selection_fields)
         writer.writeheader()
         writer.writerows(selection_rows)
+
+    # The full-request contract uses newline files so the complete target set
+    # is never truncated by an environment-variable size limit.  Preserve the
+    # already-frozen process order for exact ranges and first-seen event order
+    # for parent event targets.
+    event_ids = list(dict.fromkeys(row["event_id"] for row in selection_rows))
+    process_targets_path = output_root / "full_request_process_targets.txt"
+    range_targets_path = output_root / "full_request_process_range_targets.txt"
+    process_targets_path.write_text(
+        "\n".join(event_ids) + "\n", encoding="utf-8"
+    )
+    range_targets_path.write_text(
+        "\n".join(row["hiptx_range"] for row in selection_rows) + "\n",
+        encoding="utf-8",
+    )
 
     launch_targets = [
         row for row in selection_rows if row["collection_required"] == "true"
@@ -504,6 +581,11 @@ def main() -> None:
             "file_sha256": sha256_file(paths["contract"]),
             "path": str(paths["contract"]),
             "source_revision": source_revision,
+            "r01_source_revision": r01_source_revision,
+            "source_revision_matches_r01": (
+                source_revision == r01_source_revision
+            ),
+            "source_hash_equality_required": False,
             "source_root": str(source_root),
             "model_root": str(args.model_root),
             "resolved_model_root": str(model_root),
@@ -537,9 +619,9 @@ def main() -> None:
             },
             "non_replay_family_ledger": {
                 "path": str(paths["family_ledger"]),
-                "sha256": sha256_file(paths["family_ledger"]),
+                "sha256": family_ledger_sha256,
                 "role": (
-                    "schema-equivalent current Workflow-02 family/order table "
+                    "schema-equivalent same-run R02 family/order table "
                     "materialized from the exact R02 non-replay DB"
                 ),
             },
@@ -560,9 +642,35 @@ def main() -> None:
         "selection_plan": {
             "path": str(selection_path),
             "sha256": sha256_file(selection_path),
-            "selection_mode": "all_current_workflow02_representatives",
+            "selection_mode": "all_same_run_r02_representatives",
             "filtered": False,
             "collection_status": "pending",
+            "process_target_transport": "newline_file",
+            "process_targets": {
+                "path": str(process_targets_path),
+                "sha256": sha256_file(process_targets_path),
+                "rows": len(event_ids),
+            },
+            "exact_process_range_targets": {
+                "path": str(range_targets_path),
+                "sha256": sha256_file(range_targets_path),
+                "rows": len(selection_rows),
+            },
+        },
+        "pmc_collection": {
+            "policy": args.pmc_collection_policy,
+            "capture_batch_count_per_mode": 1,
+            "capture_batch_id": args.selection_batch_id,
+            "one_literal_kernel_name_filter_per_capture_batch": True,
+            "kernel_name_filter": kernel_name_filter,
+            "kernel_name_filter_coverage": {
+                "expected_kernel_family_rows": len(expected_kernel_rows),
+                "covered_kernel_family_rows": len(expected_kernel_rows),
+                "unique_kernel_families": len(kernel_family_names),
+                "maximum_targeted_pmc_family_count": (
+                    args.maximum_targeted_pmc_family_count
+                ),
+            },
         },
         "timing_boundary": {
             "timing_source": "workflow02_non_replay_family_row",
@@ -580,6 +688,10 @@ def main() -> None:
         "status": "PASS",
         "selection_plan": str(selection_path),
         "selection_plan_sha256": sha256_file(selection_path),
+        "process_targets": str(process_targets_path),
+        "process_targets_sha256": sha256_file(process_targets_path),
+        "exact_process_range_targets": str(range_targets_path),
+        "exact_process_range_targets_sha256": sha256_file(range_targets_path),
         "run_contract": str(snapshot_path),
         "expected_denominator": snapshot["expected_denominator"],
     }

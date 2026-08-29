@@ -7,6 +7,7 @@ import argparse
 import csv
 import hashlib
 import json
+import re
 import subprocess
 from pathlib import Path
 from typing import Any
@@ -32,6 +33,8 @@ INVENTORY_FIELDS = [
     "status",
     "notes",
 ]
+
+EVENT_ID_RE = re.compile(r"^input(?P<forward>\d+)_layer(?P<layer>\d+)$")
 
 
 def sha256(path: Path) -> str:
@@ -166,6 +169,24 @@ def inventory_range_name(
     return name
 
 
+def aggregation_key(event_id: str, process_id: str) -> str:
+    if process_id in {
+        "output_projection",
+        "output_projection__post_attention_rmsnorm_fused",
+    }:
+        return f"{event_id}:output_projection_transition"
+    return f"{event_id}:{process_id}"
+
+
+def event_from_range_name(name: str) -> str:
+    parts = name.split(".")
+    if len(parts) not in {4, 5} or parts[:2] != ["pra", "fx_process"]:
+        raise RuntimeError(f"invalid inventory range name: {name}")
+    if EVENT_ID_RE.fullmatch(parts[2]) is None:
+        raise RuntimeError(f"invalid event identity in range name: {name}")
+    return parts[2]
+
+
 def markdown_cell(value: Any) -> str:
     return str(value).replace("\\", "\\\\").replace("|", "\\|").replace("\n", " ")
 
@@ -189,6 +210,7 @@ def build_inventory(
     source_root: Path,
     fx_root: Path,
     profile_script: Path,
+    template_assignments_path: Path,
 ) -> tuple[
     list[dict[str, str]],
     list[dict[str, Any]],
@@ -307,7 +329,7 @@ def build_inventory(
                     "process_id": stage_name,
                     "process_title": str(stage["title"]),
                     "fragment_id": fragment_id,
-                    "aggregation_key": f"{event_id}:{stage_name}",
+                    "aggregation_key": aggregation_key(event_id, stage_name),
                     "fx_nodes": ";".join(stage["nodes"]),
                     "fx_op_families": node_families(selected_nodes),
                     "expected_kernel_families": expected_kernels(stage_name),
@@ -362,7 +384,10 @@ def build_inventory(
                     "Shared residual-add and post-attention RMSNorm transition"
                 ),
                 "fragment_id": fragment_id,
-                "aggregation_key": f"{event_id}:fused_transition",
+                "aggregation_key": aggregation_key(
+                    event_id,
+                    "output_projection__post_attention_rmsnorm_fused",
+                ),
                 "fx_nodes": ";".join(fused_nodes),
                 "fx_op_families": node_families(fused_records),
                 "expected_kernel_families": expected_kernels(
@@ -395,6 +420,120 @@ def build_inventory(
         )
         mapping_events.append(mapping_event)
 
+    template_inventory = inventory
+    template_rows_by_event: dict[str, list[dict[str, str]]] = {}
+    for row in template_inventory:
+        template_event_id = event_from_range_name(row["nvtx_range_name"])
+        template_rows_by_event.setdefault(template_event_id, []).append(row)
+    template_identity_by_event = {
+        event["event_id"]: event["event_identity"]
+        for event in mapping_events
+    }
+
+    with template_assignments_path.open(encoding="utf-8", newline="") as stream:
+        assignment_rows = list(csv.DictReader(stream))
+    if not assignment_rows:
+        raise RuntimeError("full-request template assignments are empty")
+
+    assignment_event_ids: set[str] = set()
+    expanded_inventory: list[dict[str, str]] = []
+    relation_counts: dict[str, int] = {}
+    for assignment in assignment_rows:
+        event_id = assignment["event_id"]
+        template_event_id = assignment["template_event_id"]
+        match = EVENT_ID_RE.fullmatch(event_id)
+        if match is None:
+            raise RuntimeError(f"invalid assignment event id: {event_id}")
+        if event_id in assignment_event_ids:
+            raise RuntimeError(f"duplicate template assignment: {event_id}")
+        assignment_event_ids.add(event_id)
+        template_identity = template_identity_by_event.get(template_event_id)
+        template_rows = template_rows_by_event.get(template_event_id)
+        if template_identity is None or not template_rows:
+            raise RuntimeError(
+                f"assignment refers to missing current FX template: "
+                f"{event_id} -> {template_event_id}"
+            )
+        shape_checks = {
+            "phase": str(assignment["phase"])
+            == str(template_identity["phase"]),
+            "layer_type": str(assignment["layer_type"])
+            == str(template_identity["layer_type"]),
+            "q_len": int(assignment["q_len"])
+            == int(template_identity["q_len"]),
+            "kv_len": int(assignment["kv_len"])
+            == int(template_identity["kv_len"]),
+            "template_q_len": int(assignment["template_q_len"])
+            == int(template_identity["q_len"]),
+            "template_kv_len": int(assignment["template_kv_len"])
+            == int(template_identity["kv_len"]),
+            "q_delta": int(assignment["target_template_q_len_delta"]) == 0,
+            "kv_delta": int(assignment["target_template_kv_len_delta"]) == 0,
+        }
+        if not all(shape_checks.values()):
+            raise RuntimeError(
+                f"non-exact shape transfer for {event_id}: {shape_checks}"
+            )
+        relation = assignment["relation"]
+        expected_relation = (
+            "same_event"
+            if event_id == template_event_id
+            else "exact_shape_template_transfer"
+        )
+        if relation != expected_relation:
+            raise RuntimeError(
+                f"invalid transfer label for {event_id}: {relation}"
+            )
+        relation_counts[relation] = relation_counts.get(relation, 0) + 1
+        forward_id = int(match.group("forward"))
+        layer_id = int(match.group("layer"))
+        q_len = int(assignment["q_len"])
+        kv_len = int(assignment["kv_len"])
+        past_len = kv_len - q_len
+        if past_len < 0:
+            raise RuntimeError(f"negative past length for {event_id}")
+
+        for template_row in template_rows:
+            process_id = template_row["process_id"]
+            fragment_id = template_row["fragment_id"]
+            row = dict(template_row)
+            row.update(
+                {
+                    "variant_scope": (
+                        "Qwen3.5-27B current eager structural FX mapping; "
+                        f"fx_contract={template_identity['contract_id']}; "
+                        f"template_event={template_event_id}; relation={relation}"
+                    ),
+                    "phase": assignment["phase"],
+                    "layer_or_layer_pattern": (
+                        f"{event_id}; layer={layer_id}; occurrence={forward_id}; "
+                        f"q_len={q_len}; past_len={past_len}; kv_len={kv_len}; "
+                        f"template_event={template_event_id}; relation={relation}"
+                    ),
+                    "aggregation_key": aggregation_key(event_id, process_id),
+                    "nvtx_range_name": inventory_range_name(
+                        event_id, process_id, fragment_id
+                    ),
+                    "range_parent": (
+                        f"pra.layer.{event_id}.{assignment['phase']}."
+                        f"{assignment['layer_type']}"
+                    ),
+                    "range_guard_or_flag": (
+                        "PRA_BACKEND_PERF_PROCESS_PROFILE=1 and event_id in "
+                        "PRA_BACKEND_PERF_PROCESS_TARGETS and exact range name "
+                        "in PRA_BACKEND_PERF_PROCESS_RANGE_TARGETS"
+                    ),
+                    "notes": (
+                        f"{template_row['notes']}; template_event="
+                        f"{template_event_id}; transfer_relation={relation}; "
+                        "transfer is structural only and exact in "
+                        "(phase,layer_type,q_len,kv_len)"
+                    ),
+                }
+            )
+            expanded_inventory.append(row)
+    inventory = expanded_inventory
+
     names = [row["nvtx_range_name"] for row in inventory]
     if len(names) != len(set(names)):
         raise RuntimeError("inventory range names are not unique")
@@ -416,6 +555,18 @@ def build_inventory(
             "sha256": sha256(fx_events_path),
             "rows": len(event_rows),
         },
+        "full_request_template_assignments": {
+            "path": str(template_assignments_path),
+            "sha256": sha256(template_assignments_path),
+            "rows": len(assignment_rows),
+            "relation_counts": relation_counts,
+            "exact_shape_only": True,
+        },
+        "full_request_inventory": {
+            "rows": len(inventory),
+            "unique_event_count": len(assignment_event_ids),
+            "unique_range_name_count": len(names),
+        },
         "events": mapping_events,
     }
     return inventory, mapping_events, mapping
@@ -425,6 +576,7 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--source-root", type=Path, required=True)
     parser.add_argument("--fx-root", type=Path, required=True)
+    parser.add_argument("--template-assignments", type=Path, required=True)
     parser.add_argument("--r01-contract", type=Path, required=True)
     parser.add_argument("--profile-script", type=Path, required=True)
     parser.add_argument("--launcher", type=Path, required=True)
@@ -442,6 +594,7 @@ def main() -> None:
     output_dir = args.output_dir.resolve()
     profile_script = args.profile_script.resolve()
     launcher = args.launcher.resolve()
+    template_assignments_path = args.template_assignments.resolve()
     r01_contract_path = args.r01_contract.resolve()
     if "perf_trace_bk" in fx_root.parts:
         raise RuntimeError("perf_trace_bk cannot be current FX evidence")
@@ -460,13 +613,33 @@ def main() -> None:
         text=True,
     ).strip()
     r01_contract = load_object(r01_contract_path)
-    if r01_contract["source"]["revision"] != git_revision:
-        raise RuntimeError("R01 contract revision differs from current source")
+    r01_revision = str(r01_contract["source"]["revision"])
+    current_status_sha256 = hashlib.sha256(
+        subprocess.check_output(
+            ["git", "-C", str(source_root), "status", "--porcelain=v1", "-z"]
+        )
+    ).hexdigest()
+    r01_status_sha256 = r01_contract["source"].get(
+        "git_status_porcelain_v1_z_sha256"
+    )
+    current_profile_path = (
+        source_root
+        / "vllm/platforms/tunable_profiles/"
+        "gfx936_qwen3_5_27b_bf16_tn_m4096.csv"
+    )
+    current_profile_sha256 = sha256(current_profile_path)
+    r01_profile_sha256 = r01_contract["source"].get(
+        "traced_source_files", {}
+    ).get(
+        "vllm/platforms/tunable_profiles/"
+        "gfx936_qwen3_5_27b_bf16_tn_m4096.csv"
+    )
 
     inventory, mapping_events, mapping = build_inventory(
         source_root=source_root,
         fx_root=fx_root,
         profile_script=profile_script,
+        template_assignments_path=template_assignments_path,
     )
     fx_metadata = load_object(fx_root / "run_metadata.json")
     if fx_metadata["source_identity"]["revision"] != git_revision:
@@ -489,7 +662,13 @@ def main() -> None:
         encoding="utf-8",
     )
 
-    targets = [event["event_id"] for event in mapping_events]
+    targets = list(
+        dict.fromkeys(
+            event_from_range_name(row["nvtx_range_name"])
+            for row in inventory
+        )
+    )
+    exact_range_targets = [row["nvtx_range_name"] for row in inventory]
     overlay_payload = {
         "schema_version": 1,
         "runtime_goal": "R02",
@@ -506,6 +685,8 @@ def main() -> None:
                 "to": "1",
             },
             "PRA_BACKEND_PERF_PROCESS_TARGETS": targets,
+            "PRA_BACKEND_PERF_PROCESS_RANGE_TARGETS": exact_range_targets,
+            "target_transport": "newline_file",
             "process_marker_namespace": (
                 "pra.fx_process.inputN_layerM.<process_id>[.<fragment_id>]"
             ),
@@ -520,6 +701,28 @@ def main() -> None:
         "source": {
             "revision": git_revision,
             "branch": git_branch,
+            "source_state_relation": {
+                "r01_git_status_porcelain_v1_z_sha256": r01_status_sha256,
+                "current_git_status_porcelain_v1_z_sha256": (
+                    current_status_sha256
+                ),
+                "git_status_matches_r01": (
+                    current_status_sha256 == r01_status_sha256
+                ),
+                "r01_source_revision": r01_revision,
+                "stage_source_revision": git_revision,
+                "source_revision_matches_r01": git_revision == r01_revision,
+                "source_hash_equality_required": False,
+                "r01_tunable_profile_sha256": r01_profile_sha256,
+                "current_tunable_profile_sha256": current_profile_sha256,
+                "tunable_profile_matches_r01": (
+                    current_profile_sha256 == r01_profile_sha256
+                ),
+                "policy": (
+                    "current worktree is authoritative for R02 structural "
+                    "capture; all source-state differences remain visible"
+                ),
+            },
             "profile_script": {
                 "path": str(profile_script),
                 "sha256": sha256(profile_script),
@@ -697,6 +900,7 @@ def main() -> None:
 - FX run metadata: `{fx_root / 'run_metadata.json'}` (`sha256={sha256(fx_root / 'run_metadata.json')}`); status `{fx_metadata['status']}`; contract `{fx_metadata['contract_id']}`; source revision `{fx_metadata['source_identity']['revision']}`.
 - FX layer events: `{fx_root / 'fx_layer_events.csv'}` (`sha256={sha256(fx_root / 'fx_layer_events.csv')}`).
 - Ordered reconstruction evidence: `{mapping_json}` (`sha256={sha256(mapping_json)}`); it retains each stage's ordered nodes, inputs, users, op families, fixed-input context, and evidence guards.
+- Full-request exact-shape assignments: `{template_assignments_path}` (`sha256={sha256(template_assignments_path)}`); 58 current-request shape templates are assigned to all {len(targets)} R01 events only when `(phase, layer_type, q_len, kv_len)` is identical.
 - Inventory sidecars: `{inventory_csv}` (`sha256={sha256(inventory_csv)}`) and `{inventory_json}` (`sha256={sha256(inventory_json)}`).
 - These files are current evidence outside `perf_trace_bk`; no archived handoff or archived trace is treated as validation.
 
@@ -707,13 +911,13 @@ The exact structural FX selections are:
 ## Execution Reproducibility Contract
 
 - Frozen same-input parent: `{r01_contract['contract_id']}`; canonical SHA-256 `{r01_contract['contract_sha256']}`; file `{r01_contract_path}` (`sha256={sha256(r01_contract_path)}`).
-- R02 instrumentation overlay: `{overlay_path}` (`overlay_sha256={overlay['overlay_sha256']}`, `file_sha256={sha256(overlay_path)}`). The only intentional execution delta is `PRA_BACKEND_PERF_PROCESS_PROFILE: 0 -> 1` plus the nine explicit process targets; prompt, model, sampling, backend, warmup, device, and eager execution remain frozen.
+- R02 instrumentation overlay: `{overlay_path}` (`overlay_sha256={overlay['overlay_sha256']}`, `file_sha256={sha256(overlay_path)}`). The intended instrumentation delta is `PRA_BACKEND_PERF_PROCESS_PROFILE: 0 -> 1`, {len(targets)} exact event targets, and {len(inventory)} exact process/fragment targets. Prompt, model, sampling, attention backend, warmup, device mapping, and eager execution remain frozen; current worktree source-state differences from the R01 record are explicitly retained in the overlay instead of being hidden.
 - Input: `{prompt['dataset']}`, row `{prompt['dataset_row']}`; rendered prompt token count `{prompt['rendered_prompt_token_count']}`; rendered prompt SHA-256 `{prompt['rendered_prompt_sha256']}`; rendered token-ID SHA-256 `{prompt['rendered_prompt_token_ids_sha256']}`; `enable_thinking={str(prompt['enable_thinking']).lower()}`.
 - Sampling: `temperature={sampling['temperature']}`, `top_p={sampling['top_p']}`, `top_k={sampling['top_k']}`, `min_p={sampling['min_p']}`, `seed={sampling['seed']}`, `ignore_eos={str(sampling['ignore_eos']).lower()}`, `max_new_tokens={sampling['max_new_tokens']}`; one identical warmup.
 - Model/runtime: `{r01_contract['model']['architecture']}`, BF16, 64 layers, resolved checkpoint `{r01_contract['model']['resolved_model_root']}`, eager mode, attention backend `{config['attention_backend']}`, max batched tokens `{config['max_num_batched_tokens']}`, TP/PP 1.
-- Source: `{source_root}` at `{git_revision}` on branch `{git_branch}`. The current Python model source is the same revision used by both the FX structural capture and R01.
+- Source: `{source_root}` at R02 stage revision `{git_revision}` on branch `{git_branch}`; R01 recorded revision `{r01_revision}`. Revision equality is not a gate. The FX capture and process validation use the frozen R02 stage checkout, while exact dirty-state and TunableOp-profile relations are recorded in `source.source_state_relation` in the overlay.
 - Device: physical DCU `{r01_contract['device']['physical_device_id']}` / logical device `{r01_contract['device']['logical_device_id']}` / unique ID `{r01_contract['device']['unique_id']}` through `HIP_VISIBLE_DEVICES=1` and `CUDA_VISIBLE_DEVICES=1`; hipprof is not passed `--devices 0`.
-- Structural FX contract `{fx_metadata['contract_id']}` is not the same execution contract as R01 (historical OpenAI-chat rendering/max-token setup and different device). It is used only to reconstruct current-code process structure and is never merged with R01 runtime or timing evidence.
+- Structural FX capture contract `{fx_metadata['contract_id']}` is the frozen R01 same-input contract executed in the same fresh-run lineage on physical DCU 1. Its response came from the original eager decoder; post-request FX replay is structural evidence only and is never merged with R01 timing evidence.
 
 The exact R01-bound process validation selections are:
 
@@ -737,7 +941,7 @@ The exact R01-bound process validation selections are:
 - Parent: `pra.layer.inputN_layerM.<phase>.<layer_type>`.
 - Child: `pra.fx_process.inputN_layerM.<process_id>[.<fragment_id>]`.
 - Event identity is unique in the measured request; process/fragment identity is unique within the event; inventory `nvtx_range_name` values are globally unique.
-- `aggregation_key` is stable within one event and logical process. The shared residual-add/RMSNorm transition deliberately has its own combined key because one current fused runtime call crosses two offline FX stages and must be counted once.
+- `aggregation_key` is stable within one event and logical process. `output_projection.part01_*` and `output_projection__post_attention_rmsnorm_fused.part02_shared_fusion` share the event-local `output_projection_transition` key; the second fragment remains ambiguity-labeled because one current fused runtime call crosses two offline FX stages and must be counted once.
 - Guard: ranges exist only when `PRA_BACKEND_PERF_PROCESS_PROFILE=1` and the event is listed in `PRA_BACKEND_PERF_PROCESS_TARGETS`.
 
 ## Expected Trace Outputs
@@ -762,7 +966,8 @@ The exact R01-bound process validation selections are:
 
 ## Open Risks
 
-- The current FX structural capture uses `{fx_metadata['contract_id']}`, whose historical rendering and q/past/kv contexts differ from the frozen R01 same-input contract. This is an explicit structural-transfer boundary, not a same-run timing join; the exact event contexts for both contracts are recorded above.
+- The current TunableOp profile SHA-256 is `{current_profile_sha256}`, while R01 recorded `{r01_profile_sha256}`. R02 uses the current worktree profile and proves exact output equivalence, but this source-state difference prevents treating R02 host durations as directly comparable R01 performance measurements; Stage A makes no such timing claim.
+- {mapping['full_request_template_assignments']['relation_counts'].get('exact_shape_template_transfer', 0)} target events use an explicitly labeled exact-shape structural transfer from one of the 58 fresh templates. Transfer requires identical `(phase, layer_type, q_len, kv_len)` and is not a temporal, stream-order, or queue-order dependency claim.
 - `output_projection` ends with residual addition in offline FX, while the current eager runtime fuses that addition with `post_attention_rmsnorm`. The combined range remains `status=ambiguous_shared_fusion`, is emitted once, and must never be duplicated into both source stages.
 - Opaque `vllm.gdn_attention_core`, `vllm.unified_kv_cache_update`, and `vllm.unified_attention_with_output` internals are not reconstructed from FX.
 - Kernel-family entries are hypotheses only. This Stage-A handoff defines and validates instrumentation; it does not establish process DCU kernel time.

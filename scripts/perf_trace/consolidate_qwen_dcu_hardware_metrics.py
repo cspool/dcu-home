@@ -195,6 +195,42 @@ def exact_metadata_contract(
         int(baseline["expected_process_range_count"]),
     )
     require_equal(
+        f"{mode} exact process-range filter",
+        metadata.get("exact_process_range_filter_enabled"),
+        True,
+    )
+    require_equal(
+        f"{mode} exact process-range set",
+        sorted(metadata["exact_process_range_targets"]),
+        sorted(baseline["exact_process_range_targets"]),
+    )
+    require_equal(
+        f"{mode} emitted exact process-range set",
+        sorted(metadata["emitted_process_ranges"]),
+        sorted(metadata["exact_process_range_targets"]),
+    )
+    selection_contract = run_contract["selection_plan"]
+    require_equal(
+        f"{mode} process target transport",
+        metadata["process_target_transport"]["file_sha256"],
+        selection_contract["process_targets"]["sha256"],
+    )
+    require_equal(
+        f"{mode} exact process-range transport",
+        metadata["exact_process_range_target_transport"]["file_sha256"],
+        selection_contract["exact_process_range_targets"]["sha256"],
+    )
+    require_equal(
+        f"{mode} process target file-only transport",
+        int(metadata["process_target_transport"]["inline_count"]),
+        0,
+    )
+    require_equal(
+        f"{mode} exact range file-only transport",
+        int(metadata["exact_process_range_target_transport"]["inline_count"]),
+        0,
+    )
+    require_equal(
         f"{mode} max new tokens",
         int(metadata["max_new_tokens"]),
         int(baseline["max_new_tokens"]),
@@ -243,9 +279,19 @@ def exact_metadata_contract(
         metadata.get("request_synchronized_latency_is_replay_distorted"),
         True,
     )
+    require_equal(
+        f"{mode} observed layer count",
+        int(metadata["observed_layer_events"]),
+        int(baseline["observed_layer_events"]),
+    )
+    require_equal(
+        f"{mode} observed forward count",
+        int(metadata["observed_forwards"]),
+        int(baseline["observed_forwards"]),
+    )
 
 
-def probe_device() -> dict[str, Any]:
+def probe_device(expected_unique_id: str) -> dict[str, Any]:
     os.environ["HIP_VISIBLE_DEVICES"] = "1"
     os.environ["CUDA_VISIBLE_DEVICES"] = "1"
     import torch
@@ -275,7 +321,9 @@ def probe_device() -> dict[str, Any]:
         )
     )
     card = smi.get("card1", {})
-    require_equal("live device unique ID", card.get("Unique ID"), "TCH19625050401")
+    if not expected_unique_id:
+        raise ConsolidationError("frozen contract lacks a physical-device unique ID")
+    require_equal("live device unique ID", card.get("Unique ID"), expected_unique_id)
     require_equal("live device name", card.get("Card Series"), "BW")
     return {
         "physical_device": 1,
@@ -316,9 +364,14 @@ def main() -> None:
     run_contract_path = args.run_contract.resolve()
     selection_path = args.selection_plan.resolve()
     non_replay_path = args.non_replay_family_ledger.resolve()
-    if output_root.name != "R04" or "perf_trace_bk" in output_root.parts:
+    if "perf_trace_bk" in output_root.parts:
         raise ConsolidationError("invalid live R04 output root")
     run_contract = load_json(run_contract_path)
+    require_equal(
+        "R04 output/run-contract root",
+        str(output_root),
+        str(run_contract_path.parent),
+    )
     selection = read_csv(selection_path)
     expected_rows = read_csv(non_replay_path)
     baseline = load_json(args.r02_run_metadata.resolve())
@@ -417,6 +470,80 @@ def main() -> None:
             mode_provenance[mode].get("pmc_type"),
             "0",
         )
+        pmc_contract = run_contract["pmc_collection"]
+        require_equal(
+            f"{mode} analyzer collection policy",
+            mode_summaries[mode].get("collection_policy"),
+            "bounded-family-superset",
+        )
+        require_equal(
+            f"{mode} analyzer capture batch",
+            mode_summaries[mode].get("capture_batch_id"),
+            pmc_contract["capture_batch_id"],
+        )
+        require_equal(
+            f"{mode} analyzer literal kernel filter",
+            mode_summaries[mode].get("kernel_name_filter"),
+            pmc_contract["kernel_name_filter"],
+        )
+        require_equal(
+            f"{mode} runner collection policy",
+            mode_provenance[mode].get("workflow05_pmc_collection_policy"),
+            pmc_contract["policy"],
+        )
+        require_equal(
+            f"{mode} runner exact process filter",
+            mode_provenance[mode].get("workflow05_exact_process_filter_required"),
+            "1",
+        )
+        require_equal(
+            f"{mode} runner literal kernel filter",
+            mode_provenance[mode].get("kernel_name_filter"),
+            pmc_contract["kernel_name_filter"],
+        )
+        require_equal(
+            f"{mode} runner capture batch",
+            mode_provenance[mode].get("workflow05_pmc_capture_batch_id"),
+            pmc_contract["capture_batch_id"],
+        )
+        require_equal(
+            f"{mode} runner selection-plan SHA",
+            mode_provenance[mode].get("workflow05_target_selection_plan_sha256"),
+            run_contract["selection_plan"]["sha256"],
+        )
+        require_equal(
+            f"{mode} runner process-target file SHA",
+            mode_provenance[mode].get("process_targets_file_sha256"),
+            run_contract["selection_plan"]["process_targets"]["sha256"],
+        )
+        require_equal(
+            f"{mode} runner exact-range file SHA",
+            mode_provenance[mode].get("exact_process_range_targets_file_sha256"),
+            run_contract["selection_plan"]["exact_process_range_targets"]["sha256"],
+        )
+        require_equal(
+            f"{mode} collector-side process filter boundary",
+            mode_provenance[mode].get("collector_side_process_window_filter"),
+            "false",
+        )
+        require_equal(
+            f"{mode} source revision",
+            mode_provenance[mode].get("source_revision"),
+            run_contract["contract"]["source_revision"],
+        )
+        profiler_args = mode_provenance[mode].get("hipprof_args", "").split()
+        required_profiler_args = {
+            "--hiptx-trace",
+            "--hip-trace",
+            "--pmc-type",
+            "--kernel-name",
+            {"pmc": "--pmc", "pmc-read": "--pmc-read", "pmc-write": "--pmc-write"}[mode],
+        }
+        if not required_profiler_args.issubset(profiler_args):
+            raise ConsolidationError(
+                f"{mode} profiler arguments lack required live bindings: "
+                f"{sorted(required_profiler_args - set(profiler_args))}"
+            )
         exact_metadata_contract(
             mode, mode_metadata[mode], baseline, run_contract
         )
@@ -430,7 +557,9 @@ def main() -> None:
     if len({str(path.parent) for path in mode_analysis.values()}) != 3:
         raise ConsolidationError("the three replay captures are not separate")
 
-    device_probe = probe_device()
+    device_probe = probe_device(
+        str(run_contract["contract"]["device"].get("unique_id", ""))
+    )
     expected_keys: list[tuple[str, str, str]] = []
     expected_by_key: dict[tuple[str, str, str], dict[str, str]] = {}
     for row in expected_rows:
@@ -866,20 +995,18 @@ def main() -> None:
                 ),
             }
         )
+    selection_identity = {
+        (row["event_id"], row["stage"]): (
+            int(row["forward_id"]),
+            int(row["layer"]),
+        )
+        for row in selection
+    }
+    if len(selection_identity) != len(selection):
+        raise ConsolidationError("selection has duplicate event/stage identities")
     process_rows.sort(
         key=lambda row: (
-            int(next(
-                item["forward_id"]
-                for item in selection
-                if item["event_id"] == row["event_id"]
-                and item["stage"] == row["stage"]
-            )),
-            int(next(
-                item["layer"]
-                for item in selection
-                if item["event_id"] == row["event_id"]
-                and item["stage"] == row["stage"]
-            )),
+            *selection_identity[(row["event_id"], row["stage"])],
             int(row["process_gpu_order"]),
         )
     )
@@ -1001,7 +1128,7 @@ def main() -> None:
         f"Status: **{status}**",
         "",
         "- Device: physical DCU 1, live-verified gfx936.",
-        "- Main row unit: current Workflow-02 launch-owned `matched_kernel_family`.",
+        "- Main row unit: same-run R02 launch-owned `matched_kernel_family`.",
         "- `timing_source=workflow02_non_replay_family_row`.",
         "- `hardware_join_key=event_id+stage+matched_kernel_family`.",
         "- `pmc_replay_timing_used_as_latency=false`.",
@@ -1071,21 +1198,24 @@ def main() -> None:
         pre_collection_sha,
         run_contract["selection_plan"]["sha256"],
     )
+    expected_keys_by_process: dict[
+        tuple[str, str], list[tuple[str, str, str]]
+    ] = defaultdict(list)
+    for key in expected_keys:
+        expected_keys_by_process[(key[0], key[1])].append(key)
+    hardware_status_by_target = {
+        str(row["target_id"]): str(row["dcu_pmc_status"])
+        for row in hardware_rows
+    }
     for row in selection:
         if row["expected_no_kernel"].strip().lower() == "true":
             row["collection_status"] = "no_kernel"
         else:
-            target_keys = [
-                key
-                for key in expected_keys
-                if key[0] == row["event_id"] and key[1] == row["stage"]
+            target_keys = expected_keys_by_process[
+                (row["event_id"], row["stage"])
             ]
             target_statuses = {
-                next(
-                    item["dcu_pmc_status"]
-                    for item in hardware_rows
-                    if item["target_id"] == ":".join(key)
-                )
+                hardware_status_by_target[":".join(key)]
                 for key in target_keys
             }
             row["collection_status"] = (

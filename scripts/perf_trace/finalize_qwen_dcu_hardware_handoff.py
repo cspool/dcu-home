@@ -47,6 +47,16 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--handoff-output", required=True, type=Path)
     parser.add_argument("--branch", required=True)
     parser.add_argument("--run-id", required=True)
+    parser.add_argument("--workflow05-policy-version", required=True)
+    parser.add_argument(
+        "--evidence-acquisition-mode",
+        choices=("fresh_no_prior_runtime_reuse",),
+        required=True,
+    )
+    parser.add_argument(
+        "--maximum-profiling-wall-time-seconds", type=float, required=True
+    )
+    parser.add_argument("--maximum-trace-bundle-bytes", type=int, required=True)
     return parser.parse_args()
 
 
@@ -119,11 +129,12 @@ def main() -> int:
     artifact_root = args.artifact_root.resolve()
     handoff_output = args.handoff_output.resolve()
 
-    expected_artifact_root = runtime_root / "artifacts" / RUNTIME_GOAL
+    expected_artifact_parent = runtime_root / "artifacts" / RUNTIME_GOAL
     expected_handoff = runtime_root / "handoffs" / f"{RUNTIME_GOAL}.json"
-    if artifact_root != expected_artifact_root:
+    if artifact_root.parent != expected_artifact_parent:
         raise RuntimeError(
-            f"artifact root must be {expected_artifact_root}, got {artifact_root}"
+            "artifact root must be one current R04 attempt beneath "
+            f"{expected_artifact_parent}, got {artifact_root}"
         )
     if handoff_output != expected_handoff:
         raise RuntimeError(
@@ -165,7 +176,7 @@ def main() -> int:
     source_branch = git_value(source_root, "rev-parse", "--abbrev-ref", "HEAD")
     contract = run_contract["contract"]
     if source_revision != contract["source_revision"]:
-        raise RuntimeError("live source revision differs from frozen contract")
+        raise RuntimeError("live source revision differs from frozen R04 stage state")
     if Path(contract["source_root"]).resolve() != source_root:
         raise RuntimeError("source root mismatch")
     if not Path(contract["model_root"]).absolute().is_relative_to(project_root):
@@ -204,14 +215,19 @@ def main() -> int:
         raise RuntimeError("pre-collection selection plan SHA-256 mismatch")
 
     replay_collections: dict[str, Any] = {}
+    profiling_wall_seconds_by_mode: dict[str, float] = {}
     hipprof_path: str | None = None
     hipprof_sha: str | None = None
     for mode in REPLAY_MODES:
-        replay_root = artifact_root / "replays" / mode
-        analysis_root = replay_root / "analysis"
-        metadata_path = one_glob(replay_root, "hipprof_sameinput_*.json")
+        frozen = run_contract["replay_bindings"][mode]
+        analysis_root = Path(frozen["analysis_dir"]).resolve()
+        replay_root = analysis_root.parent
+        require_relative(replay_root, artifact_root, f"{mode} replay root")
+        if analysis_root != replay_root / "analysis":
+            raise RuntimeError(f"{mode}: unexpected analysis directory layout")
+        metadata_path = one_glob(replay_root, "r04_*.json")
         runtime_events_path = one_glob(
-            replay_root, "hipprof_sameinput_*.layer_events.runtime.jsonl"
+            replay_root, "r04_*.layer_events.runtime.jsonl"
         )
         metadata = load_json(metadata_path)
         trace_summary_path = analysis_root / "process_trace_summary.json"
@@ -227,13 +243,18 @@ def main() -> int:
         if trace_summary["contract_sha256"] != contract["canonical_sha256"]:
             raise RuntimeError(f"{mode}: canonical contract SHA-256 mismatch")
 
-        frozen = run_contract["replay_bindings"][mode]
         db_path = Path(frozen["raw_db"]).resolve()
         metrics_path = db_path.with_suffix(".txt")
         provenance_path = replay_root / "tool_provenance.txt"
         provenance = provenance_map(provenance_path)
+        if sha256(metadata_path) != frozen["metadata_sha256"]:
+            raise RuntimeError(f"{mode}: run metadata changed after consolidation")
+        if sha256(runtime_events_path) != trace_summary["runtime_events_sha256"]:
+            raise RuntimeError(f"{mode}: runtime events changed after strict analysis")
         if sha256(db_path) != frozen["raw_db_sha256"]:
             raise RuntimeError(f"{mode}: raw DB changed after consolidation")
+        if sha256(metrics_path) != pmc_summary["metrics_sha256"]:
+            raise RuntimeError(f"{mode}: raw PMC metrics changed after exact matching")
         if sha256(trace_summary_path) != frozen["trace_summary_sha256"]:
             raise RuntimeError(f"{mode}: trace summary changed after consolidation")
         if sha256(pmc_summary_path) != frozen["pmc_summary_sha256"]:
@@ -257,6 +278,16 @@ def main() -> int:
             raise RuntimeError("hipprof executable changed between replay modes")
         if sha256(Path(hipprof_path)) != hipprof_sha:
             raise RuntimeError("live hipprof executable SHA-256 mismatch")
+        started = datetime.strptime(
+            provenance["started_utc"], "%Y-%m-%dT%H:%M:%SZ"
+        ).replace(tzinfo=timezone.utc)
+        finished = datetime.strptime(
+            provenance["finished_utc"], "%Y-%m-%dT%H:%M:%SZ"
+        ).replace(tzinfo=timezone.utc)
+        elapsed = (finished - started).total_seconds()
+        if elapsed < 0:
+            raise RuntimeError(f"{mode}: negative profiler wall time")
+        profiling_wall_seconds_by_mode[mode] = elapsed
 
         checks = trace_summary["checks"]
         replay_collections[mode] = {
@@ -367,6 +398,22 @@ def main() -> int:
     if len(baseline_results) != 1:
         raise RuntimeError("replay modes produced different SAME_INPUT results")
 
+    profiling_wall_seconds = sum(profiling_wall_seconds_by_mode.values())
+    if profiling_wall_seconds > args.maximum_profiling_wall_time_seconds:
+        raise RuntimeError(
+            "profiling wall-time budget exceeded: "
+            f"{profiling_wall_seconds} > "
+            f"{args.maximum_profiling_wall_time_seconds}"
+        )
+    artifact_bytes = sum(
+        path.stat().st_size for path in artifact_root.rglob("*") if path.is_file()
+    )
+    if artifact_bytes > args.maximum_trace_bundle_bytes:
+        raise RuntimeError(
+            "trace artifact budget exceeded: "
+            f"{artifact_bytes} > {args.maximum_trace_bundle_bytes}"
+        )
+
     scripts_root = source_root / "scripts" / "perf_trace"
     source_tools = {name: ref(scripts_root / name) for name in SOURCE_TOOLS}
     non_replay_ledger = Path(
@@ -389,7 +436,18 @@ def main() -> int:
         "schema_version": 1,
         "runtime_goal": RUNTIME_GOAL,
         "status": "complete",
+        "execution_status": "complete",
+        "evidence_status": "complete",
+        "coverage_target_met": True,
+        "next_authorization_required": False,
         "skill": SKILL,
+        "branch": args.branch,
+        "run_id": args.run_id,
+        "runtime_root": str(runtime_root),
+        "runtime_artifact_root": str(artifact_root),
+        "workflow05_policy_version": args.workflow05_policy_version,
+        "evidence_acquisition_mode": args.evidence_acquisition_mode,
+        "completed_utc": completed_utc,
         "run": {
             "branch": args.branch,
             "run_id": args.run_id,
@@ -400,19 +458,38 @@ def main() -> int:
             "rocm_dcu_hip_profiler_replays": 3,
         },
         "workflow": {
-            "role": "project live hipprof PMC replay diagnostics projected onto the current Workflow-02 process/family denominator",
+            "role": "project live hipprof PMC replay diagnostics projected onto the same-run R02 process/family denominator",
             "replay_modes": list(REPLAY_MODES),
             "pmc_type": 0,
             "selection_mode": run_contract["selection_plan"]["selection_mode"],
             "selection_filtered": run_contract["selection_plan"]["filtered"],
             "archive_used_as_current_evidence": False,
+            "pmc_collection_policy": run_contract["pmc_collection"]["policy"],
+            "capture_batch_id": run_contract["pmc_collection"]["capture_batch_id"],
+            "one_literal_kernel_name_filter_per_capture_batch": True,
+            "kernel_name_filter": run_contract["pmc_collection"]["kernel_name_filter"],
+            "process_target_transport": "newline_file",
+            "exact_process_range_filter_required": True,
+            "collector_side_process_window_filter_required": False,
+        },
+        "artifact_budget": {
+            "artifact_bytes_at_final_validation": artifact_bytes,
+            "maximum_trace_bundle_bytes": args.maximum_trace_bundle_bytes,
+            "profiling_wall_time_seconds": profiling_wall_seconds,
+            "profiling_wall_time_seconds_by_mode": profiling_wall_seconds_by_mode,
+            "maximum_profiling_wall_time_seconds": (
+                args.maximum_profiling_wall_time_seconds
+            ),
+            "within_limit": True,
         },
         "same_input_parent": {
             "contract_id": contract["contract_id"],
             "contract_path": contract["path"],
             "contract_file_sha256": contract["file_sha256"],
             "contract_canonical_sha256": contract["canonical_sha256"],
-            "source_revision": contract["source_revision"],
+            "source_revision": contract["r01_source_revision"],
+            "r04_stage_source_revision": contract["source_revision"],
+            "source_hash_equality_required": False,
             "model_root": contract["model_root"],
             "resolved_model_root": contract["resolved_model_root"],
             "served_model_name": contract["served_model_name"],
@@ -460,7 +537,7 @@ def main() -> int:
             },
         },
         "pmc_name_order_matching": {
-            "rule": "same profiler PID + exact dispatch-order position + exact c++filt demangled kernel name",
+            "rule": "same-replay profiler PID + exact observed-name trace subsequence + dispatch-order position + exact c++filt demangled kernel name, followed by strict HIPTX/runtime/HIPOPS event-stage-family ownership",
             "minimum_global_match_rate": 0.99,
             "fuzzy_name_matching_used": False,
             "row_position_family_join_used": False,
@@ -567,7 +644,13 @@ def main() -> int:
             "timing_source": coverage["timing_source"],
         },
         "evidence_boundary": {
-            "establishes": "complete current-denominator gfx936 hipprof PMC diagnostics for all 119 launch-owning kernel-family rows plus 18 explicit no-kernel rows",
+            "establishes": (
+                "complete current-denominator gfx936 hipprof PMC diagnostics "
+                f"for all {run_contract['expected_denominator']['kernel_family_rows']} "
+                "launch-owning kernel-family rows plus "
+                f"{run_contract['expected_denominator']['no_kernel_family_rows']} "
+                "explicit no-kernel rows"
+            ),
             "does_not_establish": "direct process latency from replay duration, unavailable DRAM bandwidth, or strict hardware causality beyond the exposed counters/proxies",
             "pmc_replay_timing_used_as_latency": False,
             "pmc_is_latency_evidence": False,
@@ -579,6 +662,7 @@ def main() -> int:
             "device_timestamp_overlap_attribution_used": False,
             "expected_kernel_family_hypotheses_used_as_measurements": False,
             "archive_backup_used_as_current_evidence": False,
+            "prior_runtime_evidence_used_for_measurement_or_attribution": False,
         },
         "handoff_output": str(handoff_output),
     }

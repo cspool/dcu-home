@@ -8,6 +8,7 @@ import functools
 import hashlib
 import json
 import os
+import re
 import subprocess
 import sys
 import threading
@@ -15,6 +16,14 @@ import time
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
+
+
+PROCESS_RANGE_RE = re.compile(
+    r"^pra\.fx_process\."
+    r"(?P<event>input\d+_layer\d+)\."
+    r"(?P<process>[A-Za-z0-9_]+)"
+    r"(?:\.(?P<fragment>[A-Za-z0-9_]+))?$"
+)
 
 
 def _sha256_bytes(data: bytes) -> str:
@@ -36,6 +45,114 @@ def _load_json(path: Path) -> dict[str, Any]:
     if not isinstance(value, dict):
         raise RuntimeError(f"{path} must contain a JSON object")
     return value
+
+
+def _parse_csv_set(name: str) -> set[str]:
+    raw = os.environ.get(name, "")
+    values = [item.strip() for item in raw.split(",") if item.strip()]
+    if len(values) != len(set(values)):
+        raise RuntimeError(f"{name} contains duplicate values")
+    return set(values)
+
+
+def _parse_target_set(name: str, file_name: str) -> tuple[set[str], dict[str, Any]]:
+    """Load a bounded target set from CSV text and/or a newline file.
+
+    Large full-request process plans exceed a safe environment-variable size,
+    so the file transport is the required path for that mode.  Combining both
+    transports is supported only when their union has no duplicate.
+    """
+    inline = _parse_csv_set(name)
+    file_value = os.environ.get(file_name, "").strip()
+    from_file: list[str] = []
+    resolved_file: Path | None = None
+    if file_value:
+        resolved_file = Path(file_value).expanduser().resolve()
+        if not resolved_file.is_file():
+            raise RuntimeError(f"{file_name} is not a file: {resolved_file}")
+        for line_number, raw_line in enumerate(
+            resolved_file.read_text(encoding="utf-8").splitlines(), 1
+        ):
+            value = raw_line.strip()
+            if not value or value.startswith("#"):
+                continue
+            if "," in value:
+                raise RuntimeError(
+                    f"{file_name}:{line_number} must contain one target per line"
+                )
+            from_file.append(value)
+        if len(from_file) != len(set(from_file)):
+            raise RuntimeError(f"{file_name} contains duplicate values")
+    duplicate = inline.intersection(from_file)
+    if duplicate:
+        raise RuntimeError(
+            f"{name} and {file_name} overlap: {sorted(duplicate)[:8]}"
+        )
+    values = set(inline).union(from_file)
+    provenance = {
+        "inline_count": len(inline),
+        "file_count": len(from_file),
+        "total_count": len(values),
+        "file": str(resolved_file) if resolved_file is not None else None,
+        "file_sha256": (
+            _sha256_bytes(resolved_file.read_bytes())
+            if resolved_file is not None
+            else None
+        ),
+    }
+    return values, provenance
+
+
+@contextmanager
+def _live_utilization_window() -> Any:
+    """Arm and stop the launcher-supervised live-utilization sidecar."""
+    names = {
+        "ready": "PRA_BACKEND_LIVE_UTIL_READY_FILE",
+        "arm": "PRA_BACKEND_LIVE_UTIL_ARM_FILE",
+        "stop": "PRA_BACKEND_LIVE_UTIL_STOP_FILE",
+        "samples": "PRA_BACKEND_LIVE_UTIL_SAMPLES_FILE",
+        "summary": "PRA_BACKEND_LIVE_UTIL_SUMMARY_FILE",
+    }
+    values = {key: os.environ.get(name, "").strip() for key, name in names.items()}
+    configured = [key for key, value in values.items() if value]
+    if not configured:
+        yield {"enabled": False}
+        return
+    if len(configured) != len(names):
+        raise RuntimeError(
+            "live utilization sidecar requires all control/output paths; "
+            f"configured={configured}"
+        )
+    paths = {key: Path(value).expanduser().resolve() for key, value in values.items()}
+    if not paths["ready"].is_file():
+        raise RuntimeError(f"live utilization sidecar is not ready: {paths['ready']}")
+    ready = _load_json(paths["ready"])
+    if ready.get("status") != "ready_waiting_for_arm":
+        raise RuntimeError("live utilization ready record has an invalid status")
+    for key in ("arm", "stop", "samples", "summary"):
+        if paths[key].exists():
+            raise RuntimeError(f"fresh live utilization path already exists: {paths[key]}")
+    paths["arm"].parent.mkdir(parents=True, exist_ok=True)
+    arm_realtime_ns = time.time_ns()
+    arm_monotonic_ns = time.monotonic_ns()
+    paths["arm"].touch(exist_ok=False)
+    state = {
+        "enabled": True,
+        "ready": str(paths["ready"]),
+        "arm": str(paths["arm"]),
+        "stop": str(paths["stop"]),
+        "samples": str(paths["samples"]),
+        "summary": str(paths["summary"]),
+        "arm_realtime_ns": arm_realtime_ns,
+        "arm_monotonic_ns": arm_monotonic_ns,
+        "ready_payload": ready,
+    }
+    try:
+        yield state
+    finally:
+        state["stop_realtime_ns"] = time.time_ns()
+        state["stop_monotonic_ns"] = time.monotonic_ns()
+        paths["stop"].touch(exist_ok=False)
 
 
 @contextmanager
@@ -130,13 +247,46 @@ def _activate_current_build(root_dir: Path) -> dict[str, str]:
 class ProcessRangeRecorder:
     """Install opt-in process ranges around the current eager operators."""
 
-    def __init__(self, *, targets: set[str]) -> None:
+    def __init__(
+        self,
+        *,
+        targets: set[str],
+        exact_range_targets: set[str] | None = None,
+    ) -> None:
         if not targets:
             raise RuntimeError("process profiling requires at least one target event")
         self.targets = set(targets)
+        self.exact_range_targets = (
+            set(exact_range_targets)
+            if exact_range_targets is not None
+            else None
+        )
+        if self.exact_range_targets is not None:
+            if not self.exact_range_targets:
+                raise RuntimeError("exact process range target list is empty")
+            invalid = sorted(
+                name
+                for name in self.exact_range_targets
+                if PROCESS_RANGE_RE.fullmatch(name) is None
+            )
+            if invalid:
+                raise RuntimeError(
+                    f"invalid exact process range targets: {invalid}"
+                )
+            range_events = {
+                PROCESS_RANGE_RE.fullmatch(name).group("event")
+                for name in self.exact_range_targets
+            }
+            if range_events != self.targets:
+                raise RuntimeError(
+                    "event and exact process range targets differ: "
+                    f"events={sorted(self.targets)}, "
+                    f"range_events={sorted(range_events)}"
+                )
         self._state = threading.local()
         self.seen_targets: set[str] = set()
         self.expected_ranges: set[str] = set()
+        self.emitted_ranges: set[str] = set()
 
     @staticmethod
     def _range_name(
@@ -178,10 +328,15 @@ class ProcessRangeRecorder:
             ("mlp", None),
             ("layer_output", None),
         ]
-        return [
+        names = [
             self._range_name(event_id, process_id, fragment_id)
             for process_id, fragment_id in common + attention_stages + tail
         ]
+        if self.exact_range_targets is not None:
+            names = [
+                name for name in names if name in self.exact_range_targets
+            ]
+        return names
 
     def selected(self, event_id: str) -> bool:
         return event_id in self.targets
@@ -197,19 +352,28 @@ class ProcessRangeRecorder:
         finally:
             self._state.event_id = previous_event_id
 
+    @contextmanager
     def range(
         self,
         process_id: str,
         fragment_id: str | None = None,
     ):
-        import torch
-
         event_id = getattr(self._state, "event_id", None)
         if event_id is None:
             raise RuntimeError("process range entered outside a selected layer")
-        return torch.cuda.nvtx.range(
-            self._range_name(event_id, process_id, fragment_id)
-        )
+        name = self._range_name(event_id, process_id, fragment_id)
+        if (
+            self.exact_range_targets is not None
+            and name not in self.exact_range_targets
+        ):
+            yield
+            return
+
+        import torch
+
+        self.emitted_ranges.add(name)
+        with torch.cuda.nvtx.range(name):
+            yield
 
     def forward_decoder_layer(
         self,
@@ -291,7 +455,11 @@ class ProcessRangeRecorder:
     def install(self) -> None:
         import torch
         from einops import rearrange
-        from vllm.model_executor.models.qwen3_5 import Qwen3_5GatedDeltaNet
+        from vllm.model_executor.models.qwen3_5 import (
+            Qwen3_5GatedDeltaNet,
+            _can_use_qwen35_gdn_strided_z_rmsnorm,
+            _qwen35_gdn_strided_z_rmsnorm,
+        )
         from vllm.model_executor.models.qwen3_next import Qwen3NextAttention
 
         recorder = self
@@ -326,7 +494,11 @@ class ProcessRangeRecorder:
                 a = a.contiguous()
 
             with recorder.range("gdn_recurrent_core"):
-                core_attn_out = torch.zeros(
+                # Keep this allocation identical to the current
+                # Qwen3_5GatedDeltaNet.forward implementation.  The process
+                # wrapper may add ranges only; it must not restore the older
+                # zero-filled allocation or introduce an extra device kernel.
+                core_attn_out = torch.empty(
                     (
                         num_tokens,
                         module.num_v_heads // module.tp_size,
@@ -344,13 +516,23 @@ class ProcessRangeRecorder:
                 )
 
             with recorder.range("gdn_gated_rmsnorm"):
-                z_shape_og = z.shape
-                core_attn_out = core_attn_out.reshape(
-                    -1, core_attn_out.shape[-1]
-                )
-                z = z.reshape(-1, z.shape[-1])
-                core_attn_out = module.norm(core_attn_out, z)
-                core_attn_out = core_attn_out.reshape(z_shape_og)
+                if _can_use_qwen35_gdn_strided_z_rmsnorm(
+                    core_attn_out, z, module.norm.weight
+                ):
+                    core_attn_out = _qwen35_gdn_strided_z_rmsnorm(
+                        core_attn_out,
+                        z,
+                        module.norm.weight,
+                        module.norm.eps,
+                    )
+                else:
+                    z_shape_og = z.shape
+                    core_attn_out = core_attn_out.reshape(
+                        -1, core_attn_out.shape[-1]
+                    )
+                    z = z.reshape(-1, z.shape[-1])
+                    core_attn_out = module.norm(core_attn_out, z)
+                    core_attn_out = core_attn_out.reshape(z_shape_og)
                 core_attn_out = rearrange(
                     core_attn_out, "... h d -> ... (h d)"
                 )
@@ -441,6 +623,18 @@ class ProcessRangeRecorder:
             )
         if not self.expected_ranges:
             raise RuntimeError("no process ranges were expected")
+        if self.exact_range_targets is not None:
+            missing_ranges = sorted(
+                self.exact_range_targets - self.emitted_ranges
+            )
+            extra_ranges = sorted(
+                self.emitted_ranges - self.exact_range_targets
+            )
+            if missing_ranges or extra_ranges:
+                raise RuntimeError(
+                    "exact process range coverage mismatch: "
+                    f"missing={missing_ranges}, extra={extra_ranges}"
+                )
 
 
 class LayerRangeRecorder:
@@ -510,7 +704,11 @@ class LayerRangeRecorder:
                 "contract_sha256": self.contract_sha256,
                 "forward_id": self.current["forward_id"],
                 "layer_idx": layer_idx,
-                "occurrence": 0,
+                # Workflow 04/05 stable identities use the 1-based
+                # input/forward occurrence. Preserve the raw within-range
+                # occurrence separately for exact historical-plan joins.
+                "occurrence": self.current["forward_id"],
+                "source_range_occurrence": 0,
                 "phase": self.current["phase"],
                 "q_len": self.current["q_len"],
                 "past_len": self.current["past_len"],
@@ -519,7 +717,7 @@ class LayerRangeRecorder:
             }
             event["occurrence_key"] = (
                 f"{self.contract_id}:forward={event['forward_id']}:"
-                f"layer={layer_idx}:occurrence=0"
+                f"layer={layer_idx}:occurrence={event['occurrence']}"
             )
             event["range_name"] = (
                 f"pra.layer.input{event['forward_id']}_layer{layer_idx}."
@@ -664,6 +862,14 @@ def main() -> None:
     parser.add_argument("--dataset", type=Path, required=True)
     parser.add_argument("--dataset-row", type=int, default=0)
     parser.add_argument("--contract", type=Path, required=True)
+    parser.add_argument(
+        "--lineage-manifest",
+        type=Path,
+        help=(
+            "Optional same-run lineage manifest. Required by the fresh R07 "
+            "workflow and recorded in the generated request metadata."
+        ),
+    )
     parser.add_argument("--tag", required=True)
     parser.add_argument("--output-dir", type=Path, required=True)
     parser.add_argument("--max-new-tokens", type=int, required=True)
@@ -696,6 +902,31 @@ def main() -> None:
     computed_contract_sha256 = _canonical_json_sha256(contract_payload)
     if recorded_contract_sha256 != computed_contract_sha256:
         raise RuntimeError("contract_sha256 mismatch")
+    lineage: dict[str, Any] | None = None
+    lineage_record: dict[str, Any] | None = None
+    if args.lineage_manifest is not None:
+        lineage_path = args.lineage_manifest.expanduser().resolve()
+        if not lineage_path.is_file():
+            raise RuntimeError(f"lineage manifest is missing: {lineage_path}")
+        lineage = _load_json(lineage_path)
+        if (
+            lineage.get("schema_version") != 1
+            or lineage.get("status") != "PASS"
+            or lineage.get("evidence_source_policy") != "current_run_only"
+            or lineage.get("source_change_policy")
+            != "stage_trace_instrumentation_allowed"
+            or lineage.get("source_hash_equality_required") is not False
+            or lineage.get("semantic_contract_id") != contract.get("contract_id")
+            or not isinstance(lineage.get("lineage_id"), str)
+            or not lineage.get("lineage_id")
+        ):
+            raise RuntimeError(
+                "lineage manifest is incompatible with this fresh request"
+            )
+        lineage_record = {
+            "path": str(lineage_path),
+            "sha256": _sha256_bytes(lineage_path.read_bytes()),
+        }
 
     event_path = output_dir / f"{args.tag}.layer_events.runtime.jsonl"
     result_path = output_dir / f"{args.tag}.json"
@@ -750,19 +981,27 @@ def main() -> None:
     import torch
     from vllm import LLM, SamplingParams
 
-    process_targets = {
-        item.strip()
-        for item in os.environ.get(
-            "PRA_BACKEND_PERF_PROCESS_TARGETS", ""
-        ).split(",")
-        if item.strip()
-    }
+    process_targets, process_target_provenance = _parse_target_set(
+        "PRA_BACKEND_PERF_PROCESS_TARGETS",
+        "PRA_BACKEND_PERF_PROCESS_TARGETS_FILE",
+    )
+    exact_range_targets, exact_range_target_provenance = _parse_target_set(
+        "PRA_BACKEND_PERF_PROCESS_RANGE_TARGETS",
+        "PRA_BACKEND_PERF_PROCESS_RANGE_TARGETS_FILE",
+    )
     if process_profile_flag == "0" and process_targets:
         raise RuntimeError(
             "process targets must be empty when process profiling is off"
         )
+    if process_profile_flag == "0" and exact_range_targets:
+        raise RuntimeError(
+            "exact process range targets must be empty when profiling is off"
+        )
     process_recorder = (
-        ProcessRangeRecorder(targets=process_targets)
+        ProcessRangeRecorder(
+            targets=process_targets,
+            exact_range_targets=(exact_range_targets or None),
+        )
         if process_profile_flag == "1"
         else None
     )
@@ -828,18 +1067,23 @@ def main() -> None:
         f"contract_{recorded_contract_sha256[:16]}.tag_{args.tag}"
     )
     with _optional_hipprof_session() as hipprof_session:
-        recorder.enabled = True
-        request_start_perf_ns = time.perf_counter_ns()
-        with torch.cuda.nvtx.range(request_marker):
-            measured_output = llm.chat(
-                messages,
-                sampling_params=sampling_params,
-                use_tqdm=False,
-                chat_template_kwargs={"enable_thinking": False},
-            )
-            torch.cuda.synchronize()
-        request_end_perf_ns = time.perf_counter_ns()
-        recorder.enabled = False
+        with _live_utilization_window() as live_utilization_window:
+            recorder.enabled = True
+            request_start_realtime_ns = time.time_ns()
+            request_start_monotonic_ns = time.monotonic_ns()
+            request_start_perf_ns = time.perf_counter_ns()
+            with torch.cuda.nvtx.range(request_marker):
+                measured_output = llm.chat(
+                    messages,
+                    sampling_params=sampling_params,
+                    use_tqdm=False,
+                    chat_template_kwargs={"enable_thinking": False},
+                )
+                torch.cuda.synchronize()
+            request_end_perf_ns = time.perf_counter_ns()
+            request_end_monotonic_ns = time.monotonic_ns()
+            request_end_realtime_ns = time.time_ns()
+            recorder.enabled = False
     recorder.assert_complete()
     if process_recorder is not None:
         process_recorder.assert_complete()
@@ -860,6 +1104,24 @@ def main() -> None:
         raise RuntimeError("vLLM prompt token count differs from frozen rendering")
     if not 0 < measured_result["output_token_count"] <= args.max_new_tokens:
         raise RuntimeError("invalid measured output token count")
+    expected_output = contract.get("same_input", {}).get(
+        "expected_output", {}
+    )
+    if expected_output:
+        for key in (
+            "prompt_token_count",
+            "prompt_token_ids_sha256",
+            "output_token_count",
+            "output_token_ids_sha256",
+            "output_text_sha256",
+            "finish_reason",
+        ):
+            if expected_output.get(key) != measured_result.get(key):
+                raise RuntimeError(
+                    f"frozen SAME_INPUT output mismatch for {key}: "
+                    f"{expected_output.get(key)!r} != "
+                    f"{measured_result.get(key)!r}"
+                )
 
     metadata = {
         "schema_version": 1,
@@ -867,6 +1129,10 @@ def main() -> None:
         "tag": args.tag,
         "contract_id": contract["contract_id"],
         "contract_sha256": recorded_contract_sha256,
+        "lineage_id": lineage.get("lineage_id") if lineage is not None else None,
+        "fresh_run_lineage_manifest": lineage_record,
+        "contract_relation": contract.get("contract_relation"),
+        "parent_contract": contract.get("parent_contract"),
         "source_root": str(root_dir),
         "model_root": str(model_root),
         "served_model_name": args.served_model_name,
@@ -878,6 +1144,15 @@ def main() -> None:
             "pra.fx_process.inputN_layerM.<process_id>[.<fragment_id>]"
         ),
         "process_targets": sorted(process_targets),
+        "process_target_transport": process_target_provenance,
+        "exact_process_range_filter_enabled": bool(exact_range_targets),
+        "exact_process_range_targets": sorted(exact_range_targets),
+        "exact_process_range_target_transport": exact_range_target_provenance,
+        "emitted_process_ranges": (
+            sorted(process_recorder.emitted_ranges)
+            if process_recorder is not None
+            else []
+        ),
         "expected_process_ranges": (
             sorted(process_recorder.expected_ranges)
             if process_recorder is not None
@@ -898,6 +1173,11 @@ def main() -> None:
             request_end_perf_ns - request_start_perf_ns
         )
         / 1e6,
+        "request_start_realtime_ns": request_start_realtime_ns,
+        "request_end_realtime_ns": request_end_realtime_ns,
+        "request_start_monotonic_ns": request_start_monotonic_ns,
+        "request_end_monotonic_ns": request_end_monotonic_ns,
+        "live_utilization_window": live_utilization_window,
         "profiler_session_control": hipprof_session,
         "request_synchronized_latency_is_replay_distorted": (
             hipprof_session.get("profile_kind")

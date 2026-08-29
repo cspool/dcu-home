@@ -7,6 +7,7 @@ import argparse
 import csv
 import hashlib
 import json
+import os
 import re
 import sqlite3
 from collections import defaultdict
@@ -59,6 +60,134 @@ def _write_csv(path: Path, rows: list[dict[str, Any]]) -> None:
         writer.writerows(rows)
 
 
+def _raw_trace_merge_manifest_path(raw_trace: Path) -> Path:
+    tag = (
+        raw_trace.name[: -len(".hipprof.json")]
+        if raw_trace.name.endswith(".hipprof.json")
+        else raw_trace.stem
+    )
+    return raw_trace.with_name(f"{tag}.raw_trace_merge_manifest.json")
+
+
+def _materialize_segmented_raw_trace(raw_trace: Path) -> Path | None:
+    """Losslessly join numbered hipprof Chrome-JSON trace segments.
+
+    hipprof may honor flush boundaries by exporting ``<prefix>.1.json``,
+    ``<prefix>.2.json``, ... instead of the requested unsuffixed JSON path.
+    The DB remains the queryable attribution source; this routine preserves
+    every native JSON event in dispatch order and records exact chunk hashes.
+    """
+    manifest_path = _raw_trace_merge_manifest_path(raw_trace)
+    if raw_trace.is_file() and raw_trace.stat().st_size > 0:
+        if manifest_path.is_file():
+            manifest = _load_object(manifest_path)
+            if manifest.get("output", {}).get("path") != str(
+                raw_trace.resolve()
+            ):
+                raise RuntimeError("raw trace merge manifest output mismatch")
+            return manifest_path
+        return None
+
+    chunk_pattern = re.compile(
+        rf"^{re.escape(raw_trace.stem)}\.(?P<number>[1-9][0-9]*)"
+        rf"{re.escape(raw_trace.suffix)}$"
+    )
+    numbered_chunks: list[tuple[int, Path]] = []
+    for candidate in raw_trace.parent.glob(
+        f"{raw_trace.stem}.*{raw_trace.suffix}"
+    ):
+        match = chunk_pattern.fullmatch(candidate.name)
+        if match is not None:
+            numbered_chunks.append((int(match.group("number")), candidate))
+    numbered_chunks.sort(key=lambda item: item[0])
+    if not numbered_chunks:
+        return None
+    expected_numbers = list(range(1, len(numbered_chunks) + 1))
+    observed_numbers = [number for number, _ in numbered_chunks]
+    if observed_numbers != expected_numbers:
+        raise RuntimeError(
+            "non-contiguous hipprof raw trace chunks: "
+            f"{observed_numbers}"
+        )
+
+    prefix = b'{"traceEvents":['
+    suffix = b"]}"
+    temporary = raw_trace.with_name(f".{raw_trace.name}.partial")
+    if temporary.exists():
+        raise RuntimeError(f"stale raw trace merge output: {temporary}")
+    chunk_records: list[dict[str, Any]] = []
+    wrote_body = False
+    try:
+        with temporary.open("xb") as output:
+            output.write(prefix)
+            for number, chunk in numbered_chunks:
+                size = chunk.stat().st_size
+                if size < len(prefix) + len(suffix):
+                    raise RuntimeError(f"truncated raw trace chunk: {chunk}")
+                with chunk.open("rb") as source:
+                    if source.read(len(prefix)) != prefix:
+                        raise RuntimeError(
+                            f"unexpected raw trace chunk prefix: {chunk}"
+                        )
+                    source.seek(-len(suffix), 2)
+                    if source.read(len(suffix)) != suffix:
+                        raise RuntimeError(
+                            f"unexpected raw trace chunk suffix: {chunk}"
+                        )
+                    body_size = size - len(prefix) - len(suffix)
+                    if body_size:
+                        if wrote_body:
+                            output.write(b",")
+                        source.seek(len(prefix))
+                        remaining = body_size
+                        while remaining:
+                            block = source.read(min(8 * 1024 * 1024, remaining))
+                            if not block:
+                                raise RuntimeError(
+                                    f"short read from raw trace chunk: {chunk}"
+                                )
+                            output.write(block)
+                            remaining -= len(block)
+                        wrote_body = True
+                chunk_records.append(
+                    {
+                        "chunk_number": number,
+                        "path": str(chunk.resolve()),
+                        "size_bytes": size,
+                        "sha256": _sha256(chunk),
+                    }
+                )
+            output.write(suffix)
+            output.flush()
+            os.fsync(output.fileno())
+        temporary.replace(raw_trace)
+    except BaseException:
+        if temporary.exists():
+            temporary.unlink()
+        raise
+
+    if manifest_path.exists():
+        raise RuntimeError(f"refusing to overwrite {manifest_path}")
+    _write_json(
+        manifest_path,
+        {
+            "schema_version": 1,
+            "status": "pass",
+            "source_format": "hipprof_numbered_chrome_json",
+            "merge_rule": (
+                "concatenate traceEvents arrays in numeric chunk order"
+            ),
+            "chunks": chunk_records,
+            "output": {
+                "path": str(raw_trace.resolve()),
+                "size_bytes": raw_trace.stat().st_size,
+                "sha256": _sha256(raw_trace),
+            },
+        },
+    )
+    return manifest_path
+
+
 def _merge_duration_ns(intervals: Iterable[tuple[int, int]]) -> int:
     ordered = sorted(intervals)
     if not ordered:
@@ -78,7 +207,7 @@ def _kernel_family(name: str) -> str:
     low = name.lower()
     if "mmac" in low or low.startswith("cijk_"):
         return "TunableOp_MMAC_GEMM"
-    if "llmm" in low or "gemv" in low:
+    if "llmm" in low or "llgemm" in low or "gemv" in low:
         return "LLMM1_GEMV"
     if "gdn" in low or "gated_delta" in low:
         return "GDN_recurrent"
@@ -165,6 +294,30 @@ def _read_hipprof(
             "select name from sqlite_master where type='table' order by name"
         )
     ]
+    if "STR_TABLE" not in tables:
+        connection.close()
+        raise RuntimeError("fresh hipprof DB has no STR_TABLE name dictionary")
+    kernel_name_by_id: dict[tuple[str, int, str], str] = {}
+    for row in connection.execute(
+        "select PID, CONFIG_KEY, STR_ID, STR_NAME from STR_TABLE "
+        "where TYPE = 6"
+    ):
+        key = (
+            str(row["CONFIG_KEY"]),
+            int(row["PID"]),
+            str(row["STR_ID"]),
+        )
+        value = str(row["STR_NAME"] or "")
+        if not value:
+            connection.close()
+            raise RuntimeError(f"empty hipprof kernel name mapping: {key}")
+        if key in kernel_name_by_id:
+            connection.close()
+            raise RuntimeError(f"duplicate hipprof kernel name mapping: {key}")
+        kernel_name_by_id[key] = value
+    if not kernel_name_by_id:
+        connection.close()
+        raise RuntimeError("fresh hipprof DB has no TYPE=6 kernel names")
     configs = [
         dict(row)
         for row in connection.execute("select * from CONFIG")
@@ -236,7 +389,15 @@ def _read_hipprof(
                 connection.execute(f"select * from {_quote(table)}"),
                 1,
             ):
-                name = str(row["Name"])
+                name_id = str(row["Name"])
+                name_key = (config_key, int(row["pid"]), name_id)
+                name = kernel_name_by_id.get(name_key)
+                if name is None:
+                    connection.close()
+                    raise RuntimeError(
+                        "unresolved hipprof HIPOPS kernel name ID: "
+                        f"{name_key}"
+                    )
                 kernels.append(
                     {
                         "kernel_id": (
@@ -252,6 +413,7 @@ def _read_hipprof(
                         "duration_ns": int(row["DurationNs"]),
                         "device_id": int(row["dev_id"]),
                         "queue_id": str(row["queue_id"]),
+                        "kernel_name_id": name_id,
                         "kernel_name": name,
                         "kernel_family": _kernel_family(name),
                         "launch_parameters": str(row["PARS"] or ""),
@@ -332,6 +494,10 @@ def main() -> None:
     parser.add_argument("--expected-layers", type=int, default=64)
     parser.add_argument("--expected-device-id", type=int, default=1)
     args = parser.parse_args()
+
+    raw_trace_merge_manifest = _materialize_segmented_raw_trace(
+        args.raw_trace
+    )
 
     for required in (
         args.raw_db,
@@ -441,7 +607,11 @@ def main() -> None:
                         "contract_id": contract["contract_id"],
                         "forward_id": layer_range["forward_id"],
                         "layer_idx": layer_range["layer_idx"],
-                        "occurrence": 0,
+                        "occurrence": int(
+                            event_by_range[layer_range["range_name"]][
+                                "occurrence"
+                            ]
+                        ),
                         "range_name": layer_range["range_name"],
                         "runtime_index": runtime_index,
                         "runtime_api": call["api_name"],
@@ -453,6 +623,7 @@ def main() -> None:
                             call["end_ns"] <= layer_range["end_ns"]
                         ),
                         "kernel_id": kernel["kernel_id"],
+                        "kernel_name_id": kernel["kernel_name_id"],
                         "kernel_name": kernel["kernel_name"],
                         "kernel_family": kernel["kernel_family"],
                         "kernel_begin_ns": kernel["begin_ns"],
@@ -523,6 +694,9 @@ def main() -> None:
             "forward_id": layer_range["forward_id"],
             "layer_idx": layer_range["layer_idx"],
             "occurrence": int(event["occurrence"]),
+            "source_range_occurrence": int(
+                event.get("source_range_occurrence", 0)
+            ),
             "occurrence_key": event["occurrence_key"],
             "phase": event["phase"],
             "q_len": int(event["q_len"]),
@@ -567,6 +741,7 @@ def main() -> None:
                     "launch_order": order,
                     "runtime_index": row["runtime_index"],
                     "kernel_id": row["kernel_id"],
+                    "kernel_name_id": row["kernel_name_id"],
                     "kernel_family": row["kernel_family"],
                     "kernel_name": row["kernel_name"],
                     "kernel_duration_ms": row["kernel_duration_ns"] / 1e6,
@@ -873,6 +1048,11 @@ def main() -> None:
         "contract_sha256": contract["contract_sha256"],
         "raw_db_sha256": raw_db_sha256,
         "raw_trace_sha256": raw_trace_sha256,
+        "raw_trace_merge_manifest": (
+            str(raw_trace_merge_manifest.resolve())
+            if raw_trace_merge_manifest is not None
+            else None
+        ),
         "runtime_events_sha256": event_sha256,
         "forward_count": len(forward_ids),
         "expected_layer_count_per_forward": args.expected_layers,
@@ -883,6 +1063,20 @@ def main() -> None:
         "unique_launch_owned_kernels": len(
             {row["kernel_id"] for row in ownership_rows}
         ),
+        "kernel_name_resolution": (
+            "HIPOPS Name STR_ID -> STR_TABLE TYPE=6 STR_NAME joined by "
+            "CONFIG_KEY and PID"
+        ),
+        "unique_kernel_name_ids": len(
+            {row["kernel_name_id"] for row in ownership_rows}
+        ),
+        "unique_resolved_kernel_names": len(
+            {row["kernel_name"] for row in ownership_rows}
+        ),
+        "resolved_kernel_families": sorted(
+            {row["kernel_family"] for row in ownership_rows}
+        ),
+        "unresolved_kernel_name_ids": [],
         "failed_ownership_ranges": failed_ownership,
         "missing_event_rows": missing_event_rows,
         "missing_range_rows": missing_range_rows,
@@ -948,6 +1142,9 @@ Status: **PASS**
 The runtime-resolved ownership chain is:
 
 `layer HIPTX host range -> HIP Runtime call whose host start lies inside the range and whose _Index lies inside marker bounds -> HIPOPS kernel with identical runtime _Index -> full durations summed as launch-owned kernel time`.
+
+HIPOPS numeric `Name` IDs were resolved through the same DB's `STR_TABLE`
+TYPE=6 dictionary using `(CONFIG_KEY, PID, STR_ID)`; unresolved IDs are fatal.
 
 Device timestamp overlap attribution was not used. Nested `total`, `attn`, and
 `mlp` rows were not summed as independent costs.

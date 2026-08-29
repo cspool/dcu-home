@@ -45,6 +45,11 @@ def read_csv(path: Path) -> list[dict[str, str]]:
         return list(csv.DictReader(handle))
 
 
+def csv_value_counter(path: Path, field: str) -> Counter[str]:
+    with path.open(newline="", encoding="utf-8") as handle:
+        return Counter(row[field] for row in csv.DictReader(handle))
+
+
 def family_key(row: dict[str, str]) -> tuple[str, str, str]:
     return (
         row["event_id"],
@@ -95,7 +100,7 @@ def main() -> None:
 
     record(
         "output_scope",
-        root.name == "R04"
+        root.parent.name == "R04"
         and "perf_trace_bk" not in root.parts
         and source_root.name == "pra2026-bh408",
         {"output_root": str(root), "source_root": str(source_root)},
@@ -125,7 +130,6 @@ def main() -> None:
     expected_rows = read_csv(ledger_path)
     hardware_rows = read_csv(root / "hardware_metrics_by_kernel_family.csv")
     process_rows = read_csv(root / "hardware_metrics.csv")
-    replay_rows = read_csv(root / "hardware_replay_kernel_metrics.csv")
 
     record(
         "run_contract_projection_status",
@@ -326,7 +330,8 @@ def main() -> None:
         "live_gfx936_occupancy_binding",
         str(coverage["device"]["gcn_arch_name"]).startswith("gfx936")
         and coverage["device"]["physical_device"] == 1
-        and coverage["device"]["unique_id"] == "TCH19625050401",
+        and coverage["device"]["unique_id"]
+        == run_contract["contract"]["device"]["unique_id"],
         coverage["device"],
     )
     record(
@@ -350,10 +355,20 @@ def main() -> None:
         len(process_rows),
     )
 
-    replay_counter = Counter(row["replay_source"] for row in replay_rows)
+    replay_counter = csv_value_counter(
+        root / "hardware_replay_kernel_metrics.csv", "replay_source"
+    )
     per_mode_evidence: dict[str, Any] = {}
     for mode in MODES:
-        analysis = root / "replays" / mode / "analysis"
+        analysis = Path(
+            run_contract["replay_bindings"][mode]["analysis_dir"]
+        ).resolve()
+        record(
+            f"{mode}:analysis_scope",
+            analysis.is_relative_to(root)
+            and "perf_trace_bk" not in analysis.parts,
+            str(analysis),
+        )
         trace_summary = load_json(analysis / "process_trace_summary.json")
         pmc_summary = load_json(analysis / "hardware_metric_summary.json")
         replay_family_rows = read_csv(
@@ -369,6 +384,7 @@ def main() -> None:
             "pmc_blocks.csv",
             "pmc_name_order_matches.csv",
             "hardware_kernel_metrics.csv",
+            "discarded_superset_matches.csv",
             "hardware_metric_summary.json",
             "unmatched_pmc_blocks.json",
             "unmatched_trace_kernels.json",
@@ -398,7 +414,7 @@ def main() -> None:
             and int(pmc_summary["unmatched_selected_block_count"]) == 0
             and int(pmc_summary["ambiguous_pair_count"]) == 0
             and int(pmc_summary["covered_selected_target_count"])
-            == int(expected["launch_owning_capture_targets"])
+            == int(expected["kernel_family_rows"])
             and int(trace_summary["checks"]["process_marker_count"])
             == int(expected["process_fragment_targets"])
         )
@@ -520,6 +536,7 @@ def main() -> None:
             "prepare_qwen_dcu_hardware_plan.py",
             "consolidate_qwen_dcu_hardware_metrics.py",
             "audit_qwen_dcu_hardware_run.py",
+            "finalize_qwen_dcu_hardware_handoff.py",
         )
     }
     record(
