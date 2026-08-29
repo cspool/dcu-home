@@ -63,9 +63,9 @@ def write_text(path: Path, value: str) -> None:
     path.write_text(value, encoding="utf-8")
 
 
-def output_record(path: Path) -> dict[str, Any]:
+def output_record(path: Path, output_dir: Path) -> dict[str, Any]:
     return {
-        "path": str(path),
+        "path": str(path.relative_to(output_dir)),
         "sha256": sha256_file(path),
         "size_bytes": path.stat().st_size,
     }
@@ -139,13 +139,48 @@ def main() -> int:
         raise RuntimeError("source E2E bounds differ from accepted metadata")
 
     visualizer = load_generator(generator_path)
-    lossless_payload = visualizer.build_lossless_timeline_payload(begin, end, rows)
+    retained_process_rows = [
+        {
+            "process_range": str(row.get("process") or row.get("n") or ""),
+            "hiptx_begin_ns": str(row["b"]),
+            "hiptx_end_ns": str(row["e"]),
+        }
+        for row in rows
+        if row.get("g") == "process"
+    ]
+    top_latency_process_contract = (
+        visualizer.build_top_latency_process_contract(
+            retained_process_rows, begin, end
+        )
+    )
+    top_latency_process_contract = {
+        **top_latency_process_contract,
+        "ranking_source": (
+            "retained_accepted_R10_complete_process_intervals"
+        ),
+        "formal_r09_r10_regeneration": False,
+        "source_process_timeline_sha256": source_metadata[
+            "source_table_hashes"
+        ]["process_timeline"],
+    }
+    enriched_source_payload = {
+        **source_payload,
+        "top_latency_processes": top_latency_process_contract["selected"],
+        "top_latency_process_policy": {
+            key: value
+            for key, value in top_latency_process_contract.items()
+            if key != "selected"
+        },
+    }
+    lossless_payload = visualizer.build_lossless_timeline_payload(
+        begin, end, rows, top_latency_process_contract
+    )
     trace = visualizer.build_full_perfetto_trace(
         {
             "request_begin_realtime_ns": begin,
             "lineage_id": source_metadata["lineage_id"],
         },
-        {"E2E_PROCESS_TIMELINE.html": source_payload},
+        {"E2E_PROCESS_TIMELINE.html": enriched_source_payload},
         source_metadata,
     )
     expected_categories = dict(sorted(Counter(row["g"] for row in rows).items()))
@@ -171,6 +206,7 @@ def main() -> int:
         "sampling_performed": False,
         "source_acceptance_archive_sha256": sha256_file(source_archive),
         "source_e2e_page_sha256": sha256_bytes(source_page_bytes),
+        "top_latency_process_contract": top_latency_process_contract,
     }
     lossless_page = (
         "<!doctype html><html lang='en'><head><meta charset='utf-8'>"
@@ -182,6 +218,7 @@ def main() -> int:
         + "</nav><h1>Full-resolution observed end-to-end request timeline</h1>"
         + "<div class='backend'><strong>DERIVED VIEWER ONLY — formal_r09_r10_regeneration=false. The source accepted page and every embedded interval are hash-bound; no model, profiler, GPU, PMC, or sampling activity was performed.</strong></div>"
         + visualizer.evidence_legend()
+        + visualizer.top_latency_process_legend(lossless_payload)
         + visualizer.LOSSLESS_E2E_BODY
         + "<script type='application/json' id='acceptance-metadata'>"
         + visualizer.compact_json(derived_metadata)
@@ -212,9 +249,9 @@ def main() -> int:
     write_text(index_path, index)
 
     outputs = {
-        "index.html": output_record(index_path),
-        LOSSLESS_PAGE: output_record(lossless_page_path),
-        FULL_TRACE: output_record(full_trace_path),
+        "index.html": output_record(index_path, output_dir),
+        LOSSLESS_PAGE: output_record(lossless_page_path, output_dir),
+        FULL_TRACE: output_record(full_trace_path, output_dir),
     }
     derived_manifest = {
         "schema_version": 1,
@@ -250,6 +287,7 @@ def main() -> int:
             "source_table_hashes": source_metadata["source_table_hashes"],
             "source_table_row_counts": row_counts,
         },
+        "top_latency_process_contract": top_latency_process_contract,
         "generators": {
             "derived_bundle_generator": {
                 "path": str(Path(__file__).resolve()),
@@ -269,6 +307,10 @@ def main() -> int:
             "full_trace_event_count_matches_source": True,
             "category_counts_match_source": True,
             "relative_nanosecond_payload_exact": True,
+            "top_latency_process_ranking_recomputed_from_all_process_intervals": True,
+            "top_latency_process_distinct_fill_colors": True,
+            "owned_runtime_queue_kernel_same_color_outlines": True,
+            "zoom_reveals_process_names_inside_rectangles": True,
             "model_run_count": 0,
             "gpu_activity_count": 0,
             "profiler_run_count": 0,

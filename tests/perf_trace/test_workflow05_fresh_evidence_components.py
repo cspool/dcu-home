@@ -635,6 +635,25 @@ class FreshEvidenceComponentsTest(unittest.TestCase):
             )
             self.assertTrue(acceptance["self_contained_offline"])
             self.assertTrue(acceptance["view_coverage"]["filters_search_zoom"])
+            self.assertTrue(
+                acceptance["view_coverage"]["top_latency_process_colors"]
+            )
+            self.assertTrue(
+                acceptance["view_coverage"][
+                    "zoom_reveals_process_names_inside_rectangles"
+                ]
+            )
+            top_contract = acceptance["top_latency_process_contract"]
+            self.assertEqual(top_contract["configured_count"], 10)
+            self.assertEqual(top_contract["selected_count"], 3)
+            self.assertEqual(
+                [row["process_range"] for row in top_contract["selected"]],
+                [expected[1], expected[2], expected[0]],
+            )
+            self.assertEqual(
+                [row["color"] for row in top_contract["selected"]],
+                ["#4E79A7", "#F28E2B", "#E15759"],
+            )
             self.assertEqual(
                 set(acceptance["outputs"]),
                 {"index.html", "E2E_PROCESS_TIMELINE.html",
@@ -672,13 +691,35 @@ class FreshEvidenceComponentsTest(unittest.TestCase):
                 full_manifest["source_table_hashes"],
                 acceptance["source_table_hashes"],
             )
+            lossless_text = (
+                acceptance_dir / "E2E_PROCESS_TIMELINE_LOSSLESS.html"
+            ).read_text()
             self.assertIn(
                 "data-sampling-performed='false'",
-                (acceptance_dir / "E2E_PROCESS_TIMELINE_LOSSLESS.html").read_text(),
+                lossless_text,
             )
+            self.assertIn("data-top-latency-process-count='3'", lossless_text)
+            self.assertIn("g==='process'&&top?top.color", lossless_text)
+            self.assertIn("ownedGroups.has(g)", lossless_text)
+            self.assertIn("X.fillText(name", lossless_text)
+            self.assertIn("w>=tw+8", lossless_text)
             self.assertNotIn(
                 "<script src=",
                 (acceptance_dir / "E2E_PROCESS_TIMELINE.html").read_text(),
+            )
+            trace = json.loads(
+                (acceptance_dir / "E2E_PROCESS_TIMELINE.full.perfetto.json")
+                .read_text()
+            )
+            ranked_process_events = [
+                event
+                for event in trace["traceEvents"]
+                if "top_latency_process_rank" in event["args"]
+            ]
+            self.assertEqual(len(ranked_process_events), 3)
+            self.assertEqual(
+                trace["metadata"]["top_latency_processes"],
+                top_contract["selected"],
             )
 
 

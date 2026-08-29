@@ -49,6 +49,22 @@ PAGE_NAMES = (
 )
 PERFETTO_TRACE = "E2E_PROCESS_TIMELINE.full.perfetto.json"
 FULL_TIMELINE_MANIFEST = "full_timeline_manifest.json"
+TOP_LATENCY_PROCESS_COLOR_COUNT = 10
+TOP_LATENCY_PROCESS_PALETTE = (
+    "#4E79A7",
+    "#F28E2B",
+    "#E15759",
+    "#76B7B2",
+    "#59A14F",
+    "#EDC948",
+    "#B07AA1",
+    "#FF9DA7",
+    "#9C755F",
+    "#BAB0AC",
+)
+REQUEST_SPAN_RATIO_CAVEAT = (
+    "Overlapping process intervals are not additive end-to-end attribution."
+)
 
 
 def sha256_file(path: Path) -> str:
@@ -359,8 +375,79 @@ def selected_hardware_row(row: dict[str, str]) -> dict[str, str]:
     return {field: row.get(field, "") for field in fields}
 
 
+def build_top_latency_process_contract(
+    process_rows: list[dict[str, str]], request_begin: int, request_end: int
+) -> dict[str, Any]:
+    request_span = request_end - request_begin
+    if request_span <= 0:
+        raise RuntimeError("request span must be positive for process ranking")
+    seen: set[str] = set()
+    ranked: list[tuple[int, int, str]] = []
+    for index, row in enumerate(process_rows):
+        process_range = row.get("process_range", "").strip()
+        if not process_range:
+            raise RuntimeError(f"process timeline row {index} lacks process_range")
+        if process_range in seen:
+            raise RuntimeError(
+                f"duplicate process_range in process timeline: {process_range}"
+            )
+        seen.add(process_range)
+        try:
+            begin = int(row["hiptx_begin_ns"])
+            end = int(row["hiptx_end_ns"])
+        except (KeyError, TypeError, ValueError) as exc:
+            raise RuntimeError(
+                f"process timeline row has invalid HIPTX bounds: {process_range}"
+            ) from exc
+        if end < begin:
+            raise RuntimeError(
+                f"process timeline row has negative duration: {process_range}"
+            )
+        ranked.append((end - begin, begin, process_range))
+    total_duration = sum(duration for duration, _, _ in ranked)
+    if total_duration <= 0:
+        raise RuntimeError("observed process duration total must be positive")
+    ranked.sort(key=lambda value: (-value[0], value[1], value[2]))
+    selected = []
+    for rank, (duration, begin, process_range) in enumerate(
+        ranked[:TOP_LATENCY_PROCESS_COLOR_COUNT], start=1
+    ):
+        selected.append(
+            {
+                "rank": rank,
+                "process_range": process_range,
+                "hiptx_begin_ns": begin,
+                "observed_duration_ns": duration,
+                "observed_process_duration_share": duration / total_duration,
+                "observed_request_span_ratio": duration / request_span,
+                "request_span_ratio_caveat": REQUEST_SPAN_RATIO_CAVEAT,
+                "color": TOP_LATENCY_PROCESS_PALETTE[rank - 1],
+            }
+        )
+    return {
+        "schema_version": 1,
+        "ranking_source": "complete_immutable_R09_process_timeline",
+        "ranking_duration": "hiptx_end_ns - hiptx_begin_ns",
+        "ranking_order": [
+            "observed_duration_ns_descending",
+            "hiptx_begin_ns_ascending",
+            "process_range_ascending",
+        ],
+        "configured_count": TOP_LATENCY_PROCESS_COLOR_COUNT,
+        "selected_count": len(selected),
+        "palette": list(TOP_LATENCY_PROCESS_PALETTE),
+        "observed_process_duration_total_ns": total_duration,
+        "observed_request_span_ns": request_span,
+        "request_span_ratio_caveat": REQUEST_SPAN_RATIO_CAVEAT,
+        "selected": selected,
+    }
+
+
 def build_lossless_timeline_payload(
-    begin: int, end: int, timeline_rows: list[dict[str, Any]]
+    begin: int,
+    end: int,
+    timeline_rows: list[dict[str, Any]],
+    top_latency_process_contract: dict[str, Any],
 ) -> dict[str, Any]:
     return {
         "origin_ns": str(begin),
@@ -368,6 +455,12 @@ def build_lossless_timeline_payload(
         "end": end - begin,
         "groups": ["request", "forward", "layer", "process", "hip_runtime",
                    "gpu_queue", "strict_owned_kernel"],
+        "top_latency_processes": top_latency_process_contract["selected"],
+        "top_latency_process_policy": {
+            key: value
+            for key, value in top_latency_process_contract.items()
+            if key != "selected"
+        },
         "rows": [
             {
                 **{key: value for key, value in row.items() if key not in {"b", "e"}},
@@ -388,6 +481,9 @@ def build_payloads(
 ) -> dict[str, dict[str, Any]]:
     begin = integer(manifest["request_begin_realtime_ns"])
     end = integer(manifest["request_end_realtime_ns"])
+    top_latency_process_contract = build_top_latency_process_contract(
+        tables["process_timeline"], begin, end
+    )
     timeline_rows = [
         {
             "g": row["track_type"], "n": row.get("label", ""),
@@ -582,10 +678,16 @@ def build_payloads(
             "begin": begin, "end": end,
             "groups": ["request", "forward", "layer", "process", "hip_runtime",
                        "gpu_queue", "strict_owned_kernel"],
+            "top_latency_processes": top_latency_process_contract["selected"],
+            "top_latency_process_policy": {
+                key: value
+                for key, value in top_latency_process_contract.items()
+                if key != "selected"
+            },
             "rows": timeline_rows,
         },
         "E2E_PROCESS_TIMELINE_LOSSLESS.html": build_lossless_timeline_payload(
-            begin, end, timeline_rows
+            begin, end, timeline_rows, top_latency_process_contract
         ),
         "HIGH_LATENCY_PROCESS_HARDWARE_TIMELINE.html": {
             "processes": high_processes, "kernels": kernel_rows,
@@ -608,7 +710,7 @@ def build_payloads(
 
 CSS = """
 :root{color-scheme:dark;--bg:#0a0f1d;--panel:#121b2e;--line:#293957;--text:#eef4ff;--muted:#a6b5cc;--obs:#55d6be;--runtime:#7aa2f7;--kernel:#ffb454;--queue:#c099ff;--live:#66c7ff;--replay:#d38cff;--inferred:#e8cc68;--missing:#7d879b;--bad:#ff6b7a;--good:#59d499}
-*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font:14px system-ui,sans-serif}main{max-width:1700px;margin:auto;padding:18px}a{color:#8abaff}nav{display:flex;gap:13px;flex-wrap:wrap;padding:8px 0}.note,.panel,.backend{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:13px;margin:11px 0}.backend{border-color:#8b6bc6}.controls{display:flex;gap:11px;align-items:center;flex-wrap:wrap;margin:12px 0}.controls input[type=text],.controls input[type=number],.controls select{min-width:175px;background:#0d1424;color:var(--text);border:1px solid var(--line);padding:7px}.controls input[type=number]{min-width:130px;width:160px}.controls input.search{min-width:310px}.controls input[type=range]{width:205px}button{background:#26395c;color:var(--text);border:1px solid #49658f;border-radius:5px;padding:7px 11px}canvas{width:100%;height:auto;background:#0d1424;border:1px solid var(--line);border-radius:8px}.lossless-canvas{touch-action:none;cursor:grab}.lossless-canvas.dragging{cursor:grabbing}.legend{display:flex;gap:14px;flex-wrap:wrap;margin:10px 0}.legend span{color:var(--muted)}.dot{display:inline-block;width:11px;height:11px;border-radius:2px;margin-right:5px}table{border-collapse:collapse;width:100%;font-size:12px}th,td{border-bottom:1px solid var(--line);padding:6px;text-align:left;vertical-align:top}th{position:sticky;top:0;background:#17223a}.scroll{max-height:440px;overflow:auto}.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(175px,1fr));gap:9px}.card{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:11px}.big{font-size:24px;font-weight:700}.muted{color:var(--muted)}code{word-break:break-all}pre{white-space:pre-wrap;word-break:break-word}.badge{display:inline-block;border:1px solid var(--line);border-radius:12px;padding:2px 8px;margin:2px}.provenance summary{cursor:pointer;font-weight:700}.warning{color:#ffd37d}.pass{color:var(--good)}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font:14px system-ui,sans-serif}main{max-width:1700px;margin:auto;padding:18px}a{color:#8abaff}nav{display:flex;gap:13px;flex-wrap:wrap;padding:8px 0}.note,.panel,.backend{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:13px;margin:11px 0}.backend{border-color:#8b6bc6}.controls{display:flex;gap:11px;align-items:center;flex-wrap:wrap;margin:12px 0}.controls input[type=text],.controls input[type=number],.controls select{min-width:175px;background:#0d1424;color:var(--text);border:1px solid var(--line);padding:7px}.controls input[type=number]{min-width:130px;width:160px}.controls input.search{min-width:310px}.controls input[type=range]{width:205px}button{background:#26395c;color:var(--text);border:1px solid #49658f;border-radius:5px;padding:7px 11px}canvas{width:100%;height:auto;background:#0d1424;border:1px solid var(--line);border-radius:8px}.lossless-canvas{touch-action:none;cursor:grab}.lossless-canvas.dragging{cursor:grabbing}.legend{display:flex;gap:14px;flex-wrap:wrap;margin:10px 0}.legend span{color:var(--muted)}.dot{display:inline-block;width:11px;height:11px;border-radius:2px;margin-right:5px}.top-process-legend h2{margin:0 0 8px}.top-process-items{display:flex;gap:8px 14px;flex-wrap:wrap}.top-process-item{display:inline-flex;align-items:center;max-width:100%;color:var(--text)}.top-process-name{overflow-wrap:anywhere}.top-process-swatch{display:inline-block;width:18px;height:12px;border-radius:2px;margin-right:6px;border:1px solid #f4f7ff}table{border-collapse:collapse;width:100%;font-size:12px}th,td{border-bottom:1px solid var(--line);padding:6px;text-align:left;vertical-align:top}th{position:sticky;top:0;background:#17223a}.scroll{max-height:440px;overflow:auto}.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(175px,1fr));gap:9px}.card{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:11px}.big{font-size:24px;font-weight:700}.muted{color:var(--muted)}code{word-break:break-all}pre{white-space:pre-wrap;word-break:break-word}.badge{display:inline-block;border:1px solid var(--line);border-radius:12px;padding:2px 8px;margin:2px}.provenance summary{cursor:pointer;font-weight:700}.warning{color:#ffd37d}.pass{color:var(--good)}
 """
 
 
@@ -639,6 +741,49 @@ def evidence_legend() -> str:
         for label, color, tip in items
     )
     return "<div class='legend' data-evidence-legend='complete'>" + spans + "</div>"
+
+
+def top_latency_process_legend(payload: dict[str, Any]) -> str:
+    selected = payload.get("top_latency_processes")
+    if not isinstance(selected, list) or not selected:
+        raise RuntimeError("timeline payload lacks the top-latency process contract")
+    items = []
+    for entry in selected:
+        rank = integer(entry.get("rank"))
+        process_range = str(entry.get("process_range", ""))
+        color = str(entry.get("color", ""))
+        duration_ns = integer(entry.get("observed_duration_ns"))
+        if rank <= 0 or not process_range or color not in TOP_LATENCY_PROCESS_PALETTE:
+            raise RuntimeError("invalid top-latency process legend entry")
+        items.append(
+            "<span class='top-process-item' data-rank='"
+            + str(rank)
+            + "' data-process-range='"
+            + html.escape(process_range)
+            + "' data-color='"
+            + html.escape(color)
+            + "' title='observed HIPTX duration "
+            + f"{duration_ns:,} ns'><i class='top-process-swatch' style='background:"
+            + html.escape(color)
+            + "'></i><span class='top-process-name'>#"
+            + str(rank)
+            + " "
+            + html.escape(process_range)
+            + "</span></span>"
+        )
+    return (
+        "<section class='panel top-process-legend' "
+        "data-top-latency-process-count='"
+        + str(len(selected))
+        + "'><h2>Top latency processes</h2><p class='muted'>Distinct fill "
+        "colors identify the ten largest observed process HIPTX durations. "
+        "Owned HIP runtime, GPU queue and strict-owned kernel rectangles use "
+        "the same color as an outline. Zoom until a process rectangle is wide "
+        "enough to show its complete name. Overlapping process intervals are "
+        "not additive end-to-end attribution.</p><div class='top-process-items'>"
+        + "".join(items)
+        + "</div></section>"
+    )
 
 
 def provenance_panel(metadata: dict[str, Any]) -> str:
@@ -688,9 +833,14 @@ def page(
 E2E_JS = r"""
 const D=JSON.parse(document.getElementById('page-payload').textContent),C=document.getElementById('chart'),X=C.getContext('2d'),S=document.getElementById('start'),E=document.getElementById('end'),W=document.getElementById('window'),Z=document.getElementById('detail');
 const F={q:document.getElementById('search'),track:document.getElementById('track-filter'),process:document.getElementById('process-filter'),event:document.getElementById('event-filter'),layer:document.getElementById('layer-filter'),phase:document.getElementById('phase-filter'),family:document.getElementById('family-filter')};
-const colors={request:'#55d6be',forward:'#72ddb0',layer:'#43b8a5',process:'#4bc9b1',hip_runtime:'#7aa2f7',gpu_queue:'#c099ff',strict_owned_kernel:'#ffb454'};let hits=[];
+const colors={request:'#55d6be',forward:'#72ddb0',layer:'#43b8a5',process:'#4bc9b1',hip_runtime:'#7aa2f7',gpu_queue:'#c099ff',strict_owned_kernel:'#ffb454'};
+const topByProcess=new Map((D.top_latency_processes||[]).map(item=>[item.process_range,item]));
+const ownedGroups=new Set(['hip_runtime','gpu_queue','strict_owned_kernel']);let hits=[];
 function includes(v,q){return !q||String(v??'').toLowerCase().includes(q.toLowerCase())}function match(r){return includes(JSON.stringify(r),F.q.value)&&includes(r.g,F.track.value)&&includes(r.process,F.process.value)&&includes(r.event,F.event.value)&&includes(r.layer,F.layer.value)&&includes(r.phase,F.phase.value)&&includes(r.family,F.family.value)}
-function draw(){let lo=D.begin+(D.end-D.begin)*(+S.value/100),hi=D.begin+(D.end-D.begin)*(+E.value/100);if(hi<=lo)hi=lo+1;W.textContent=((lo-D.begin)/1e6).toFixed(3)+'–'+((hi-D.begin)/1e6).toFixed(3)+' ms on the R07 clock';let rows=D.rows.filter(r=>r.e>lo&&r.b<hi&&match(r));X.clearRect(0,0,C.width,C.height);X.font='12px system-ui';hits=[];const by={};for(const r of rows)(by[r.g]??=[]).push(r);D.groups.forEach((g,i)=>{let y=35+i*76;X.fillStyle='#a6b5cc';X.fillText(g,6,y+18);X.strokeStyle='#293957';X.beginPath();X.moveTo(140,y+30);X.lineTo(C.width-15,y+30);X.stroke();for(const r of (by[g]||[])){let x=140+(Math.max(r.b,lo)-lo)/(hi-lo)*(C.width-160),w=Math.max(1,(Math.min(r.e,hi)-Math.max(r.b,lo))/(hi-lo)*(C.width-160));X.fillStyle=colors[g]||'#7d879b';X.fillRect(x,y,w,29);hits.push({x,y,w,h:29,r});}});document.getElementById('visible-count').textContent=rows.length.toLocaleString()+' visible intervals';}
+function topFor(r){return topByProcess.get(String(r.process||''))}
+function contrast(hex){const r=parseInt(hex.slice(1,3),16),g=parseInt(hex.slice(3,5),16),b=parseInt(hex.slice(5,7),16);return .299*r+.587*g+.114*b>155?'#09111f':'#ffffff'}
+function decorate(r,g,x,y,w,h,top){if(top&&ownedGroups.has(g)){X.save();X.strokeStyle=top.color;X.lineWidth=2;X.strokeRect(x+.5,y+.5,Math.max(.5,w-1),Math.max(.5,h-1));X.restore()}if(g!=='process'||w<48)return;const name=String(r.process||r.n||'');X.save();X.font='11px system-ui';const tw=X.measureText(name).width;if(w>=tw+8){X.beginPath();X.rect(x,y,w,h);X.clip();X.fillStyle=top?contrast(top.color):'#07131d';X.textBaseline='middle';X.fillText(name,x+4,y+h/2)}X.restore()}
+function draw(){let lo=D.begin+(D.end-D.begin)*(+S.value/100),hi=D.begin+(D.end-D.begin)*(+E.value/100);if(hi<=lo)hi=lo+1;W.textContent=((lo-D.begin)/1e6).toFixed(3)+'–'+((hi-D.begin)/1e6).toFixed(3)+' ms on the R07 clock';let rows=D.rows.filter(r=>r.e>lo&&r.b<hi&&match(r));X.clearRect(0,0,C.width,C.height);X.font='12px system-ui';hits=[];const by={};for(const r of rows)(by[r.g]??=[]).push(r);D.groups.forEach((g,i)=>{let y=35+i*76;X.fillStyle='#a6b5cc';X.fillText(g,6,y+18);X.strokeStyle='#293957';X.beginPath();X.moveTo(140,y+30);X.lineTo(C.width-15,y+30);X.stroke();for(const r of (by[g]||[])){let x=140+(Math.max(r.b,lo)-lo)/(hi-lo)*(C.width-160),w=Math.max(1,(Math.min(r.e,hi)-Math.max(r.b,lo))/(hi-lo)*(C.width-160)),top=topFor(r),fill=g==='process'&&top?top.color:(colors[g]||'#7d879b');X.fillStyle=fill;X.fillRect(x,y,w,29);decorate(r,g,x,y,w,29,top);hits.push({x,y,w,h:29,r});}});document.getElementById('visible-count').textContent=rows.length.toLocaleString()+' visible intervals';}
 Object.values(F).concat([S,E]).forEach(x=>x.oninput=draw);document.getElementById('reset').onclick=()=>{Object.values(F).forEach(x=>x.value='');S.value=0;E.value=100;draw()};C.onclick=e=>{let b=C.getBoundingClientRect(),x=(e.clientX-b.left)*C.width/b.width,y=(e.clientY-b.top)*C.height/b.height,h=hits.find(h=>x>=h.x&&x<=h.x+h.w&&y>=h.y&&y<=h.y+h.h);if(h)Z.textContent=JSON.stringify(h.r,null,2)};draw();
 """
 
@@ -701,6 +851,8 @@ const C=document.getElementById('chart'),X=C.getContext('2d'),W=document.getElem
 const START=document.getElementById('start-ns'),END=document.getElementById('end-ns');
 const F={q:document.getElementById('search'),track:document.getElementById('track-filter'),process:document.getElementById('process-filter'),event:document.getElementById('event-filter'),layer:document.getElementById('layer-filter'),phase:document.getElementById('phase-filter'),family:document.getElementById('family-filter')};
 const colors={request:'#55d6be',forward:'#72ddb0',layer:'#43b8a5',process:'#4bc9b1',hip_runtime:'#7aa2f7',gpu_queue:'#c099ff',strict_owned_kernel:'#ffb454'};
+const topByProcess=new Map((D.top_latency_processes||[]).map(item=>[item.process_range,item]));
+const ownedGroups=new Set(['hip_runtime','gpu_queue','strict_owned_kernel']);
 const labelWidth=170,laneHeight=15,history=[];
 let lo=D.begin,hi=D.end,filtered=D.rows,hits=[],drag=null,filterTimer=null,framePending=false;
 function inc(v,q){return !q||String(v??'').toLowerCase().includes(q.toLowerCase())}
@@ -717,7 +869,10 @@ function fitFiltered(){if(!filtered.length)return;let a=Infinity,b=-Infinity;for
 function updateFilter(autoFit=true){filtered=D.rows.filter(match);if(autoFit)fitFiltered();else schedule()}
 function px(t,width){return labelWidth+(t-lo)/(hi-lo)*(width-labelWidth-16)}
 function exact(r){const value={};for(const [key,item] of Object.entries(r)){if(!key.startsWith('_'))value[key]=item}value.begin_ns_exact=r.b_abs;value.end_ns_exact=r.e_abs;value.duration_ns_exact=String(BigInt(r.e_abs)-BigInt(r.b_abs));return value}
-function draw(){const {width,height}=resize();X.clearRect(0,0,width,height);X.font='12px system-ui';hits=[];const span=hi-lo;W.textContent=`${(lo/1e6).toFixed(6)}–${(hi/1e6).toFixed(6)} ms relative to request begin; ${span.toLocaleString()} ns; ${(span/Math.max(1,width-labelWidth-16)).toFixed(3)} ns/px`;const visible=filtered.filter(r=>r.e>lo&&r.b<hi);VC.textContent=`${visible.length.toLocaleString()} visible / ${filtered.length.toLocaleString()} matching / ${D.rows.length.toLocaleString()} total intervals`;const by={};for(const r of visible)(by[r.g]??=[]).push(r);let top=24;for(const g of D.groups){const groupHeight=Math.max(58,38+layout[g].lanes*laneHeight);X.fillStyle='#a6b5cc';X.fillText(`${g} (${layout[g].lanes} lanes)`,6,top+18);X.strokeStyle='#293957';X.beginPath();X.moveTo(labelWidth,top+25);X.lineTo(width-16,top+25);X.stroke();for(const r of (by[g]||[])){const x=px(Math.max(r.b,lo),width),right=px(Math.min(r.e,hi),width),w=Math.max(.5,right-x),y=top+30+r._lane*laneHeight;X.fillStyle=colors[g]||'#7d879b';X.fillRect(x,y,w,Math.max(7,laneHeight-3));hits.push({x,y,w,h:Math.max(7,laneHeight-3),r})}top+=groupHeight}X.fillStyle='#a6b5cc';for(let i=0;i<=10;i++){const t=lo+span*i/10,x=px(t,width);X.fillText((t/1e6).toFixed(span<1e6?6:3)+' ms',Math.min(width-78,Math.max(labelWidth,x-28)),14)}}
+function topFor(r){return topByProcess.get(String(r.process||''))}
+function contrast(hex){const r=parseInt(hex.slice(1,3),16),g=parseInt(hex.slice(3,5),16),b=parseInt(hex.slice(5,7),16);return .299*r+.587*g+.114*b>155?'#09111f':'#ffffff'}
+function decorate(r,g,x,y,w,h,top){if(top&&ownedGroups.has(g)){X.save();X.strokeStyle=top.color;X.lineWidth=2;X.strokeRect(x+.5,y+.5,Math.max(.5,w-1),Math.max(.5,h-1));X.restore()}if(g!=='process'||w<48)return;const name=String(r.process||r.n||'');X.save();X.font='10px system-ui';const tw=X.measureText(name).width;if(w>=tw+8){X.beginPath();X.rect(x,y,w,h);X.clip();X.fillStyle=top?contrast(top.color):'#07131d';X.textBaseline='middle';X.fillText(name,x+4,y+h/2)}X.restore()}
+function draw(){const {width,height}=resize();X.clearRect(0,0,width,height);X.font='12px system-ui';hits=[];const span=hi-lo;W.textContent=`${(lo/1e6).toFixed(6)}–${(hi/1e6).toFixed(6)} ms relative to request begin; ${span.toLocaleString()} ns; ${(span/Math.max(1,width-labelWidth-16)).toFixed(3)} ns/px`;const visible=filtered.filter(r=>r.e>lo&&r.b<hi);VC.textContent=`${visible.length.toLocaleString()} visible / ${filtered.length.toLocaleString()} matching / ${D.rows.length.toLocaleString()} total intervals`;const by={};for(const r of visible)(by[r.g]??=[]).push(r);let topY=24;for(const g of D.groups){const groupHeight=Math.max(58,38+layout[g].lanes*laneHeight);X.fillStyle='#a6b5cc';X.fillText(`${g} (${layout[g].lanes} lanes)`,6,topY+18);X.strokeStyle='#293957';X.beginPath();X.moveTo(labelWidth,topY+25);X.lineTo(width-16,topY+25);X.stroke();for(const r of (by[g]||[])){const x=px(Math.max(r.b,lo),width),right=px(Math.min(r.e,hi),width),w=Math.max(.5,right-x),y=topY+30+r._lane*laneHeight,h=Math.max(7,laneHeight-3),top=topFor(r),fill=g==='process'&&top?top.color:(colors[g]||'#7d879b');X.fillStyle=fill;X.fillRect(x,y,w,h);decorate(r,g,x,y,w,h,top);hits.push({x,y,w,h,r})}topY+=groupHeight}X.fillStyle='#a6b5cc';X.font='12px system-ui';X.textBaseline='alphabetic';for(let i=0;i<=10;i++){const t=lo+span*i/10,x=px(t,width);X.fillText((t/1e6).toFixed(span<1e6?6:3)+' ms',Math.min(width-78,Math.max(labelWidth,x-28)),14)}}
 function zoomAt(anchor,factor){const span=Math.max(1,(hi-lo)*factor);const ratio=(anchor-lo)/(hi-lo);setView(anchor-span*ratio,anchor+span*(1-ratio))}
 Object.values(F).forEach(input=>input.addEventListener('input',()=>{clearTimeout(filterTimer);filterTimer=setTimeout(()=>updateFilter(true),250)}));
 document.getElementById('fit-filter').onclick=fitFiltered;
@@ -808,13 +963,23 @@ def render_pages(
         ),
         "E2E_PROCESS_TIMELINE.html": page(
             title="E2E process timeline", heading="Observed end-to-end request timeline",
-            body=e2e_body, metadata=metadata,
+            body=(
+                top_latency_process_legend(
+                    payloads["E2E_PROCESS_TIMELINE.html"]
+                )
+                + e2e_body
+            ), metadata=metadata,
             payload=payloads["E2E_PROCESS_TIMELINE.html"], app_javascript=E2E_JS
         ),
         "E2E_PROCESS_TIMELINE_LOSSLESS.html": page(
             title="Lossless E2E process timeline",
             heading="Full-resolution observed end-to-end request timeline",
-            body=LOSSLESS_E2E_BODY, metadata=metadata,
+            body=(
+                top_latency_process_legend(
+                    payloads["E2E_PROCESS_TIMELINE_LOSSLESS.html"]
+                )
+                + LOSSLESS_E2E_BODY
+            ), metadata=metadata,
             payload=payloads["E2E_PROCESS_TIMELINE_LOSSLESS.html"],
             app_javascript=LOSSLESS_E2E_JS,
         ),
@@ -839,7 +1004,12 @@ def build_full_perfetto_trace(
     manifest: dict[str, Any], payloads: dict[str, dict[str, Any]], metadata: dict[str, Any]
 ) -> dict[str, Any]:
     begin = integer(manifest["request_begin_realtime_ns"])
-    rows = payloads["E2E_PROCESS_TIMELINE.html"]["rows"]
+    timeline_payload = payloads["E2E_PROCESS_TIMELINE.html"]
+    rows = timeline_payload["rows"]
+    top_processes = timeline_payload.get("top_latency_processes", [])
+    top_by_process = {
+        str(entry["process_range"]): entry for entry in top_processes
+    }
     track_ids = {
         "request": 1,
         "forward": 2,
@@ -866,6 +1036,23 @@ def build_full_perfetto_trace(
             "relative_begin_ns": str(b - begin),
             "relative_end_ns": str(e - begin),
         })
+        top_owner = top_by_process.get(str(row.get("process", "")))
+        if top_owner is not None and row["g"] in {
+            "process", "hip_runtime", "gpu_queue", "strict_owned_kernel"
+        }:
+            prefix = (
+                "top_latency_process"
+                if row["g"] == "process"
+                else "top_latency_owner"
+            )
+            event_args.update({
+                f"{prefix}_rank": top_owner["rank"],
+                f"{prefix}_process_range": top_owner["process_range"],
+                f"{prefix}_color": top_owner["color"],
+                f"{prefix}_observed_duration_ns": str(
+                    top_owner["observed_duration_ns"]
+                ),
+            })
         events.append({
             "name": row["n"],
             "cat": row["g"],
@@ -894,6 +1081,10 @@ def build_full_perfetto_trace(
             "absolute_timestamp_encoding": "decimal_strings_in_event_args",
             "event_count": len(events),
             "event_count_by_category": dict(sorted(category_counts.items())),
+            "top_latency_process_policy": timeline_payload[
+                "top_latency_process_policy"
+            ],
+            "top_latency_processes": top_processes,
         },
     }
 
@@ -946,6 +1137,14 @@ def main() -> int:
         raise RuntimeError("R09 manifest summary does not reproduce its tables")
 
     payloads = build_payloads(manifest, tables, runtime_context)
+    top_latency_process_contract = {
+        **payloads["E2E_PROCESS_TIMELINE.html"][
+            "top_latency_process_policy"
+        ],
+        "selected": payloads["E2E_PROCESS_TIMELINE.html"][
+            "top_latency_processes"
+        ],
+    }
     metadata = {
         "schema_version": 1,
         "lineage_id": lineage_id,
@@ -967,6 +1166,7 @@ def main() -> int:
         "track_groups": list(REQUIRED_TRACK_GROUPS),
         "presentation_backend": runtime_context["presentation_backend"],
         "strict_same_run_validation": runtime_context["strict_same_run_validation"],
+        "top_latency_process_contract": top_latency_process_contract,
         "evidence_boundaries": {
             "latency": "observed R07 non-replay same request only",
             "live_utilization": "observed eligible RSMI SE active-CU snapshots",
@@ -1036,6 +1236,7 @@ def main() -> int:
         "source_analysis_sha256": metadata["source_analysis_sha256"],
         "source_table_hashes": metadata["source_table_hashes"],
         "source_table_row_counts": metadata["source_table_row_counts"],
+        "top_latency_process_contract": top_latency_process_contract,
         "outputs": {
             "lossless_page": {
                 "path": "E2E_PROCESS_TIMELINE_LOSSLESS.html",
@@ -1072,6 +1273,7 @@ def main() -> int:
         "source_analysis": {"path": str(analysis_path), "sha256": sha256_file(analysis_path)},
         "source_table_hashes": metadata["source_table_hashes"],
         "row_counts": metadata["source_table_row_counts"],
+        "top_latency_process_contract": top_latency_process_contract,
         "outputs": output_records,
         "companions": {
             PERFETTO_TRACE: companion,
@@ -1087,6 +1289,9 @@ def main() -> int:
             "lossless_relative_nanosecond_timeline_embedded": True,
             "complete_perfetto_trace_without_sampling": True,
             "high_latency_selection_reproduced": True,
+            "top_latency_process_colors": True,
+            "top_latency_owned_interval_outlines": True,
+            "zoom_reveals_process_names_inside_rectangles": True,
         },
         "presentation_backend": runtime_context["presentation_backend"],
         "same_run_inputs": {

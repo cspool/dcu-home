@@ -59,6 +59,13 @@ DETERMINISTIC_FILES = PAGE_NAMES + (
     FULL_TIMELINE_MANIFEST,
     MANIFEST_NAME,
 )
+TOP_LATENCY_PROCESS_PALETTE = (
+    "#4E79A7", "#F28E2B", "#E15759", "#76B7B2", "#59A14F",
+    "#EDC948", "#B07AA1", "#FF9DA7", "#9C755F", "#BAB0AC",
+)
+REQUEST_SPAN_RATIO_CAVEAT = (
+    "Overlapping process intervals are not additive end-to-end attribution."
+)
 
 
 def sha256_file(path: Path) -> str:
@@ -119,6 +126,67 @@ def process_phase(row: dict[str, str]) -> str:
     if "decode" in parent:
         return "decode"
     return ""
+
+
+def expected_top_latency_process_contract(
+    process_rows: list[dict[str, str]], begin: int, end: int
+) -> dict[str, Any]:
+    request_span = end - begin
+    if request_span <= 0:
+        raise RuntimeError("independent R10 check failed: invalid request span")
+    ranked = [
+        (
+            integer(row["hiptx_end_ns"]) - integer(row["hiptx_begin_ns"]),
+            integer(row["hiptx_begin_ns"]),
+            row["process_range"],
+        )
+        for row in process_rows
+    ]
+    if (
+        any(duration < 0 for duration, _, _ in ranked)
+        or len({name for _, _, name in ranked}) != len(ranked)
+    ):
+        raise RuntimeError(
+            "independent R10 check failed: process ranking input is invalid"
+        )
+    total = sum(duration for duration, _, _ in ranked)
+    if total <= 0:
+        raise RuntimeError(
+            "independent R10 check failed: process duration total is invalid"
+        )
+    ranked.sort(key=lambda item: (-item[0], item[1], item[2]))
+    selected = [
+        {
+            "rank": rank,
+            "process_range": process_range,
+            "hiptx_begin_ns": process_begin,
+            "observed_duration_ns": duration,
+            "observed_process_duration_share": duration / total,
+            "observed_request_span_ratio": duration / request_span,
+            "request_span_ratio_caveat": REQUEST_SPAN_RATIO_CAVEAT,
+            "color": TOP_LATENCY_PROCESS_PALETTE[rank - 1],
+        }
+        for rank, (duration, process_begin, process_range) in enumerate(
+            ranked[: len(TOP_LATENCY_PROCESS_PALETTE)], start=1
+        )
+    ]
+    return {
+        "schema_version": 1,
+        "ranking_source": "complete_immutable_R09_process_timeline",
+        "ranking_duration": "hiptx_end_ns - hiptx_begin_ns",
+        "ranking_order": [
+            "observed_duration_ns_descending",
+            "hiptx_begin_ns_ascending",
+            "process_range_ascending",
+        ],
+        "configured_count": len(TOP_LATENCY_PROCESS_PALETTE),
+        "selected_count": len(selected),
+        "palette": list(TOP_LATENCY_PROCESS_PALETTE),
+        "observed_process_duration_total_ns": total,
+        "observed_request_span_ns": request_span,
+        "request_span_ratio_caveat": REQUEST_SPAN_RATIO_CAVEAT,
+        "selected": selected,
+    }
 
 
 def selected_hardware_row(row: dict[str, str]) -> dict[str, str]:
@@ -474,12 +542,24 @@ def main() -> int:
     checker.require(acceptance.get("source_analysis", {}).get("sha256") == sha256_file(analysis_path), "acceptance analysis hash matches")
     expected_hashes = {key: manifest["normalized_tables"][key]["sha256"] for key in REQUIRED_TABLES}
     expected_counts = {key: len(tables[key]) for key in REQUIRED_TABLES}
+    begin = integer(manifest["request_begin_realtime_ns"])
+    end = integer(manifest["request_end_realtime_ns"])
+    expected_top_contract = expected_top_latency_process_contract(
+        tables["process_timeline"], begin, end
+    )
     checker.require(acceptance.get("source_table_hashes") == expected_hashes, "acceptance records all source hashes")
     checker.require(acceptance.get("row_counts") == expected_counts, "acceptance records all source row counts")
+    checker.require(
+        acceptance.get("top_latency_process_contract") == expected_top_contract,
+        "acceptance records the exact top-latency process contract",
+    )
     checker.require(acceptance.get("view_coverage", {}).get("track_groups") == list(REQUIRED_TRACK_GROUPS), "acceptance track groups complete")
     checker.require(acceptance.get("view_coverage", {}).get("filters_search_zoom") is True, "acceptance has filter/search/zoom")
     checker.require(acceptance.get("view_coverage", {}).get("filter_dimensions") == ["process", "event", "layer", "phase", "family"], "five filter dimensions declared")
     checker.require(acceptance.get("view_coverage", {}).get("evidence_legends_complete") is True, "evidence legends declared complete")
+    checker.require(acceptance.get("view_coverage", {}).get("top_latency_process_colors") is True, "top-latency process colors declared")
+    checker.require(acceptance.get("view_coverage", {}).get("top_latency_owned_interval_outlines") is True, "top-latency ownership outlines declared")
+    checker.require(acceptance.get("view_coverage", {}).get("zoom_reveals_process_names_inside_rectangles") is True, "zoom-dependent process labels declared")
     checker.require(acceptance.get("same_run_inputs", {}).get("strict_validation") is True, "production same-run validation was strict")
     checker.require(acceptance.get("same_run_inputs", {}).get("handoff_hashes") == handoff_hashes, "acceptance binds R06-R09 hashes")
 
@@ -513,10 +593,14 @@ def main() -> int:
         "index.html": ("Fresh-run E2E performance acceptance",),
         "E2E_PROCESS_TIMELINE.html": (
             "data-track-groups=", "hip_runtime", "gpu_queue", "strict_owned_kernel",
+            "data-top-latency-process-count=", "g==='process'&&top?top.color",
+            "ownedGroups.has(g)", "X.fillText(name", "w>=tw+8",
         ),
         "E2E_PROCESS_TIMELINE_LOSSLESS.html": (
             "Full-resolution observed end-to-end request timeline",
             "data-sampling-performed='false'", "relative to request begin",
+            "data-top-latency-process-count=", "g==='process'&&top?top.color",
+            "ownedGroups.has(g)", "X.fillText(name", "w>=tw+8",
         ),
         "HIGH_LATENCY_PROCESS_HARDWARE_TIMELINE.html": (
             "replay-projected resource", "inferred traffic", "unavailable",
@@ -541,6 +625,7 @@ def main() -> int:
         checker.require(metadata.get("source_table_row_counts") == expected_counts, f"{name} embedded row counts match")
         checker.require(metadata.get("track_groups") == list(REQUIRED_TRACK_GROUPS), f"{name} embedded track groups match")
         checker.require(metadata.get("strict_same_run_validation") is True, f"{name} records strict same-run validation")
+        checker.require(metadata.get("top_latency_process_contract") == expected_top_contract, f"{name} embeds top-latency process contract")
         checker.require("SELF-CONTAINED CUSTOM CANVAS TIMELINE FALLBACK" in text, f"{name} visibly labels custom viewer")
         checker.require("not an official Perfetto parse" in text, f"{name} distinguishes structural trace")
         for marker in required_static_markers[name]:
@@ -556,8 +641,6 @@ def main() -> int:
         for control_id in required_control_ids.get(name, ()):
             checker.require(f"id='{control_id}'" in text, f"{name} contains control {control_id}")
 
-    begin = integer(manifest["request_begin_realtime_ns"])
-    end = integer(manifest["request_end_realtime_ns"])
     for name, (_, metadata, _, _) in parsed_pages.items():
         checker.require(metadata["request_bounds"] == {
             "begin_ns": begin, "end_ns": end,
@@ -574,6 +657,19 @@ def main() -> int:
     e2e = parsed_pages["E2E_PROCESS_TIMELINE.html"][2]
     checker.require(e2e["begin"] == begin and e2e["end"] == end, "E2E payload request bounds match")
     checker.require(e2e["groups"] == ["request", "forward", "layer", "process", "hip_runtime", "gpu_queue", "strict_owned_kernel"], "E2E observed groups complete")
+    e2e_top_contract = {
+        **e2e["top_latency_process_policy"],
+        "selected": e2e["top_latency_processes"],
+    }
+    checker.require(
+        e2e_top_contract == expected_top_contract,
+        "E2E payload reproduces exact top-latency ranking and palette",
+    )
+    checker.require(
+        len({row["color"] for row in e2e["top_latency_processes"]})
+        == len(e2e["top_latency_processes"]),
+        "E2E top-latency colors are distinct",
+    )
     rows = e2e["rows"]
     request_count = len(tables["request_timeline"])
     process_count = len(tables["process_timeline"])
@@ -596,6 +692,14 @@ def main() -> int:
     checker.require(lossless["origin_ns"] == str(begin), "lossless payload preserves absolute request origin as a string")
     checker.require(lossless["begin"] == 0 and lossless["end"] == end - begin, "lossless payload uses relative integer nanoseconds")
     checker.require(lossless["groups"] == e2e["groups"], "lossless payload track groups match complete E2E")
+    checker.require(
+        {
+            **lossless["top_latency_process_policy"],
+            "selected": lossless["top_latency_processes"],
+        }
+        == expected_top_contract,
+        "lossless payload reproduces exact top-latency contract",
+    )
     lossless_rows = lossless["rows"]
     checker.require(len(lossless_rows) == len(rows), "lossless payload retains every E2E interval")
     for index, (row, relative) in enumerate(zip(rows, lossless_rows)):
@@ -686,7 +790,26 @@ def main() -> int:
     checker.require(trace_metadata.get("sampling_performed") is False, "complete trace metadata denies sampling")
     expected_category_counts = dict(sorted(Counter(row["g"] for row in rows).items()))
     checker.require(trace_metadata.get("event_count_by_category") == expected_category_counts, "complete trace category counts reproduce E2E")
+    checker.require(
+        trace_metadata.get("top_latency_processes")
+        == expected_top_contract["selected"],
+        "complete trace metadata embeds top-latency process mapping",
+    )
+    checker.require(
+        {
+            **trace_metadata.get("top_latency_process_policy", {}),
+            "selected": trace_metadata.get("top_latency_processes"),
+        }
+        == expected_top_contract,
+        "complete trace metadata embeds the complete top-latency contract",
+    )
     checker.require(Counter(row.get("cat") for row in events) == Counter(row["g"] for row in rows), "complete trace category rows reproduce E2E")
+    top_by_process = {
+        row["process_range"]: row
+        for row in expected_top_contract["selected"]
+    }
+    annotated_process_count = 0
+    annotated_owner_count = 0
     for index, (source, event) in enumerate(zip(rows, events)):
         if (
             event.get("cat") != source["g"]
@@ -698,7 +821,38 @@ def main() -> int:
                 "independent R10 check failed: complete trace event "
                 f"{index} differs from E2E"
             )
+        top_owner = top_by_process.get(str(source.get("process", "")))
+        args = event["args"]
+        if top_owner is not None and source["g"] in {
+            "process", "hip_runtime", "gpu_queue", "strict_owned_kernel"
+        }:
+            prefix = (
+                "top_latency_process"
+                if source["g"] == "process"
+                else "top_latency_owner"
+            )
+            checker.require(
+                args.get(f"{prefix}_rank") == top_owner["rank"]
+                and args.get(f"{prefix}_process_range")
+                == top_owner["process_range"]
+                and args.get(f"{prefix}_color") == top_owner["color"]
+                and args.get(f"{prefix}_observed_duration_ns")
+                == str(top_owner["observed_duration_ns"]),
+                f"complete trace event {index} has exact top-owner annotations",
+            )
+            if source["g"] == "process":
+                annotated_process_count += 1
+            else:
+                annotated_owner_count += 1
     checker.count += 1
+    checker.require(
+        annotated_process_count == len(expected_top_contract["selected"]),
+        "complete trace annotates every selected process exactly once",
+    )
+    checker.require(
+        annotated_owner_count > 0,
+        "complete trace annotates selected-process owned intervals",
+    )
 
     full_manifest_path = acceptance_dir / FULL_TIMELINE_MANIFEST
     full_manifest_record = companions[FULL_TIMELINE_MANIFEST]
@@ -737,6 +891,11 @@ def main() -> int:
         full_manifest.get("source_table_hashes")
         == acceptance["source_table_hashes"],
         "full timeline manifest binds source tables",
+    )
+    checker.require(
+        full_manifest.get("top_latency_process_contract")
+        == expected_top_contract,
+        "full timeline manifest binds top-latency process contract",
     )
     checker.require(
         full_manifest.get("outputs")
@@ -852,6 +1011,10 @@ def main() -> int:
             "all_high_latency_processes_have_exact_in_window_live_samples": True,
             "evidence_legends_complete": True,
             "filters_search_zoom_complete": True,
+            "top_latency_process_ranking_reproduced": True,
+            "top_latency_process_distinct_fill_colors": True,
+            "top_latency_owned_interval_outlines": True,
+            "zoom_reveals_process_names_inside_rectangles": True,
             "lossless_relative_nanosecond_timeline_complete": True,
             "complete_perfetto_event_count": len(events),
             "complete_perfetto_sampling_performed": False,
