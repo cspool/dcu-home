@@ -71,6 +71,7 @@ void all_reduce(fptr_t _fa, torch::Tensor& inp, torch::Tensor& out,
   TORCH_CHECK(_is_weak_contiguous(inp));
   auto input_size = inp.numel() * inp.element_size();
   auto reg_buffer = reinterpret_cast<void*>(_reg_buffer);
+  const bool uses_staging_buffer = reg_buffer != nullptr;
   if (reg_buffer) {
     TORCH_CHECK_LE(input_size, reg_buffer_sz_bytes);
     AT_CUDA_CHECK(cudaMemcpyAsync(reg_buffer, inp.data_ptr(), input_size,
@@ -82,19 +83,22 @@ void all_reduce(fptr_t _fa, torch::Tensor& inp, torch::Tensor& out,
     case at::ScalarType::Float: {
       fa->allreduce<float>(stream, reinterpret_cast<float*>(reg_buffer),
                            reinterpret_cast<float*>(out.data_ptr()),
-                           out.numel());
+                           out.numel(), 256, vllm::defaultBlockLimit,
+                           uses_staging_buffer);
       break;
     }
     case at::ScalarType::Half: {
       fa->allreduce<half>(stream, reinterpret_cast<half*>(reg_buffer),
-                          reinterpret_cast<half*>(out.data_ptr()), out.numel());
+                          reinterpret_cast<half*>(out.data_ptr()), out.numel(),
+                          256, vllm::defaultBlockLimit, uses_staging_buffer);
       break;
     }
-#if (__CUDA_ARCH__ >= 800 || !defined(__CUDA_ARCH__))
+#if defined(USE_ROCM) || (__CUDA_ARCH__ >= 800 || !defined(__CUDA_ARCH__))
     case at::ScalarType::BFloat16: {
       fa->allreduce<nv_bfloat16>(
           stream, reinterpret_cast<nv_bfloat16*>(reg_buffer),
-          reinterpret_cast<nv_bfloat16*>(out.data_ptr()), out.numel());
+          reinterpret_cast<nv_bfloat16*>(out.data_ptr()), out.numel(), 256,
+          vllm::defaultBlockLimit, uses_staging_buffer);
       break;
     }
 #endif

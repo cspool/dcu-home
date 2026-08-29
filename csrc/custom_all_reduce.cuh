@@ -105,7 +105,7 @@ DINLINE half& assign_add(half& a, half b) {
 }
 DINLINE float& assign_add(float& a, float b) { return a += b; }
 
-#if (__CUDA_ARCH__ >= 800 || !defined(__CUDA_ARCH__))
+#if defined(USE_ROCM) || (__CUDA_ARCH__ >= 800 || !defined(__CUDA_ARCH__))
 DINLINE float upcast_s(nv_bfloat16 val) { return __bfloat162float(val); }
 template <>
 DINLINE nv_bfloat16 downcast_s(float val) {
@@ -295,8 +295,8 @@ DINLINE P packed_reduce(const P* ptrs[], int idx) {
   return downcast<P>(tmp);
 }
 
-template <typename T, int ngpus>
-__global__ void __launch_bounds__(512, 1)
+template <typename T, int ngpus, bool sync_at_end = true>
+__global__ void __launch_bounds__(256, 1)
     cross_device_reduce_1stage(RankData* _dp, RankSignals sg, Signal* self_sg,
                                T* __restrict__ result, int rank, int size) {
   using P = typename packed_t<T>::P;
@@ -310,7 +310,9 @@ __global__ void __launch_bounds__(512, 1)
        idx += gridDim.x * blockDim.x) {
     ((P*)result)[idx] = packed_reduce<P, ngpus, A>((const P**)&dp.ptrs[0], idx);
   }
-  barrier_at_end<ngpus, true>(sg, self_sg, rank);
+  if constexpr (sync_at_end) {
+    barrier_at_end<ngpus, true>(sg, self_sg, rank);
+  }
 }
 
 template <typename P>
@@ -319,7 +321,7 @@ DINLINE P* get_tmp_buf(Signal* sg) {
 }
 
 template <typename T, int ngpus>
-__global__ void __launch_bounds__(512, 1)
+__global__ void __launch_bounds__(256, 1)
     cross_device_reduce_2stage(RankData* _dp, RankSignals sg, Signal* self_sg,
                                T* __restrict__ result, int rank, int size) {
   int tid = blockIdx.x * blockDim.x + threadIdx.x;
@@ -523,10 +525,11 @@ class CustomAllreduce {
    * I tried: A100, A10, A30, T4, V100. You'll notice that NCCL kernels also
    * only take a small amount of SMs. Not quite sure the underlying reason,
    * but my guess is that too many SMs will cause contention on NVLink bus.
-   */
+  */
   template <typename T>
   void allreduce(cudaStream_t stream, T* input, T* output, int size,
-                 int threads = 512, int block_limit = defaultBlockLimit) {
+                 int threads = 256, int block_limit = defaultBlockLimit,
+                 bool uses_staging_buffer = false) {
     auto d = packed_t<T>::P::size;
     if (size % d != 0)
       throw std::runtime_error(
@@ -541,17 +544,17 @@ class CustomAllreduce {
     RankData* ptrs;
     cudaStreamCaptureStatus status;
     CUDACHECK(cudaStreamIsCapturing(stream, &status));
-    if (status == cudaStreamCaptureStatusActive) {
+    auto it = buffers_.find(input);
+    if (it != buffers_.end()) {
+      ptrs = it->second;
+    } else if (status == cudaStreamCaptureStatusActive) {
       ptrs = d_rank_data_base_ + graph_unreg_buffers_.size();
       graph_unreg_buffers_.push_back(input);
     } else {
-      auto it = buffers_.find(input);
-      if (it == buffers_.end())
-        throw std::runtime_error(
-            "buffer address " +
-            std::to_string(reinterpret_cast<uint64_t>(input)) +
-            " is not registered!");
-      ptrs = it->second;
+      throw std::runtime_error(
+          "buffer address " +
+          std::to_string(reinterpret_cast<uint64_t>(input)) +
+          " is not registered!");
     }
 
     size /= d;
@@ -576,24 +579,44 @@ class CustomAllreduce {
       }
     }
 
-#define KL(ngpus, name)                                                       \
-  name<T, ngpus><<<blocks, threads, 0, stream>>>(ptrs, sg_, self_sg_, output, \
-                                                 rank_, size);
+    // The gfx936 TP2 graph path alternates two dedicated staging regions.
+    // During graph capture, the next kernel's start barrier supplies the
+    // cross-rank ordering, so the preceding one-stage kernel can omit its
+    // otherwise redundant final barrier. Eager calls and direct graph inputs
+    // retain the official final barrier.
+    const bool skip_end_sync =
+        uses_staging_buffer && world_size_ == 2 &&
+        status == cudaStreamCaptureStatusActive;
+
+#define KL_1STAGE(ngpus)                                                   \
+  if (skip_end_sync) {                                                     \
+    cross_device_reduce_1stage<T, ngpus, false>                            \
+        <<<blocks, threads, 0, stream>>>(ptrs, sg_, self_sg_, output,      \
+                                         rank_, size);                     \
+  } else {                                                                 \
+    cross_device_reduce_1stage<T, ngpus, true>                             \
+        <<<blocks, threads, 0, stream>>>(ptrs, sg_, self_sg_, output,      \
+                                         rank_, size);                     \
+  }
+#define KL_2STAGE(ngpus)                                                   \
+  cross_device_reduce_2stage<T, ngpus>                                    \
+      <<<blocks, threads, 0, stream>>>(ptrs, sg_, self_sg_, output, rank_, \
+                                       size);
 #define REDUCE_CASE(ngpus)                              \
   case ngpus: {                                         \
     if (force_1stage) {                                 \
-      KL(ngpus, cross_device_reduce_1stage);            \
+      KL_1STAGE(ngpus);                                 \
     } else if (force_2stage) {                          \
-      KL(ngpus, cross_device_reduce_2stage);            \
+      KL_2STAGE(ngpus);                                 \
     } else {                                            \
       if (world_size_ == 2) {                           \
-        KL(ngpus, cross_device_reduce_1stage);          \
+        KL_1STAGE(ngpus);                               \
       } else if (fully_connected_) {                    \
         if ((world_size_ <= 4 && bytes < 512 * 1024) || \
             (world_size_ <= 8 && bytes < 256 * 1024)) { \
-          KL(ngpus, cross_device_reduce_1stage);        \
+          KL_1STAGE(ngpus);                             \
         } else {                                        \
-          KL(ngpus, cross_device_reduce_2stage);        \
+          KL_2STAGE(ngpus);                             \
         }                                               \
       }                                                 \
     }                                                   \
@@ -613,7 +636,8 @@ class CustomAllreduce {
             std::to_string(world_size_));
     }
 #undef REDUCE_CASE
-#undef KL
+#undef KL_2STAGE
+#undef KL_1STAGE
   }
 
   ~CustomAllreduce() {

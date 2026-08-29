@@ -252,6 +252,21 @@ __device__ __forceinline__ float dot_bfloat16x8(float4 packed_weights,
   return even_sum + odd_sum;
 }
 
+__device__ __forceinline__ float dot_bfloat16x8_packed(
+    float4 packed_weights, const __hip_bfloat162* input_values) {
+  auto* weight_pairs = reinterpret_cast<__hip_bfloat162*>(&packed_weights);
+  float even_sum = 0.0f;
+  float odd_sum = 0.0f;
+#pragma unroll
+  for (int i = 0; i < 4; ++i) {
+    const float2 weights = __s22float2(weight_pairs[i]);
+    const float2 inputs = __s22float2(input_values[i]);
+    even_sum = fmaf(weights.x, inputs.x, even_sum);
+    odd_sum = fmaf(weights.y, inputs.y, odd_sum);
+  }
+  return even_sum + odd_sum;
+}
+
 // ROWS controls output rows per CTA; FUSE_SILU reuses the first GateUp pass as
 // the BF16 gate buffer and writes the final 17408-wide SwiGLU result in place.
 template <int ROWS, bool FUSE_SILU = false>
@@ -274,11 +289,11 @@ __global__ __launch_bounds__(640) void qwen35_gemv_k5120(
   const int wave = thread / 64;
   const int row_start = blockIdx.x * ROWS;
 
-  float2 input_values[4];
+  __hip_bfloat162 input_values[4];
   float4 packed_weights[ROWS];
 #pragma unroll
   for (int i = 0; i < 4; ++i) {
-    input_values[i] = __s22float2(inputs[thread * 4 + i]);
+    input_values[i] = inputs[thread * 4 + i];
   }
 #pragma unroll
   for (int row = 0; row < ROWS; ++row) {
@@ -289,7 +304,7 @@ __global__ __launch_bounds__(640) void qwen35_gemv_k5120(
   float sums[ROWS];
 #pragma unroll
   for (int row = 0; row < ROWS; ++row) {
-    sums[row] = dot_bfloat16x8(packed_weights[row], input_values);
+    sums[row] = dot_bfloat16x8_packed(packed_weights[row], input_values);
   }
 
   // Performance: merge paired lanes, then reduce only five wave leaders.
@@ -359,17 +374,56 @@ __global__ __launch_bounds__(THREADS) void qwen35_row_gemv(
   const int row_start = blockIdx.x * ROWS;
   float sums[ROWS] = {};
 
-  for (int chunk = thread; chunk < CHUNKS; chunk += THREADS) {
-    float2 input_values[4];
+  if constexpr (K == 8704 && THREADS == 640 && ROWS == 2) {
+    // TP2 K8704 has exactly two chunk iterations.  Issue both rounds of
+    // input/weight loads before starting the FMA chains to hide the second
+    // round's memory latency without changing the accumulation order.
+    __hip_bfloat162 packed_inputs[2][4];
+    float4 packed_weights[2][ROWS];
 #pragma unroll
-    for (int i = 0; i < 4; ++i) {
-      input_values[i] = __s22float2(inputs[chunk * 4 + i]);
+    for (int iteration = 0; iteration < 2; ++iteration) {
+      const int chunk = thread + iteration * THREADS;
+      if (chunk < CHUNKS) {
+#pragma unroll
+        for (int i = 0; i < 4; ++i) {
+          packed_inputs[iteration][i] = inputs[chunk * 4 + i];
+        }
+#pragma unroll
+        for (int row = 0; row < ROWS; ++row) {
+          packed_weights[iteration][row] =
+              load_ntmprl(&weights[(row_start + row) * CHUNKS + chunk]);
+        }
+      }
     }
 #pragma unroll
-    for (int row = 0; row < ROWS; ++row) {
-      sums[row] += dot_bfloat16x8(
-          load_ntmprl(&weights[(row_start + row) * CHUNKS + chunk]),
-          input_values);
+    for (int iteration = 0; iteration < 2; ++iteration) {
+      const int chunk = thread + iteration * THREADS;
+      if (chunk < CHUNKS) {
+        float2 input_values[4];
+#pragma unroll
+        for (int i = 0; i < 4; ++i) {
+          input_values[i] = __s22float2(packed_inputs[iteration][i]);
+        }
+#pragma unroll
+        for (int row = 0; row < ROWS; ++row) {
+          sums[row] +=
+              dot_bfloat16x8(packed_weights[iteration][row], input_values);
+        }
+      }
+    }
+  } else {
+    for (int chunk = thread; chunk < CHUNKS; chunk += THREADS) {
+      float2 input_values[4];
+#pragma unroll
+      for (int i = 0; i < 4; ++i) {
+        input_values[i] = __s22float2(inputs[chunk * 4 + i]);
+      }
+#pragma unroll
+      for (int row = 0; row < ROWS; ++row) {
+        sums[row] += dot_bfloat16x8(
+            load_ntmprl(&weights[(row_start + row) * CHUNKS + chunk]),
+            input_values);
+      }
     }
   }
 #pragma unroll

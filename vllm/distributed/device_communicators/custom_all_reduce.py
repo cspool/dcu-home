@@ -119,6 +119,12 @@ class CustomAllreduce:
         # now `device` is a `torch.device` object
         assert isinstance(device, torch.device)
         self.device = device
+        self._use_graph_staging = (
+            current_platform.is_rocm()
+            and world_size == 2
+            and "gfx936"
+            in getattr(torch.cuda.get_device_properties(device), "gcnArchName", "")
+        )
         device_capability = current_platform.get_device_capability()
         if (
             current_platform.is_cuda()
@@ -177,8 +183,13 @@ class CustomAllreduce:
             ops.meta_size() + max_size, group=group, uncached=True
         )
         # This is a pre-registered IPC buffer. In eager mode, input tensors
-        # are first copied into this buffer before allreduce is performed
-        self.buffer_ptrs = self.create_shared_buffer(max_size, group=group)
+        # are first copied into the first region before allreduce is performed.
+        # The gfx936 TP2 graph path alternates two additional regions so that
+        # adjacent graph all-reduces never overwrite the same staging data.
+        staging_regions = 3 if self._use_graph_staging else 1
+        self.buffer_ptrs = self.create_shared_buffer(
+            staging_regions * max_size, group=group
+        )
         # This is a buffer for storing the tuples of pointers pointing to
         # IPC buffers from all ranks. Each registered tuple has size of
         # 8*world_size bytes where world_size is at most 8. Allocating 8MB
@@ -188,6 +199,7 @@ class CustomAllreduce:
             8 * 1024 * 1024, dtype=torch.uint8, device=self.device
         )
         self.max_size = max_size
+        self._graph_staging_index = 0
         self.rank = rank
         self.world_size = world_size
         self.fully_connected = fully_connected
@@ -195,6 +207,11 @@ class CustomAllreduce:
             self.meta_ptrs, self.rank_data, rank, self.fully_connected
         )
         ops.register_buffer(self._ptr, self.buffer_ptrs)
+        if self._use_graph_staging:
+            second_region = [ptr + self.max_size for ptr in self.buffer_ptrs]
+            third_region = [ptr + 2 * self.max_size for ptr in self.buffer_ptrs]
+            ops.register_buffer(self._ptr, second_region)
+            ops.register_buffer(self._ptr, third_region)
 
     @contextmanager
     def capture(self):
@@ -246,7 +263,12 @@ class CustomAllreduce:
         return False
 
     def all_reduce(
-        self, inp: torch.Tensor, *, out: torch.Tensor = None, registered: bool = False
+        self,
+        inp: torch.Tensor,
+        *,
+        out: torch.Tensor = None,
+        registered: bool = False,
+        graph_staging: bool = False,
     ):
         """Performs an out-of-place all reduce.
 
@@ -259,8 +281,15 @@ class CustomAllreduce:
         if registered:
             ops.all_reduce(self._ptr, inp, out, 0, 0)
         else:
+            staging_region = 0
+            if graph_staging:
+                staging_region = 1 + self._graph_staging_index
+                self._graph_staging_index ^= 1
+            staging_pointer = (
+                self.buffer_ptrs[self.rank] + staging_region * self.max_size
+            )
             ops.all_reduce(
-                self._ptr, inp, out, self.buffer_ptrs[self.rank], self.max_size
+                self._ptr, inp, out, staging_pointer, self.max_size
             )
         return out
 
@@ -271,6 +300,11 @@ class CustomAllreduce:
             return None
         if self._IS_CAPTURING:
             if torch.cuda.is_current_stream_capturing():
+                # gfx936 graph allocations are not rank-symmetric in this model.
+                if self._use_graph_staging:
+                    return self.all_reduce(
+                        input, registered=False, graph_staging=True
+                    )
                 return self.all_reduce(input, registered=True)
             else:
                 # If warm up, mimic the allocation pattern since custom

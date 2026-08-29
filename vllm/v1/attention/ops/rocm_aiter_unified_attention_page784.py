@@ -138,7 +138,7 @@ def prefill(
     query_len = metadata.max_query_len
     context_len = metadata.max_seq_len - query_len
     supported = current_key is not None and current_value is not None
-    supported &= query_len >= 128 and context_len >= 784
+    supported &= context_len >= 4096
     supported &= metadata.query_start_loc.numel() == 2
     if not supported:
         return False
