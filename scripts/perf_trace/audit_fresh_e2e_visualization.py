@@ -44,6 +44,15 @@ REQUIRED_TRACK_GROUPS = (
     "dependency",
     "opportunity",
 )
+TIMELINE_RECTANGLE_LABEL_GROUPS = (
+    "request",
+    "forward",
+    "layer",
+    "process",
+    "hip_runtime",
+    "gpu_queue",
+    "strict_owned_kernel",
+)
 PAGE_NAMES = (
     "index.html",
     "E2E_PROCESS_TIMELINE.html",
@@ -542,6 +551,11 @@ def main() -> int:
     checker.require(acceptance.get("source_analysis", {}).get("sha256") == sha256_file(analysis_path), "acceptance analysis hash matches")
     expected_hashes = {key: manifest["normalized_tables"][key]["sha256"] for key in REQUIRED_TABLES}
     expected_counts = {key: len(tables[key]) for key in REQUIRED_TABLES}
+    expected_timeline_rectangle_count = (
+        expected_counts["request_timeline"]
+        + expected_counts["process_timeline"]
+        + 2 * expected_counts["kernel_timeline"]
+    )
     begin = integer(manifest["request_begin_realtime_ns"])
     end = integer(manifest["request_end_realtime_ns"])
     expected_top_contract = expected_top_latency_process_contract(
@@ -560,6 +574,10 @@ def main() -> int:
     checker.require(acceptance.get("view_coverage", {}).get("top_latency_process_colors") is True, "top-latency process colors declared")
     checker.require(acceptance.get("view_coverage", {}).get("top_latency_owned_interval_outlines") is True, "top-latency ownership outlines declared")
     checker.require(acceptance.get("view_coverage", {}).get("zoom_reveals_process_names_inside_rectangles") is True, "zoom-dependent process labels declared")
+    checker.require(acceptance.get("view_coverage", {}).get("rectangle_label_groups") == list(TIMELINE_RECTANGLE_LABEL_GROUPS), "all timeline rectangle label groups declared")
+    checker.require(acceptance.get("view_coverage", {}).get("zoom_reveals_all_timeline_labels_inside_rectangles") is True, "zoom-dependent labels for every timeline group declared")
+    checker.require(acceptance.get("view_coverage", {}).get("labeled_timeline_rectangle_count") == expected_timeline_rectangle_count, "all timeline rectangles are counted as labeled")
+    checker.require(acceptance.get("view_coverage", {}).get("unlabeled_timeline_rectangle_count") == 0, "no timeline rectangle is unlabeled")
     checker.require(acceptance.get("same_run_inputs", {}).get("strict_validation") is True, "production same-run validation was strict")
     checker.require(acceptance.get("same_run_inputs", {}).get("handoff_hashes") == handoff_hashes, "acceptance binds R06-R09 hashes")
 
@@ -594,13 +612,17 @@ def main() -> int:
         "E2E_PROCESS_TIMELINE.html": (
             "data-track-groups=", "hip_runtime", "gpu_queue", "strict_owned_kernel",
             "data-top-latency-process-count=", "g==='process'&&top?top.color",
-            "ownedGroups.has(g)", "X.fillText(name", "w>=tw+8",
+            "ownedGroups.has(g)", "data-rectangle-label-groups=",
+            "labeledGroups=new Set(D.groups)", "function rectangleLabel",
+            "function fitLabel", "X.fillText(label",
         ),
         "E2E_PROCESS_TIMELINE_LOSSLESS.html": (
             "Full-resolution observed end-to-end request timeline",
             "data-sampling-performed='false'", "relative to request begin",
             "data-top-latency-process-count=", "g==='process'&&top?top.color",
-            "ownedGroups.has(g)", "X.fillText(name", "w>=tw+8",
+            "ownedGroups.has(g)", "data-rectangle-label-groups=",
+            "labeledGroups=new Set(D.groups)", "function rectangleLabel",
+            "function fitLabel", "X.fillText(label",
         ),
         "HIGH_LATENCY_PROCESS_HARDWARE_TIMELINE.html": (
             "replay-projected resource", "inferred traffic", "unavailable",
@@ -624,6 +646,7 @@ def main() -> int:
         checker.require(metadata.get("source_table_hashes") == expected_hashes, f"{name} embedded table hashes match")
         checker.require(metadata.get("source_table_row_counts") == expected_counts, f"{name} embedded row counts match")
         checker.require(metadata.get("track_groups") == list(REQUIRED_TRACK_GROUPS), f"{name} embedded track groups match")
+        checker.require(metadata.get("rectangle_label_groups") == list(TIMELINE_RECTANGLE_LABEL_GROUPS), f"{name} embeds every timeline rectangle label group")
         checker.require(metadata.get("strict_same_run_validation") is True, f"{name} records strict same-run validation")
         checker.require(metadata.get("top_latency_process_contract") == expected_top_contract, f"{name} embeds top-latency process contract")
         checker.require("SELF-CONTAINED CUSTOM CANVAS TIMELINE FALLBACK" in text, f"{name} visibly labels custom viewer")
@@ -656,7 +679,7 @@ def main() -> int:
 
     e2e = parsed_pages["E2E_PROCESS_TIMELINE.html"][2]
     checker.require(e2e["begin"] == begin and e2e["end"] == end, "E2E payload request bounds match")
-    checker.require(e2e["groups"] == ["request", "forward", "layer", "process", "hip_runtime", "gpu_queue", "strict_owned_kernel"], "E2E observed groups complete")
+    checker.require(e2e["groups"] == list(TIMELINE_RECTANGLE_LABEL_GROUPS), "E2E observed groups complete")
     e2e_top_contract = {
         **e2e["top_latency_process_policy"],
         "selected": e2e["top_latency_processes"],
@@ -671,6 +694,20 @@ def main() -> int:
         "E2E top-latency colors are distinct",
     )
     rows = e2e["rows"]
+    checker.require(
+        all(
+            row.get("g") in TIMELINE_RECTANGLE_LABEL_GROUPS
+            and bool(
+                str(
+                    (row.get("process") or row.get("n") or "")
+                    if row.get("g") == "process"
+                    else (row.get("n") or "")
+                )
+            )
+            for row in rows
+        ),
+        "every E2E rectangle has a semantic label",
+    )
     request_count = len(tables["request_timeline"])
     process_count = len(tables["process_timeline"])
     kernel_count = len(tables["kernel_timeline"])
@@ -898,6 +935,11 @@ def main() -> int:
         "full timeline manifest binds top-latency process contract",
     )
     checker.require(
+        full_manifest.get("rectangle_label_groups")
+        == list(TIMELINE_RECTANGLE_LABEL_GROUPS),
+        "full timeline manifest binds every rectangle label group",
+    )
+    checker.require(
         full_manifest.get("outputs")
         == {
             "lossless_page": {
@@ -1015,6 +1057,10 @@ def main() -> int:
             "top_latency_process_distinct_fill_colors": True,
             "top_latency_owned_interval_outlines": True,
             "zoom_reveals_process_names_inside_rectangles": True,
+            "all_timeline_rectangle_label_groups_verified": True,
+            "zoom_reveals_all_timeline_labels_inside_rectangles": True,
+            "labeled_timeline_rectangle_count": len(rows),
+            "unlabeled_timeline_rectangle_count": 0,
             "lossless_relative_nanosecond_timeline_complete": True,
             "complete_perfetto_event_count": len(events),
             "complete_perfetto_sampling_performed": False,

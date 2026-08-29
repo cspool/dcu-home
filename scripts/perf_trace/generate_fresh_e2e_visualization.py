@@ -40,6 +40,15 @@ REQUIRED_TRACK_GROUPS = (
     "dependency",
     "opportunity",
 )
+TIMELINE_RECTANGLE_LABEL_GROUPS = (
+    "request",
+    "forward",
+    "layer",
+    "process",
+    "hip_runtime",
+    "gpu_queue",
+    "strict_owned_kernel",
+)
 PAGE_NAMES = (
     "index.html",
     "E2E_PROCESS_TIMELINE.html",
@@ -449,12 +458,34 @@ def build_lossless_timeline_payload(
     timeline_rows: list[dict[str, Any]],
     top_latency_process_contract: dict[str, Any],
 ) -> dict[str, Any]:
+    unexpected_groups = sorted(
+        {str(row.get("g", "")) for row in timeline_rows}
+        - set(TIMELINE_RECTANGLE_LABEL_GROUPS)
+    )
+    if unexpected_groups:
+        raise RuntimeError(
+            "timeline contains groups without a rectangle-label contract: "
+            + ", ".join(unexpected_groups)
+        )
+    missing_labels = [
+        index
+        for index, row in enumerate(timeline_rows)
+        if not str(
+            (row.get("process") or row.get("n") or "")
+            if row.get("g") == "process"
+            else (row.get("n") or "")
+        )
+    ]
+    if missing_labels:
+        raise RuntimeError(
+            "timeline rectangles lack semantic labels at row indexes: "
+            + ", ".join(str(index) for index in missing_labels[:20])
+        )
     return {
         "origin_ns": str(begin),
         "begin": 0,
         "end": end - begin,
-        "groups": ["request", "forward", "layer", "process", "hip_runtime",
-                   "gpu_queue", "strict_owned_kernel"],
+        "groups": list(TIMELINE_RECTANGLE_LABEL_GROUPS),
         "top_latency_processes": top_latency_process_contract["selected"],
         "top_latency_process_policy": {
             key: value
@@ -676,8 +707,7 @@ def build_payloads(
         },
         "E2E_PROCESS_TIMELINE.html": {
             "begin": begin, "end": end,
-            "groups": ["request", "forward", "layer", "process", "hip_runtime",
-                       "gpu_queue", "strict_owned_kernel"],
+            "groups": list(TIMELINE_RECTANGLE_LABEL_GROUPS),
             "top_latency_processes": top_latency_process_contract["selected"],
             "top_latency_process_policy": {
                 key: value
@@ -778,8 +808,10 @@ def top_latency_process_legend(payload: dict[str, Any]) -> str:
         + "'><h2>Top latency processes</h2><p class='muted'>Distinct fill "
         "colors identify the ten largest observed process HIPTX durations. "
         "Owned HIP runtime, GPU queue and strict-owned kernel rectangles use "
-        "the same color as an outline. Zoom until a process rectangle is wide "
-        "enough to show its complete name. Overlapping process intervals are "
+        "the same color as an outline. Every timeline rectangle carries its "
+        "event label; narrow labels are clipped with an ellipsis and zooming "
+        "reveals the complete label. Process rectangles use the exact process "
+        "name. Overlapping process intervals are "
         "not additive end-to-end attribution.</p><div class='top-process-items'>"
         + "".join(items)
         + "</div></section>"
@@ -835,12 +867,14 @@ const D=JSON.parse(document.getElementById('page-payload').textContent),C=docume
 const F={q:document.getElementById('search'),track:document.getElementById('track-filter'),process:document.getElementById('process-filter'),event:document.getElementById('event-filter'),layer:document.getElementById('layer-filter'),phase:document.getElementById('phase-filter'),family:document.getElementById('family-filter')};
 const colors={request:'#55d6be',forward:'#72ddb0',layer:'#43b8a5',process:'#4bc9b1',hip_runtime:'#7aa2f7',gpu_queue:'#c099ff',strict_owned_kernel:'#ffb454'};
 const topByProcess=new Map((D.top_latency_processes||[]).map(item=>[item.process_range,item]));
-const ownedGroups=new Set(['hip_runtime','gpu_queue','strict_owned_kernel']);let hits=[];
+const ownedGroups=new Set(['hip_runtime','gpu_queue','strict_owned_kernel']),labeledGroups=new Set(D.groups);let hits=[];
 function includes(v,q){return !q||String(v??'').toLowerCase().includes(q.toLowerCase())}function match(r){return includes(JSON.stringify(r),F.q.value)&&includes(r.g,F.track.value)&&includes(r.process,F.process.value)&&includes(r.event,F.event.value)&&includes(r.layer,F.layer.value)&&includes(r.phase,F.phase.value)&&includes(r.family,F.family.value)}
 function topFor(r){return topByProcess.get(String(r.process||''))}
 function contrast(hex){const r=parseInt(hex.slice(1,3),16),g=parseInt(hex.slice(3,5),16),b=parseInt(hex.slice(5,7),16);return .299*r+.587*g+.114*b>155?'#09111f':'#ffffff'}
-function decorate(r,g,x,y,w,h,top){if(top&&ownedGroups.has(g)){X.save();X.strokeStyle=top.color;X.lineWidth=2;X.strokeRect(x+.5,y+.5,Math.max(.5,w-1),Math.max(.5,h-1));X.restore()}if(g!=='process'||w<48)return;const name=String(r.process||r.n||'');X.save();X.font='11px system-ui';const tw=X.measureText(name).width;if(w>=tw+8){X.beginPath();X.rect(x,y,w,h);X.clip();X.fillStyle=top?contrast(top.color):'#07131d';X.textBaseline='middle';X.fillText(name,x+4,y+h/2)}X.restore()}
-function draw(){let lo=D.begin+(D.end-D.begin)*(+S.value/100),hi=D.begin+(D.end-D.begin)*(+E.value/100);if(hi<=lo)hi=lo+1;W.textContent=((lo-D.begin)/1e6).toFixed(3)+'–'+((hi-D.begin)/1e6).toFixed(3)+' ms on the R07 clock';let rows=D.rows.filter(r=>r.e>lo&&r.b<hi&&match(r));X.clearRect(0,0,C.width,C.height);X.font='12px system-ui';hits=[];const by={};for(const r of rows)(by[r.g]??=[]).push(r);D.groups.forEach((g,i)=>{let y=35+i*76;X.fillStyle='#a6b5cc';X.fillText(g,6,y+18);X.strokeStyle='#293957';X.beginPath();X.moveTo(140,y+30);X.lineTo(C.width-15,y+30);X.stroke();for(const r of (by[g]||[])){let x=140+(Math.max(r.b,lo)-lo)/(hi-lo)*(C.width-160),w=Math.max(1,(Math.min(r.e,hi)-Math.max(r.b,lo))/(hi-lo)*(C.width-160)),top=topFor(r),fill=g==='process'&&top?top.color:(colors[g]||'#7d879b');X.fillStyle=fill;X.fillRect(x,y,w,29);decorate(r,g,x,y,w,29,top);hits.push({x,y,w,h:29,r});}});document.getElementById('visible-count').textContent=rows.length.toLocaleString()+' visible intervals';}
+function rectangleLabel(r,g){return String(g==='process'?(r.process||r.n||''):(r.n||''))}
+function fitLabel(value,maxWidth){if(!value||maxWidth<24)return '';if(X.measureText(value).width<=maxWidth)return value;const suffix='…',suffixWidth=X.measureText(suffix).width;if(maxWidth<=suffixWidth+8)return '';let low=1,high=value.length-1,best='';while(low<=high){const mid=(low+high)>>1,candidate=value.slice(0,mid)+suffix;if(X.measureText(candidate).width<=maxWidth){best=candidate;low=mid+1}else high=mid-1}return best}
+function decorate(r,g,x,y,w,h,top,fill){if(top&&ownedGroups.has(g)){X.save();X.strokeStyle=top.color;X.lineWidth=2;X.strokeRect(x+.5,y+.5,Math.max(.5,w-1),Math.max(.5,h-1));X.restore()}if(!labeledGroups.has(g))return;const fullLabel=rectangleLabel(r,g);X.save();X.font='11px system-ui';const label=fitLabel(fullLabel,w-8);if(label){X.beginPath();X.rect(x,y,w,h);X.clip();X.fillStyle=contrast(fill);X.textBaseline='middle';X.fillText(label,x+4,y+h/2)}X.restore()}
+function draw(){let lo=D.begin+(D.end-D.begin)*(+S.value/100),hi=D.begin+(D.end-D.begin)*(+E.value/100);if(hi<=lo)hi=lo+1;W.textContent=((lo-D.begin)/1e6).toFixed(3)+'–'+((hi-D.begin)/1e6).toFixed(3)+' ms on the R07 clock';let rows=D.rows.filter(r=>r.e>lo&&r.b<hi&&match(r));X.clearRect(0,0,C.width,C.height);X.font='12px system-ui';hits=[];const by={};for(const r of rows)(by[r.g]??=[]).push(r);D.groups.forEach((g,i)=>{let y=35+i*76;X.fillStyle='#a6b5cc';X.fillText(g,6,y+18);X.strokeStyle='#293957';X.beginPath();X.moveTo(140,y+30);X.lineTo(C.width-15,y+30);X.stroke();for(const r of (by[g]||[])){let x=140+(Math.max(r.b,lo)-lo)/(hi-lo)*(C.width-160),w=Math.max(1,(Math.min(r.e,hi)-Math.max(r.b,lo))/(hi-lo)*(C.width-160)),top=topFor(r),fill=g==='process'&&top?top.color:(colors[g]||'#7d879b');X.fillStyle=fill;X.fillRect(x,y,w,29);decorate(r,g,x,y,w,29,top,fill);hits.push({x,y,w,h:29,r});}});document.getElementById('visible-count').textContent=rows.length.toLocaleString()+' visible intervals';}
 Object.values(F).concat([S,E]).forEach(x=>x.oninput=draw);document.getElementById('reset').onclick=()=>{Object.values(F).forEach(x=>x.value='');S.value=0;E.value=100;draw()};C.onclick=e=>{let b=C.getBoundingClientRect(),x=(e.clientX-b.left)*C.width/b.width,y=(e.clientY-b.top)*C.height/b.height,h=hits.find(h=>x>=h.x&&x<=h.x+h.w&&y>=h.y&&y<=h.y+h.h);if(h)Z.textContent=JSON.stringify(h.r,null,2)};draw();
 """
 
@@ -852,7 +886,7 @@ const START=document.getElementById('start-ns'),END=document.getElementById('end
 const F={q:document.getElementById('search'),track:document.getElementById('track-filter'),process:document.getElementById('process-filter'),event:document.getElementById('event-filter'),layer:document.getElementById('layer-filter'),phase:document.getElementById('phase-filter'),family:document.getElementById('family-filter')};
 const colors={request:'#55d6be',forward:'#72ddb0',layer:'#43b8a5',process:'#4bc9b1',hip_runtime:'#7aa2f7',gpu_queue:'#c099ff',strict_owned_kernel:'#ffb454'};
 const topByProcess=new Map((D.top_latency_processes||[]).map(item=>[item.process_range,item]));
-const ownedGroups=new Set(['hip_runtime','gpu_queue','strict_owned_kernel']);
+const ownedGroups=new Set(['hip_runtime','gpu_queue','strict_owned_kernel']),labeledGroups=new Set(D.groups);
 const labelWidth=170,laneHeight=15,history=[];
 let lo=D.begin,hi=D.end,filtered=D.rows,hits=[],drag=null,filterTimer=null,framePending=false;
 function inc(v,q){return !q||String(v??'').toLowerCase().includes(q.toLowerCase())}
@@ -871,8 +905,10 @@ function px(t,width){return labelWidth+(t-lo)/(hi-lo)*(width-labelWidth-16)}
 function exact(r){const value={};for(const [key,item] of Object.entries(r)){if(!key.startsWith('_'))value[key]=item}value.begin_ns_exact=r.b_abs;value.end_ns_exact=r.e_abs;value.duration_ns_exact=String(BigInt(r.e_abs)-BigInt(r.b_abs));return value}
 function topFor(r){return topByProcess.get(String(r.process||''))}
 function contrast(hex){const r=parseInt(hex.slice(1,3),16),g=parseInt(hex.slice(3,5),16),b=parseInt(hex.slice(5,7),16);return .299*r+.587*g+.114*b>155?'#09111f':'#ffffff'}
-function decorate(r,g,x,y,w,h,top){if(top&&ownedGroups.has(g)){X.save();X.strokeStyle=top.color;X.lineWidth=2;X.strokeRect(x+.5,y+.5,Math.max(.5,w-1),Math.max(.5,h-1));X.restore()}if(g!=='process'||w<48)return;const name=String(r.process||r.n||'');X.save();X.font='10px system-ui';const tw=X.measureText(name).width;if(w>=tw+8){X.beginPath();X.rect(x,y,w,h);X.clip();X.fillStyle=top?contrast(top.color):'#07131d';X.textBaseline='middle';X.fillText(name,x+4,y+h/2)}X.restore()}
-function draw(){const {width,height}=resize();X.clearRect(0,0,width,height);X.font='12px system-ui';hits=[];const span=hi-lo;W.textContent=`${(lo/1e6).toFixed(6)}–${(hi/1e6).toFixed(6)} ms relative to request begin; ${span.toLocaleString()} ns; ${(span/Math.max(1,width-labelWidth-16)).toFixed(3)} ns/px`;const visible=filtered.filter(r=>r.e>lo&&r.b<hi);VC.textContent=`${visible.length.toLocaleString()} visible / ${filtered.length.toLocaleString()} matching / ${D.rows.length.toLocaleString()} total intervals`;const by={};for(const r of visible)(by[r.g]??=[]).push(r);let topY=24;for(const g of D.groups){const groupHeight=Math.max(58,38+layout[g].lanes*laneHeight);X.fillStyle='#a6b5cc';X.fillText(`${g} (${layout[g].lanes} lanes)`,6,topY+18);X.strokeStyle='#293957';X.beginPath();X.moveTo(labelWidth,topY+25);X.lineTo(width-16,topY+25);X.stroke();for(const r of (by[g]||[])){const x=px(Math.max(r.b,lo),width),right=px(Math.min(r.e,hi),width),w=Math.max(.5,right-x),y=topY+30+r._lane*laneHeight,h=Math.max(7,laneHeight-3),top=topFor(r),fill=g==='process'&&top?top.color:(colors[g]||'#7d879b');X.fillStyle=fill;X.fillRect(x,y,w,h);decorate(r,g,x,y,w,h,top);hits.push({x,y,w,h,r})}topY+=groupHeight}X.fillStyle='#a6b5cc';X.font='12px system-ui';X.textBaseline='alphabetic';for(let i=0;i<=10;i++){const t=lo+span*i/10,x=px(t,width);X.fillText((t/1e6).toFixed(span<1e6?6:3)+' ms',Math.min(width-78,Math.max(labelWidth,x-28)),14)}}
+function rectangleLabel(r,g){return String(g==='process'?(r.process||r.n||''):(r.n||''))}
+function fitLabel(value,maxWidth){if(!value||maxWidth<24)return '';if(X.measureText(value).width<=maxWidth)return value;const suffix='…',suffixWidth=X.measureText(suffix).width;if(maxWidth<=suffixWidth+8)return '';let low=1,high=value.length-1,best='';while(low<=high){const mid=(low+high)>>1,candidate=value.slice(0,mid)+suffix;if(X.measureText(candidate).width<=maxWidth){best=candidate;low=mid+1}else high=mid-1}return best}
+function decorate(r,g,x,y,w,h,top,fill){if(top&&ownedGroups.has(g)){X.save();X.strokeStyle=top.color;X.lineWidth=2;X.strokeRect(x+.5,y+.5,Math.max(.5,w-1),Math.max(.5,h-1));X.restore()}if(!labeledGroups.has(g))return;const fullLabel=rectangleLabel(r,g);X.save();X.font='10px system-ui';const label=fitLabel(fullLabel,w-8);if(label){X.beginPath();X.rect(x,y,w,h);X.clip();X.fillStyle=contrast(fill);X.textBaseline='middle';X.fillText(label,x+4,y+h/2)}X.restore()}
+function draw(){const {width,height}=resize();X.clearRect(0,0,width,height);X.font='12px system-ui';hits=[];const span=hi-lo;W.textContent=`${(lo/1e6).toFixed(6)}–${(hi/1e6).toFixed(6)} ms relative to request begin; ${span.toLocaleString()} ns; ${(span/Math.max(1,width-labelWidth-16)).toFixed(3)} ns/px`;const visible=filtered.filter(r=>r.e>lo&&r.b<hi);VC.textContent=`${visible.length.toLocaleString()} visible / ${filtered.length.toLocaleString()} matching / ${D.rows.length.toLocaleString()} total intervals`;const by={};for(const r of visible)(by[r.g]??=[]).push(r);let topY=24;for(const g of D.groups){const groupHeight=Math.max(58,38+layout[g].lanes*laneHeight);X.fillStyle='#a6b5cc';X.fillText(`${g} (${layout[g].lanes} lanes)`,6,topY+18);X.strokeStyle='#293957';X.beginPath();X.moveTo(labelWidth,topY+25);X.lineTo(width-16,topY+25);X.stroke();for(const r of (by[g]||[])){const x=px(Math.max(r.b,lo),width),right=px(Math.min(r.e,hi),width),w=Math.max(.5,right-x),y=topY+30+r._lane*laneHeight,h=Math.max(7,laneHeight-3),top=topFor(r),fill=g==='process'&&top?top.color:(colors[g]||'#7d879b');X.fillStyle=fill;X.fillRect(x,y,w,h);decorate(r,g,x,y,w,h,top,fill);hits.push({x,y,w,h,r})}topY+=groupHeight}X.fillStyle='#a6b5cc';X.font='12px system-ui';X.textBaseline='alphabetic';for(let i=0;i<=10;i++){const t=lo+span*i/10,x=px(t,width);X.fillText((t/1e6).toFixed(span<1e6?6:3)+' ms',Math.min(width-78,Math.max(labelWidth,x-28)),14)}}
 function zoomAt(anchor,factor){const span=Math.max(1,(hi-lo)*factor);const ratio=(anchor-lo)/(hi-lo);setView(anchor-span*ratio,anchor+span*(1-ratio))}
 Object.values(F).forEach(input=>input.addEventListener('input',()=>{clearTimeout(filterTimer);filterTimer=setTimeout(()=>updateFilter(true),250)}));
 document.getElementById('fit-filter').onclick=fitFiltered;
@@ -892,11 +928,11 @@ window.addEventListener('resize',schedule);setView(D.begin,D.end,false);
 
 
 LOSSLESS_E2E_BODY = """
-<div class='note'>Full-resolution, no-sampling view of every normalized request, forward, layer, process HIPTX, HIP runtime, GPU queue and strict-owned kernel interval. Times used for rendering are exact integer nanoseconds relative to request begin; original absolute nanoseconds remain decimal strings. Wheel to zoom at the pointer, drag to pan, double-click to zoom 4×, or fit the current filter.</div>
+<div class='note'>Full-resolution, no-sampling view of every normalized request, forward, layer, process HIPTX, HIP runtime, GPU queue and strict-owned kernel interval. Every rectangle displays its event label when space permits; narrow labels use a clipped ellipsis and reveal more as you zoom. Times used for rendering are exact integer nanoseconds relative to request begin; original absolute nanoseconds remain decimal strings. Wheel to zoom at the pointer, drag to pan, double-click to zoom 4×, or fit the current filter.</div>
 <div class='controls'><label>Search <input class='search' id='search' type='text' placeholder='any field'></label><label>Track <input id='track-filter' type='text'></label><label>Process <input id='process-filter' type='text'></label><label>Event <input id='event-filter' type='text'></label><label>Layer <input id='layer-filter' type='text'></label><label>Phase <input id='phase-filter' type='text'></label><label>Family <input id='family-filter' type='text'></label></div>
 <div class='controls'><button id='fit-filter'>Fit filtered events</button><button id='zoom-in'>Zoom in 2×</button><button id='zoom-out'>Zoom out 2×</button><button id='back'>Back</button><button id='reset'>Reset all</button><label>Start relative ms <input id='start-ns' type='number' step='0.000001'></label><label>End relative ms <input id='end-ns' type='number' step='0.000001'></label></div>
 <div class='controls'><span id='window'></span><span id='visible-count' class='badge'></span></div>
-<div data-track-groups='request,forward,layer,process,hip_runtime,gpu_queue,strict_owned_kernel' data-sampling-performed='false'></div><canvas id='chart' class='lossless-canvas' width='1600' height='650'></canvas><pre id='detail' class='panel muted'>Click a rectangle to list every overlapping event at that pixel.</pre>
+<div data-track-groups='request,forward,layer,process,hip_runtime,gpu_queue,strict_owned_kernel' data-rectangle-label-groups='request,forward,layer,process,hip_runtime,gpu_queue,strict_owned_kernel' data-sampling-performed='false'></div><canvas id='chart' class='lossless-canvas' width='1600' height='650'></canvas><pre id='detail' class='panel muted'>Click a rectangle to list every overlapping event at that pixel.</pre>
 """
 
 
@@ -941,10 +977,10 @@ def render_pages(
         "</ul></div>"
     )
     e2e_body = """
-<div class='note'>Complete observed request, forward, layer, process HIPTX, HIP runtime, GPU queue and strict-owned kernel intervals on the single R07 realtime axis. Rectangle details expose evidence and timing semantics. No replay duration appears on this axis.</div>
+<div class='note'>Complete observed request, forward, layer, process HIPTX, HIP runtime, GPU queue and strict-owned kernel intervals on the single R07 realtime axis. Every rectangle displays its event label when space permits; narrow labels use a clipped ellipsis and reveal more as you zoom. Rectangle details expose the complete label, evidence and timing semantics. No replay duration appears on this axis.</div>
 <div class='controls'><label>Search <input class='search' id='search' type='text' placeholder='any field'></label><label>Track <input id='track-filter' type='text'></label><label>Process <input id='process-filter' type='text'></label><label>Event <input id='event-filter' type='text'></label><label>Layer <input id='layer-filter' type='text'></label><label>Phase <input id='phase-filter' type='text'></label><label>Family <input id='family-filter' type='text'></label><button id='reset'>Reset</button></div>
 <div class='controls'><label>Zoom start <input id='start' type='range' min='0' max='99' value='0'></label><label>Zoom end <input id='end' type='range' min='1' max='100' value='100'></label><span id='window'></span><span id='visible-count' class='badge'></span></div>
-<div data-track-groups='request,forward,layer,process,hip_runtime,gpu_queue,strict_owned_kernel'></div><canvas id='chart' width='1600' height='650'></canvas><pre id='detail' class='panel muted'>Click a rectangle for its exact observed fields.</pre>
+<div data-track-groups='request,forward,layer,process,hip_runtime,gpu_queue,strict_owned_kernel' data-rectangle-label-groups='request,forward,layer,process,hip_runtime,gpu_queue,strict_owned_kernel'></div><canvas id='chart' width='1600' height='650'></canvas><pre id='detail' class='panel muted'>Click a rectangle for its exact observed fields.</pre>
 """
     high_body = """
 <div class='note'>Every R09 high-latency process window is reproduced with its exact strict-owned kernels and eligible in-window R07 SE samples. Purple records are replay-projected resource and PMC attributes with no replay timestamps; yellow records are inferred traffic from FX-visible logical IO; unavailable values are retained.</div>
@@ -1164,6 +1200,7 @@ def main() -> int:
         },
         "high_latency_process_count": len(tables["high_latency_processes"]),
         "track_groups": list(REQUIRED_TRACK_GROUPS),
+        "rectangle_label_groups": list(TIMELINE_RECTANGLE_LABEL_GROUPS),
         "presentation_backend": runtime_context["presentation_backend"],
         "strict_same_run_validation": runtime_context["strict_same_run_validation"],
         "top_latency_process_contract": top_latency_process_contract,
@@ -1237,6 +1274,7 @@ def main() -> int:
         "source_table_hashes": metadata["source_table_hashes"],
         "source_table_row_counts": metadata["source_table_row_counts"],
         "top_latency_process_contract": top_latency_process_contract,
+        "rectangle_label_groups": list(TIMELINE_RECTANGLE_LABEL_GROUPS),
         "outputs": {
             "lossless_page": {
                 "path": "E2E_PROCESS_TIMELINE_LOSSLESS.html",
@@ -1292,6 +1330,12 @@ def main() -> int:
             "top_latency_process_colors": True,
             "top_latency_owned_interval_outlines": True,
             "zoom_reveals_process_names_inside_rectangles": True,
+            "rectangle_label_groups": list(TIMELINE_RECTANGLE_LABEL_GROUPS),
+            "zoom_reveals_all_timeline_labels_inside_rectangles": True,
+            "labeled_timeline_rectangle_count": len(
+                payloads["E2E_PROCESS_TIMELINE.html"]["rows"]
+            ),
+            "unlabeled_timeline_rectangle_count": 0,
         },
         "presentation_backend": runtime_context["presentation_backend"],
         "same_run_inputs": {

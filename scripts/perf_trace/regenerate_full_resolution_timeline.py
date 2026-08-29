@@ -207,6 +207,9 @@ def main() -> int:
         "source_acceptance_archive_sha256": sha256_file(source_archive),
         "source_e2e_page_sha256": sha256_bytes(source_page_bytes),
         "top_latency_process_contract": top_latency_process_contract,
+        "rectangle_label_groups": list(
+            visualizer.TIMELINE_RECTANGLE_LABEL_GROUPS
+        ),
     }
     lossless_page = (
         "<!doctype html><html lang='en'><head><meta charset='utf-8'>"
@@ -288,6 +291,9 @@ def main() -> int:
             "source_table_row_counts": row_counts,
         },
         "top_latency_process_contract": top_latency_process_contract,
+        "rectangle_label_groups": list(
+            visualizer.TIMELINE_RECTANGLE_LABEL_GROUPS
+        ),
         "generators": {
             "derived_bundle_generator": {
                 "path": str(Path(__file__).resolve()),
@@ -311,6 +317,10 @@ def main() -> int:
             "top_latency_process_distinct_fill_colors": True,
             "owned_runtime_queue_kernel_same_color_outlines": True,
             "zoom_reveals_process_names_inside_rectangles": True,
+            "all_timeline_rectangle_label_groups_verified": True,
+            "zoom_reveals_all_timeline_labels_inside_rectangles": True,
+            "labeled_timeline_rectangle_count": expected_count,
+            "unlabeled_timeline_rectangle_count": 0,
             "model_run_count": 0,
             "gpu_activity_count": 0,
             "profiler_run_count": 0,

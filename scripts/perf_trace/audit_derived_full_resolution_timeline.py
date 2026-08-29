@@ -39,6 +39,15 @@ PALETTE = (
     "#9C755F",
     "#BAB0AC",
 )
+TIMELINE_RECTANGLE_LABEL_GROUPS = (
+    "request",
+    "forward",
+    "layer",
+    "process",
+    "hip_runtime",
+    "gpu_queue",
+    "strict_owned_kernel",
+)
 CAVEAT = "Overlapping process intervals are not additive end-to-end attribution."
 
 
@@ -260,6 +269,20 @@ def main() -> int:
         + 2 * int(source_metadata["source_table_row_counts"]["kernel_timeline"])
     )
     checker.require(len(source_rows) == expected_count, "source event count is complete")
+    checker.require(
+        all(
+            row.get("g") in TIMELINE_RECTANGLE_LABEL_GROUPS
+            and bool(
+                str(
+                    (row.get("process") or row.get("n") or "")
+                    if row.get("g") == "process"
+                    else (row.get("n") or "")
+                )
+            )
+            for row in source_rows
+        ),
+        "every source timeline rectangle has a semantic label",
+    )
     expected_categories = dict(sorted(Counter(row["g"] for row in source_rows).items()))
     expected_contract = build_expected_contract(
         source_rows,
@@ -298,6 +321,11 @@ def main() -> int:
     checker.require(
         manifest.get("top_latency_process_contract") == expected_contract,
         "manifest top-process ranking and palette reproduce the source",
+    )
+    checker.require(
+        manifest.get("rectangle_label_groups")
+        == list(TIMELINE_RECTANGLE_LABEL_GROUPS),
+        "manifest binds every timeline rectangle label group",
     )
     checker.require(
         manifest["source"]["archive"]["sha256"] == sha256_file(source_archive),
@@ -340,6 +368,11 @@ def main() -> int:
         output_metadata["formal_r09_r10_regeneration"] is False,
         "page identifies presentation-only replay",
     )
+    checker.require(
+        output_metadata.get("rectangle_label_groups")
+        == list(TIMELINE_RECTANGLE_LABEL_GROUPS),
+        "page metadata embeds every rectangle label group",
+    )
     checker.require(output_payload["origin_ns"] == str(begin), "page preserves absolute origin")
     checker.require(
         output_payload["begin"] == 0 and output_payload["end"] == end - begin,
@@ -348,6 +381,20 @@ def main() -> int:
     output_rows = output_payload.get("rows")
     checker.require(isinstance(output_rows, list), "output rows parse")
     checker.require(len(output_rows) == expected_count, "page retains every interval")
+    checker.require(
+        all(
+            row.get("g") in TIMELINE_RECTANGLE_LABEL_GROUPS
+            and bool(
+                str(
+                    (row.get("process") or row.get("n") or "")
+                    if row.get("g") == "process"
+                    else (row.get("n") or "")
+                )
+            )
+            for row in output_rows
+        ),
+        "every output timeline rectangle retains a semantic label",
+    )
     checker.require(
         canonical_row_hash(output_rows) == expected_relative_hash,
         "every relative interval exactly reproduces the accepted payload",
@@ -377,8 +424,11 @@ def main() -> int:
     for token, label in (
         ("g==='process'&&top?top.color", "selected process fill logic"),
         ("ownedGroups.has(g)", "owned interval outline logic"),
-        ("X.fillText(name", "in-rectangle process label logic"),
-        ("w>=tw+8", "zoom-dependent full-name fit gate"),
+        ("data-rectangle-label-groups=", "all rectangle label groups marker"),
+        ("labeledGroups=new Set(D.groups)", "all timeline groups label logic"),
+        ("function rectangleLabel", "group-aware rectangle label selection"),
+        ("function fitLabel", "zoom-dependent label fitting logic"),
+        ("X.fillText(label", "clipped in-rectangle event label logic"),
         ("const topByProcess", "exact process-to-color mapping"),
     ):
         checker.require(token in page_text, f"page contains {label}")
@@ -433,6 +483,8 @@ def main() -> int:
         "top_latency_process_distinct_fill_colors",
         "owned_runtime_queue_kernel_same_color_outlines",
         "zoom_reveals_process_names_inside_rectangles",
+        "all_timeline_rectangle_label_groups_verified",
+        "zoom_reveals_all_timeline_labels_inside_rectangles",
     ):
         checker.require(validation.get(key) is True, f"manifest validates {key}")
 
@@ -498,6 +550,10 @@ def main() -> int:
             "distinct_color_count": len(PALETTE),
             "owned_interval_outline_contract_present": True,
             "zoom_process_name_contract_present": True,
+            "all_timeline_rectangle_label_groups_verified": True,
+            "zoom_all_timeline_labels_contract_present": True,
+            "labeled_timeline_rectangle_count": expected_count,
+            "unlabeled_timeline_rectangle_count": 0,
             "self_contained_offline": True,
             "inline_application_javascript_syntax": "PASS",
             "sampling_performed": False,

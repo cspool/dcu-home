@@ -643,6 +643,24 @@ class FreshEvidenceComponentsTest(unittest.TestCase):
                     "zoom_reveals_process_names_inside_rectangles"
                 ]
             )
+            expected_label_groups = [
+                "request",
+                "forward",
+                "layer",
+                "process",
+                "hip_runtime",
+                "gpu_queue",
+                "strict_owned_kernel",
+            ]
+            self.assertEqual(
+                acceptance["view_coverage"]["rectangle_label_groups"],
+                expected_label_groups,
+            )
+            self.assertTrue(
+                acceptance["view_coverage"][
+                    "zoom_reveals_all_timeline_labels_inside_rectangles"
+                ]
+            )
             top_contract = acceptance["top_latency_process_contract"]
             self.assertEqual(top_contract["configured_count"], 10)
             self.assertEqual(top_contract["selected_count"], 3)
@@ -677,6 +695,18 @@ class FreshEvidenceComponentsTest(unittest.TestCase):
                 + 2
                 * manifest["normalized_tables"]["kernel_timeline"]["row_count"]
             )
+            self.assertEqual(
+                acceptance["view_coverage"][
+                    "labeled_timeline_rectangle_count"
+                ],
+                expected_event_count,
+            )
+            self.assertEqual(
+                acceptance["view_coverage"][
+                    "unlabeled_timeline_rectangle_count"
+                ],
+                0,
+            )
             self.assertEqual(companion["event_count"], expected_event_count)
             self.assertTrue(companion["complete_timeline"])
             self.assertFalse(companion["sampling_performed"])
@@ -691,6 +721,10 @@ class FreshEvidenceComponentsTest(unittest.TestCase):
                 full_manifest["source_table_hashes"],
                 acceptance["source_table_hashes"],
             )
+            self.assertEqual(
+                full_manifest["rectangle_label_groups"],
+                expected_label_groups,
+            )
             lossless_text = (
                 acceptance_dir / "E2E_PROCESS_TIMELINE_LOSSLESS.html"
             ).read_text()
@@ -701,8 +735,12 @@ class FreshEvidenceComponentsTest(unittest.TestCase):
             self.assertIn("data-top-latency-process-count='3'", lossless_text)
             self.assertIn("g==='process'&&top?top.color", lossless_text)
             self.assertIn("ownedGroups.has(g)", lossless_text)
-            self.assertIn("X.fillText(name", lossless_text)
-            self.assertIn("w>=tw+8", lossless_text)
+            self.assertIn("data-rectangle-label-groups=", lossless_text)
+            self.assertIn("labeledGroups=new Set(D.groups)", lossless_text)
+            self.assertIn("function rectangleLabel", lossless_text)
+            self.assertIn("function fitLabel", lossless_text)
+            self.assertIn("X.fillText(label", lossless_text)
+            self.assertNotIn("if(g!=='process'", lossless_text)
             self.assertNotIn(
                 "<script src=",
                 (acceptance_dir / "E2E_PROCESS_TIMELINE.html").read_text(),
